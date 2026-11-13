@@ -1602,6 +1602,16 @@ pub(super) fn compute_row_layouts(
                                         && matches!(p.line_spacing.unwrap_or(ctx.doc_line_spacing),
                                             crate::model::LineSpacing::Auto(factor) if factor > 1.0)))
                     };
+                    // Whether the end-of-cell mark after the nested table at `idx` is
+                    // hidden: always after an inline one; after a float when the mark
+                    // is the lone anchor of a wide one, when a positive offset
+                    // suppresses the centered cell's trailing mark, when a negative
+                    // offset displaces its anchor line, or when the anchor shifted.
+                    let mark_after_nested_hidden = |idx: usize, offset: Option<f32>, final_mark_hidden: bool, anchor_shift: f32| {
+                        final_mark_hidden || offset.is_none() || (!top_aligned && offset.is_some_and(|y| y > 0.0))
+                            || suppress_negative_mark(idx, offset)
+                            || (anchor_shift > 0.0 && offset.is_some())
+                    };
                     for (block_idx, block) in cell.content.iter().enumerate() {
                         match block {
                             Block::Paragraph(para) => {
@@ -1914,17 +1924,17 @@ pub(super) fn compute_row_layouts(
                                     && block_idx == block_count - 1
                                     && para_content_h == 0.0
                                     && is_text_empty(runs);
+                                // Match the rendering's first_line_hanging: when a
+                                // list label is present, the label is drawn separately
+                                // and the text starts at indent_left, so the first
+                                // line has no extra hanging width.
+                                let hanging = super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts);
                                 let lines = if !is_text_empty(runs) && !image_only {
                                     let para_text_w = (cell_text_w
                                         - para.indent_left
                                         - para.indent_right
                                         - float_indent_left)
                                         .max(0.0);
-                                    // Match the rendering's first_line_hanging: when a
-                                    // list label is present, the label is drawn separately
-                                    // and the text starts at indent_left, so the first
-                                    // line has no extra hanging width.
-                                    let hanging = super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts);
                                     let has_tabs = runs.iter().any(|r| r.is_tab);
                                     let inline_images = super::layout::run_image_map(runs, ctx.table_cell_image_names);
                                     let inline_effects = super::layout::run_image_map(runs, ctx.effect_table_names);
@@ -2167,7 +2177,7 @@ pub(super) fn compute_row_layouts(
                                     indent_right: para.indent_right,
                                     indent_hanging: para.indent_hanging,
                                     indent_first_line: para.indent_first_line,
-                                    text_hanging: super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts),
+                                    text_hanging: hanging,
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
                                     beside_indent,
@@ -2358,10 +2368,7 @@ pub(super) fn compute_row_layouts(
                                     && auto_left_float && left_float_right_gap < MIN_NESTED_FLOAT_STRIP
                                     && floating_offset.is_some_and(|offset| offset >= 0.0)
                                     && matches!(cell.content.get(block_idx+1),Some(Block::Paragraph(p)) if is_text_empty(&p.runs));
-                                // Positive offsets suppress the centered cell's trailing mark; negative offsets displace its anchor line.
-                                prev_was_nested_table = final_float_mark_hidden || floating_offset.is_none() || (!top_aligned && floating_offset.is_some_and(|offset| offset > 0.0))
-                                    || suppress_negative_mark(block_idx, floating_offset)
-                                    || (negative_anchor_shift > 0.0 && floating_offset.is_some());
+                                prev_was_nested_table = mark_after_nested_hidden(block_idx, floating_offset, final_float_mark_hidden, negative_anchor_shift);
                                 para_idx += 1;
                             }
                         }
@@ -2374,9 +2381,7 @@ pub(super) fn compute_row_layouts(
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
                         && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
-                            if final_float_mark_hidden || floating_offset.is_none() || (!top_aligned && floating_offset.is_some_and(|offset| offset > 0.0))
-                                || suppress_negative_mark(block_count.saturating_sub(2), *floating_offset)
-                                || (negative_anchor_shift > 0.0 && floating_offset.is_some()))
+                            if mark_after_nested_hidden(block_count.saturating_sub(2), *floating_offset, final_float_mark_hidden, negative_anchor_shift))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
                     let trailing_space_after =
                         if trailing_mark_after_table { 0.0 } else { prev_space_after };
@@ -2418,7 +2423,6 @@ pub(super) fn compute_row_layouts(
                 // margins is 35.0, with only a 5pt top margin 30.0 (Word probes).
                 // The inset's half band is already in the exact pitch.
                 (Some(h), true) => {
-                    let bottom_band = row_half_bands(row).1;
                     h + cells
                         .iter()
                         .map(|l| l.cm.bottom - bottom_band)
@@ -2673,9 +2677,22 @@ pub(super) fn outer_half_bands(table: &Table) -> (f32, f32) {
     )
 }
 
-/// Height of a chunk with `room` left for it on its page; items without
-/// lines use their block height.
-pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk, room: f32) -> f32 {
+/// Whether chunk `c` opens the continuation `start` (past the cell's first
+/// item) with its item whole: a nested table there starts flush at the
+/// piece's top, without its space before, and its anchor gap moves with it
+/// (`floating_anchor_gap`).
+pub(super) fn continues_whole(c: &Chunk, start: &CellCursor) -> bool {
+    c.item == start.item && start.item > 0 && start.line == 0 && c.from.is_empty()
+}
+
+/// Height of a chunk with `room` left for it on its page, in a cell drawn
+/// from `start`; items without lines use their block height.
+pub(super) fn item_chunk_height(
+    item: &CellContentItem,
+    c: &Chunk,
+    start: &CellCursor,
+    room: f32,
+) -> f32 {
     match item {
         CellContentItem::Paragraph(p) if !p.lines.is_empty() => {
             cell_lines_h(p, c.l0..c.l1.unwrap_or(p.lines.len()))
@@ -2691,7 +2708,7 @@ pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk, room: f32) ->
             bottom_band,
             ..
         } => {
-            let mut h = if c.l0 == 0 && c.from.is_empty() {
+            let mut h = if c.l0 == 0 && c.from.is_empty() && !continues_whole(c, start) {
                 *space_before
             } else {
                 0.0
@@ -2764,27 +2781,14 @@ pub(super) fn partial_row_height(
                     *space_before,
                     *offset,
                     floating_x_offset.is_some(),
-                    c.item == start.item && start.item > 0 && start.line == 0 && c.from.is_empty(),
+                    continues_whole(&c, start),
                     &mut reanchor_shift,
                 );
                 floating_extent = floating_extent
                     .max(h + anchor_gap + rows.iter().map(|r| r.height).sum::<f32>());
             }
             let sb = chunk_space_before(item, c.item, start);
-            let mut piece_h = item_chunk_height(item, &c, room - h - sb);
-            if c.item == start.item
-                && start.item > 0
-                && start.line == 0
-                && c.from.is_empty()
-                && let CellContentItem::NestedTable {
-                    space_before,
-                    floating_offset: None,
-                    ..
-                } = item
-            {
-                piece_h -= space_before;
-            }
-            h += sb + piece_h;
+            h += sb + item_chunk_height(item, &c, start, room - h - sb);
         }
         // The chunk that finishes the cell keeps its last paragraph's space
         // after, as an unsplit row does.
@@ -2882,19 +2886,7 @@ pub(super) fn find_cell_split(
             from,
             to: &[],
         };
-        let mut item_h = sb + item_chunk_height(item, &rest, available_h - h - sb);
-        if first
-            && start.item > 0
-            && l0 == 0
-            && from.is_empty()
-            && let CellContentItem::NestedTable {
-                space_before,
-                floating_offset: None,
-                ..
-            } = item
-        {
-            item_h -= space_before;
-        }
+        let item_h = sb + item_chunk_height(item, &rest, start, available_h - h - sb);
         if let CellContentItem::NestedTable {
             rows,
             space_before,
@@ -2907,7 +2899,7 @@ pub(super) fn find_cell_split(
                 *space_before,
                 *offset,
                 floating_x_offset.is_some(),
-                first && start.item > 0 && l0 == 0 && from.is_empty(),
+                continues_whole(&rest, start),
                 &mut reanchor_shift,
             );
             let required = (anchor_gap + rows.iter().map(|r| r.height).sum::<f32>()).max(0.0);
@@ -3298,10 +3290,10 @@ mod tests {
         assert_eq!(squeezed, kept);
     }
 
-    #[test]
-    fn asymmetric_autofit_parent_keeps_saved_grid_with_nested_table() {
+    /// A one-row auto-width table over `grid` whose cells prefer `preferred`.
+    fn one_row_table(grid: Vec<f32>, preferred: Vec<f32>) -> Table {
         use crate::model::{CellVAlign, TableCell, TableRow, VMerge};
-        let make = |grid: Vec<f32>, preferred: Vec<f32>| Table {
+        Table {
             col_widths: grid,
             rows: vec![TableRow {
                 cells: preferred
@@ -3342,11 +3334,15 @@ mod tests {
             bidi_visual: false,
             header_first_row: false,
             header_first_col: false,
-        };
-        let mut parent = make(vec![250.0, 150.0], vec![250.0, 180.0]);
+        }
+    }
+
+    #[test]
+    fn asymmetric_autofit_parent_keeps_saved_grid_with_nested_table() {
+        let mut parent = one_row_table(vec![250.0, 150.0], vec![250.0, 180.0]);
         parent.rows[0].cells[0]
             .content
-            .push(Block::Table(make(vec![230.0], vec![230.0])));
+            .push(Block::Table(one_row_table(vec![230.0], vec![230.0])));
         let fonts = HashMap::new();
         assert_eq!(
             auto_fit_columns(&parent, &fonts, None, None, 0.0),
@@ -3361,50 +3357,7 @@ mod tests {
 
     #[test]
     fn asymmetric_autofit_keeps_grid_with_uniform_stale_cell_widths() {
-        use crate::model::{CellVAlign, TableCell, TableRow, VMerge};
-        let make = |grid: Vec<f32>, preferred: Vec<f32>| Table {
-            col_widths: grid,
-            rows: vec![TableRow {
-                cells: preferred
-                    .into_iter()
-                    .map(|width| TableCell {
-                        width,
-                        width_pct: None,
-                        content: vec![],
-                        borders: Default::default(),
-                        shading: None,
-                        hatch: None,
-                        grid_span: 1,
-                        v_merge: VMerge::None,
-                        v_align: CellVAlign::Top,
-                        text_direction: Default::default(),
-                        cell_margins: None,
-                        hide_mark: false,
-                    })
-                    .collect(),
-                grid_before: 0,
-                height: None,
-                height_exact: false,
-                is_header: false,
-                cant_split: false,
-            }],
-            table_indent: 0.0,
-            table_indent_explicit: false,
-            has_table_style: true,
-            cell_margins: Default::default(),
-            position: None,
-            alignment: Default::default(),
-            fixed_layout: false,
-            auto_width: true,
-            width_pct: None,
-            grid_inferred: false,
-            cells_unsized: false,
-            cells_twip_sized: false,
-            bidi_visual: false,
-            header_first_row: false,
-            header_first_col: false,
-        };
-        let mut table = make(vec![250.0, 150.0], vec![300.0, 300.0]);
+        let mut table = one_row_table(vec![250.0, 150.0], vec![300.0, 300.0]);
         let fonts = HashMap::new();
         assert_eq!(
             auto_fit_columns(&table, &fonts, None, None, 0.0),

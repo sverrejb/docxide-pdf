@@ -237,11 +237,7 @@ pub(super) fn assemble_pdf_pages(
                 .iter()
                 .map(|spec| {
                     let func_ref = if spec.stops.len() <= 2 {
-                        let (c0, c1) = if spec.stops.len() >= 2 {
-                            (spec.stops[0].0, spec.stops[spec.stops.len() - 1].0)
-                        } else {
-                            (spec.stops[0].0, spec.stops[0].0)
-                        };
+                        let (c0, c1) = (spec.stops[0].0, spec.stops[spec.stops.len() - 1].0);
                         let fref = alloc();
                         pdf.exponential_function(fref)
                             .domain([0.0, 1.0])
@@ -338,13 +334,9 @@ pub(super) fn assemble_pdf_pages(
         // by wrapping the body content stream in a `q s 0 0 s tx ty cm ... Q`
         // transform. The comment pane and connectors stay in unscaled PDF
         // coordinates and are rendered into a separate stream appended after.
-        let (.., zoom_si) = page_section_indices[i];
-        let zoom_sp = &doc.sections[zoom_si].properties;
-        let (zoom, zoom_tx, zoom_ty) = page_zoom(
-            zoom_sp.page_width,
-            zoom_sp.page_height,
-            zoom_sp.margin_right,
-        );
+        let (_, is_first, si) = page_section_indices[i];
+        let sp = &doc.sections[si].properties;
+        let (zoom, zoom_tx, zoom_ty) = page_zoom(sp.page_width, sp.page_height, sp.margin_right);
         let (scale_prefix, scale_suffix) = if has_any_comments {
             (
                 format!("q {zoom} 0 0 {zoom} {zoom_tx} {zoom_ty} cm\n").into_bytes(),
@@ -378,7 +370,7 @@ pub(super) fn assemble_pdf_pages(
                 &mut pane_content,
                 &doc.comments,
                 &transformed,
-                zoom_sp,
+                sp,
                 (zoom, zoom_tx, zoom_ty),
                 seen_fonts,
                 (body_key, label_key, doc.comment_font_size),
@@ -396,19 +388,15 @@ pub(super) fn assemble_pdf_pages(
         // Page border box (page coords, unscaled — outside the comment-scale
         // wrapper). @display gates which pages get it; is_first = first page of
         // its section, matching ST_PageBorderDisplay firstPage/notFirstPage.
-        {
-            let (_, is_first, content_si) = page_section_indices[i];
-            let sp = &doc.sections[content_si].properties;
-            if let Some(pb) = &sp.page_borders {
-                let show = match pb.display {
-                    PageBorderDisplay::AllPages => true,
-                    PageBorderDisplay::FirstPage => is_first,
-                    PageBorderDisplay::NotFirstPage => !is_first,
-                };
-                if show {
-                    let borders = render_page_borders(pb, sp).finish();
-                    super::tagging::wrap_artifact(&mut combined, borders.as_slice(), false);
-                }
+        if let Some(pb) = &sp.page_borders {
+            let show = match pb.display {
+                PageBorderDisplay::AllPages => true,
+                PageBorderDisplay::FirstPage => is_first,
+                PageBorderDisplay::NotFirstPage => !is_first,
+            };
+            if show {
+                let borders = render_page_borders(pb, sp).finish();
+                super::tagging::wrap_artifact(&mut combined, borders.as_slice(), false);
             }
         }
         combined.extend_from_slice(&valign_prefix);

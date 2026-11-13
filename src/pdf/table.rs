@@ -17,9 +17,9 @@ use super::table_layout::{
     CELL_START, CellContentItem, CellCursor, CellFloatingImageLayout, CellLayout,
     CellParagraphLayout, Chunk, HfSubstitution, RowLayout, RowPiece, apply_pct_width,
     auto_fit_columns, autofit_min_widths, cell_span_width, cell_x_offset, chunk_space_before,
-    compute_merge_spans, compute_row_layouts, cursor_chunks, find_cell_split, fixed_columns,
-    item_chunk_height, keep_chain_end, min_content_widths, para_block_height, partial_row_height,
-    row_pieces, skip_finished_row, squeeze_to_width,
+    compute_merge_spans, compute_row_layouts, continues_whole, cursor_chunks, find_cell_split,
+    fixed_columns, item_chunk_height, keep_chain_end, min_content_widths, para_block_height,
+    partial_row_height, row_pieces, skip_finished_row, squeeze_to_width,
 };
 use super::tagging::{CellTagger, TableTags, Tags};
 
@@ -430,8 +430,8 @@ fn cell_content_h_for_valign(items: &[CellContentItem]) -> f32 {
     h.max(floating_extent)
 }
 
-fn cell_has_visible_content(items: &[CellContentItem]) -> bool {
-    items.iter().any(|item| match item {
+fn cell_has_visible_content<'a>(items: impl IntoIterator<Item = &'a CellContentItem>) -> bool {
+    items.into_iter().any(|item| match item {
         CellContentItem::Paragraph(p) => para_has_visible_content(p),
         CellContentItem::NestedTable { rows, .. } => rows.iter().any(|r| r.height > 0.0),
     })
@@ -511,10 +511,17 @@ fn draw_cell_paragraph_bottom(
     }
 }
 
+/// The content of a cell from `start` to `end`. `whole` cells also draw
+/// their anchored shapes, layer their pictures by relativeHeight and clip
+/// their text to the cell's edges; a split row's pieces never did.
 fn render_cell_content(
     content: &mut Content,
     items: &[CellContentItem],
+    // The cell's source blocks: compute_row_layouts lays out one item per
+    // block, so item `i` came from block `i`.
     blocks: &[Block],
+    start: &CellCursor,
+    end: &CellCursor,
     cell_x: f32,
     col_w: f32,
     cursor_y_start: f32,
@@ -529,42 +536,45 @@ fn render_cell_content(
     mut tagger: Option<CellTagger<'_>>,
     hf_sub: Option<&HfSubstitution>,
     mut behind: BehindLayer<'_>,
+    floor: f32,
+    whole: bool,
 ) {
     let mut cursor_y = cursor_y_start;
-    let mut block_idx = 0;
+    let mut reanchor_shift = 0.0;
+    // Word clips cell text at the cell's horizontal edges, even when a
+    // negative paragraph indent puts a glyph outside it. Keep this around
+    // inline text/labels only: anchored shapes and nested floating tables
+    // have their own drawing bounds.
+    let page_h = ctx
+        .sections
+        .iter()
+        .map(|s| s.properties.page_height)
+        .fold(cursor_y_start.max(0.0), f32::max);
 
-    for (item_idx, item) in items.iter().enumerate() {
-        match item {
+    for chunk in cursor_chunks(items, start, end) {
+        let (pi, l0, l1) = (chunk.item, chunk.l0, chunk.l1);
+        match &items[pi] {
             CellContentItem::Paragraph(para) => {
-                // Advance block_idx past the corresponding Block::Paragraph
-                let mut source_para: Option<&Paragraph> = None;
-                while block_idx < blocks.len() {
-                    if let Block::Paragraph(p) = &blocks[block_idx] {
-                        source_para = Some(p);
-                        block_idx += 1;
-                        break;
-                    }
-                    block_idx += 1;
-                }
+                let source_para = match blocks.get(pi) {
+                    Some(Block::Paragraph(p)) => Some(p),
+                    _ => None,
+                };
+                let sb = chunk_space_before(&items[pi], pi, start);
 
                 // Word tags every cell paragraph, empty ones included.
                 let cell_nodes = tagger.as_mut().map(|t| {
-                    t.begin(
-                        content,
-                        item_idx,
-                        para.list_item,
-                        !para.list_label.is_empty(),
-                        para.tag_kind(),
-                    )
+                    let labelled = !para.list_label.is_empty();
+                    t.begin(content, pi, para.list_item, labelled, para.tag_kind())
                 });
                 let cell_para = cell_nodes.map(|(_, body)| body);
                 let para_top = cursor_y;
-                if !para_has_visible_content(para) && !para.has_textboxes && !para.has_connectors {
-                    cursor_y -= para.space_before + para_block_height(para);
+                if !para_has_visible_content(para) {
+                    cursor_y -= sb + para_block_height(para);
                     // A VML horizontal rule (o:hr) rides an otherwise empty
                     // paragraph, in cells as in the body (advocacy's story
                     // separators).
-                    if let Some(p) = source_para
+                    if whole
+                        && let Some(p) = source_para
                         && let Some(hr) = &p.horizontal_rule
                     {
                         super::helpers::draw_horizontal_rule(
@@ -581,7 +591,7 @@ fn render_cell_content(
                     continue;
                 }
 
-                cursor_y -= para.space_before;
+                cursor_y -= sb;
                 // Word anchors paragraph-relative floats to the cell's content
                 // top, unaffected by vAlign (see `valign_off`).
                 let float_y = cursor_y + valign_off;
@@ -590,37 +600,41 @@ fn render_cell_content(
                 // above the paragraph's connectors/textboxes must paint after
                 // them (annotation #241: an opaque label cutting a vertical
                 // arrow). Everything else keeps the picture-before-text order.
-                let shape_z = source_para.and_then(|p| {
+                let shape_z = source_para.filter(|_| whole).and_then(|p| {
                     p.connectors
                         .iter()
                         .map(|c| c.z_index)
                         .chain(p.textboxes.iter().map(|t| t.z_index))
                         .max()
                 });
-                let layered = behind.is_some();
+                let layered = whole && behind.is_some();
                 let above_shapes = |fi: &&CellFloatingImageLayout| {
                     !(layered && fi.behind_doc) && shape_z.is_some_and(|z| fi.z_index > z)
                 };
-                // Tag the behind layer first, preserving the cell's reading
-                // order even when a front picture comes first in the paragraph.
-                let behind_floats = para
-                    .floating_images
-                    .iter()
-                    .filter(|fi| layered && fi.behind_doc);
-                let front_floats = para
-                    .floating_images
-                    .iter()
-                    .filter(|fi| !(layered && fi.behind_doc) && !above_shapes(fi));
-                for fi in behind_floats.chain(front_floats) {
-                    place_cell_float(
-                        content,
-                        &mut behind,
-                        &mut tagger,
-                        cell_para,
-                        fi,
-                        cell_x,
-                        float_y,
-                    );
+                // Anchored pictures and the list label belong to the
+                // paragraph's first line; a continuation chunk has neither.
+                if l0 == 0 {
+                    // Tag the behind layer first, preserving the cell's reading
+                    // order even when a front picture comes first in the paragraph.
+                    let behind_floats = para
+                        .floating_images
+                        .iter()
+                        .filter(|fi| layered && fi.behind_doc);
+                    let front_floats = para
+                        .floating_images
+                        .iter()
+                        .filter(|fi| !(layered && fi.behind_doc) && !above_shapes(fi));
+                    for fi in behind_floats.chain(front_floats) {
+                        place_cell_float(
+                            content,
+                            &mut behind,
+                            &mut tagger,
+                            cell_para,
+                            fi,
+                            cell_x,
+                            float_y,
+                        );
+                    }
                 }
 
                 if let Some(ref img_name) = para.image_name {
@@ -642,6 +656,13 @@ fn render_cell_content(
                     continue;
                 }
 
+                if whole {
+                    content.save_state();
+                    content
+                        .rect(cell_x, 0.0, col_w, page_h)
+                        .clip_nonzero()
+                        .end_path();
+                }
                 let text_x = cell_x + cm.left + para.indent_left + para.float_indent_left;
                 // Must match the wrap width in table_layout.rs (incl. indent_right),
                 // or centered text shifts right and justify overshoots the border.
@@ -653,25 +674,7 @@ fn render_cell_content(
                     - para.float_indent_left)
                     .max(0.0);
                 let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
-
-                // Word clips cell text at the cell's horizontal edges, even
-                // when a negative paragraph indent puts a glyph outside it.
-                // Keep this around inline text/labels only: anchored shapes
-                // and nested floating tables have their own drawing bounds.
-                let page_h = ctx
-                    .sections
-                    .iter()
-                    .map(|s| s.properties.page_height)
-                    .fold(cursor_y_start.max(0.0), f32::max);
-                content.save_state();
-                content
-                    .rect(cell_x, 0.0, col_w, page_h)
-                    .clip_nonzero()
-                    .end_path();
-
-                let first_line_hanging = if para.list_label.is_empty() {
-                    para.text_hanging
-                } else {
+                if l0 == 0 && !para.list_label.is_empty() {
                     let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging
                         + para.indent_first_line
                         + cell_label_alignment_offset(para, col_w - cm.left - cm.right);
@@ -684,15 +687,15 @@ fn render_cell_content(
                         baseline_y,
                         ctx.fonts,
                     );
-                    para.text_hanging
-                };
+                }
 
-                let block_h = para_block_height(para);
+                let l1 = l1.unwrap_or(para.lines.len());
+                let lines_h = super::table_layout::cell_lines_h(para, l0..l1);
                 let picture_clip =
-                    clip_fixed_cell_pictures(content, para, cell_x, col_w, cursor_y, block_h);
+                    clip_fixed_cell_pictures(content, para, cell_x, col_w, cursor_y, lines_h);
                 render_paragraph_lines(
                     content,
-                    &para.lines,
+                    &para.lines[l0..l1],
                     &para.alignment,
                     text_x,
                     para.indent_left,
@@ -701,9 +704,9 @@ fn render_cell_content(
                     para.line_h,
                     para.picture_metrics(),
                     para.lines.len(),
-                    0,
+                    l0,
                     links,
-                    first_line_hanging,
+                    para.text_hanging,
                     ctx.fonts,
                     beside_float_geometry(para, text_x, text_w).as_deref(),
                     gradient_specs,
@@ -719,13 +722,21 @@ fn render_cell_content(
                 if picture_clip {
                     content.restore_state();
                 }
-                content.restore_state();
+                if whole {
+                    content.restore_state();
+                }
                 end_cell_tag(content, &tagger);
 
-                cursor_y -= block_h;
-                draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
+                cursor_y -= if para.lines.is_empty() {
+                    para_block_height(para)
+                } else {
+                    lines_h
+                };
+                if l1 == para.lines.len() {
+                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
+                }
 
-                if let Some(src) = source_para {
+                if whole && let Some(src) = source_para {
                     render_cell_floating_shapes(
                         content,
                         src,
@@ -747,7 +758,7 @@ fn render_cell_content(
                     });
                 }
             }
-            item @ CellContentItem::NestedTable {
+            CellContentItem::NestedTable {
                 col_widths,
                 rows,
                 space_before,
@@ -755,24 +766,35 @@ fn render_cell_content(
                 floating_x_offset,
                 bottom_band,
             } => {
-                // Find the corresponding Block::Table
-                let table = loop {
-                    if block_idx >= blocks.len() {
-                        break None;
-                    }
-                    if let Block::Table(t) = &blocks[block_idx] {
-                        block_idx += 1;
-                        break Some(t);
-                    }
-                    block_idx += 1;
-                };
-                if let Some(table) = table {
+                if let Some(Block::Table(table)) = blocks.get(pi) {
                     let saved_y = cursor_y;
-                    cursor_y -= space_before + floating_offset.unwrap_or(0.0);
+                    let drop_anchor = continues_whole(&chunk, start);
+                    if chunk.l0 == 0 && chunk.from.is_empty() {
+                        let gap = if let Some(offset) = floating_offset {
+                            super::table_layout::floating_anchor_gap(
+                                *space_before,
+                                *offset,
+                                floating_x_offset.is_some(),
+                                drop_anchor,
+                                &mut reanchor_shift,
+                            )
+                        } else if drop_anchor {
+                            0.0
+                        } else {
+                            *space_before
+                        };
+                        cursor_y -= gap;
+                    }
                     render_nested_table(
                         table,
                         content,
-                        cell_x + cm.left + floating_x_offset.unwrap_or(0.0),
+                        cell_x
+                            + cm.left
+                            + if drop_anchor {
+                                0.0
+                            } else {
+                                floating_x_offset.unwrap_or(0.0)
+                            },
                         col_w - cm.left - cm.right,
                         floating_offset.map(|_| cm),
                         &mut cursor_y,
@@ -781,23 +803,17 @@ fn render_cell_content(
                         links,
                         &mut tagger,
                         (col_widths, rows),
-                        &Chunk {
-                            item: item_idx,
-                            l0: 0,
-                            l1: None,
-                            from: &[],
-                            to: &[],
-                        },
+                        &chunk,
                         behind.as_deref_mut(),
-                        f32::NEG_INFINITY,
+                        floor,
                     );
                     if floating_offset.is_some() {
                         cursor_y = saved_y;
-                    } else {
+                    } else if chunk.l1.is_none() && chunk.to.is_empty() {
                         cursor_y -= bottom_band;
                     }
                 } else {
-                    cursor_y -= item.height();
+                    cursor_y -= item_chunk_height(&items[pi], &chunk, start, cursor_y - floor);
                 }
             }
         }
@@ -1062,6 +1078,75 @@ fn beside_float_geometry(
 /// Render a nested table inline within a parent cell at the given cursor position.
 /// Render every row of `table` — cell backgrounds and content, then borders —
 /// advancing `cursor_y`. Shared by nested and header/footer table rendering.
+/// The tagger of cell `ci` (grid column `grid_col`, `span` wide) of `row`,
+/// when the table is tagged.
+fn cell_tagger<'a>(
+    tag: Option<(&'a mut Tags, &'a mut TableTags, usize)>,
+    row: &TableRow,
+    row_idx: usize,
+    ci: usize,
+    span: usize,
+    col_widths: &[f32],
+    grid_col: usize,
+) -> Option<CellTagger<'a>> {
+    tag.map(|(tags, table, page)| CellTagger {
+        tags,
+        table,
+        page,
+        row: row_idx,
+        cell: ci,
+        col_span: row_tag_span(row, ci, span, col_widths.len(), grid_col + span),
+    })
+}
+
+/// A cell's content from its top margin down, shifted for vAlign; an empty
+/// cell still gets its tagged empty paragraph.
+fn render_cell_box(
+    content: &mut Content,
+    cell: &crate::model::TableCell,
+    cell_layout: &CellLayout,
+    cell_x: f32,
+    row_top: f32,
+    effective_h: f32,
+    col_w: f32,
+    ctx: &RenderContext,
+    gradient_specs: &mut Vec<super::GradientSpec>,
+    links: &mut Vec<LinkAnnotation>,
+    tagger: Option<CellTagger<'_>>,
+    hf_sub: Option<&HfSubstitution>,
+    behind: BehindLayer<'_>,
+) {
+    if cell_has_visible_content(&cell_layout.items) {
+        let ecm = &cell_layout.cm;
+        let content_h = cell_content_h_for_valign(&cell_layout.items);
+        let avail = effective_h - ecm.top - ecm.bottom;
+        let v_offset = valign_offset(cell.v_align, avail, content_h);
+        let cell_cursor_y = row_top - ecm.top - v_offset;
+        render_cell_content(
+            content,
+            &cell_layout.items,
+            &cell.content,
+            &CELL_START,
+            &CellCursor::at(cell_layout.items.len(), 0),
+            cell_x,
+            col_w,
+            cell_cursor_y,
+            v_offset,
+            ecm,
+            ctx,
+            gradient_specs,
+            links,
+            tagger,
+            hf_sub,
+            behind,
+            f32::NEG_INFINITY,
+            true,
+        );
+    } else if let Some(t) = tagger {
+        t.empty_para(content);
+    }
+}
+
 fn render_table_rows(
     table: &Table,
     row_layouts: &[RowLayout],
@@ -1098,14 +1183,7 @@ fn render_table_rows(
         {
             let col_w = cell_span_width(col_widths, grid_col, span);
             let cx = cell_x_offset(col_widths, table_left, grid_col);
-            let tagger = tag.as_mut().map(|(tags, table_tags, page)| CellTagger {
-                tags,
-                table: table_tags,
-                page: *page,
-                row: ri,
-                cell: ci,
-                col_span: row_tag_span(row, ci, span, col_widths.len(), grid_col + span),
-            });
+            let tagger = cell_tagger(reborrow(&mut tag), row, ri, ci, span, col_widths, grid_col);
 
             if cell.v_merge == VMerge::Continue {
                 if let Some(mut t) = tagger {
@@ -1127,34 +1205,21 @@ fn render_table_rows(
                 col_w,
                 effective_h,
             );
-
-            if cell_has_visible_content(&cell_layout.items) {
-                let ecm = &cell_layout.cm;
-                let content_h = cell_content_h_for_valign(&cell_layout.items);
-
-                let avail = effective_h - ecm.top - ecm.bottom;
-                let v_offset = valign_offset(cell.v_align, avail, content_h);
-                let cell_cursor_y = row_top - ecm.top - v_offset;
-
-                render_cell_content(
-                    content,
-                    &cell_layout.items,
-                    &cell.content,
-                    cx,
-                    col_w,
-                    cell_cursor_y,
-                    v_offset,
-                    ecm,
-                    ctx,
-                    gradient_specs,
-                    links,
-                    tagger,
-                    hf_sub,
-                    behind.as_deref_mut(),
-                );
-            } else if let Some(t) = tagger {
-                t.empty_para(content);
-            }
+            render_cell_box(
+                content,
+                cell,
+                cell_layout,
+                cx,
+                row_top,
+                effective_h,
+                col_w,
+                ctx,
+                gradient_specs,
+                links,
+                tagger,
+                hf_sub,
+                behind.as_deref_mut(),
+            );
         }
 
         for (grid_col, span, cell) in row.grid_cells() {
@@ -1295,242 +1360,6 @@ fn render_nested_table(
     }
 }
 
-fn render_partial_cell_content(
-    content: &mut Content,
-    items: &[CellContentItem],
-    blocks: &[Block],
-    start: &CellCursor,
-    end: &CellCursor,
-    cell_x: f32,
-    col_w: f32,
-    cursor_y_start: f32,
-    cm: &CellMargins,
-    ctx: &RenderContext,
-    gradient_specs: &mut Vec<super::GradientSpec>,
-    links: &mut Vec<LinkAnnotation>,
-    mut tagger: Option<CellTagger<'_>>,
-    mut behind: BehindLayer<'_>,
-    floor: f32,
-) {
-    let mut cursor_y = cursor_y_start;
-    let mut reanchor_shift = 0.0;
-    // Build a mapping from item index to block index
-    let mut block_idx = 0usize;
-    let mut item_to_block: Vec<usize> = Vec::new();
-    for item in items {
-        item_to_block.push(block_idx);
-        match item {
-            CellContentItem::Paragraph(_) => {
-                while block_idx < blocks.len() {
-                    if matches!(&blocks[block_idx], Block::Paragraph(_)) {
-                        block_idx += 1;
-                        break;
-                    }
-                    block_idx += 1;
-                }
-            }
-            CellContentItem::NestedTable { .. } => {
-                while block_idx < blocks.len() {
-                    if matches!(&blocks[block_idx], Block::Table(_)) {
-                        block_idx += 1;
-                        break;
-                    }
-                    block_idx += 1;
-                }
-            }
-        }
-    }
-
-    for chunk in cursor_chunks(items, start, end) {
-        let (pi, l0, l1) = (chunk.item, chunk.l0, chunk.l1);
-        match &items[pi] {
-            CellContentItem::Paragraph(para) => {
-                let sb = chunk_space_before(&items[pi], pi, start);
-
-                let cell_nodes = tagger.as_mut().map(|t| {
-                    let labelled = !para.list_label.is_empty();
-                    t.begin(content, pi, para.list_item, labelled, para.tag_kind())
-                });
-                let cell_para = cell_nodes.map(|(_, body)| body);
-                if !para_has_visible_content(para) {
-                    cursor_y -= sb + para_block_height(para);
-                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
-                    end_cell_tag(content, &tagger);
-                    continue;
-                }
-
-                cursor_y -= sb;
-
-                // Anchored pictures and the list label belong to the
-                // paragraph's first line; a continuation chunk has neither.
-                if l0 == 0 {
-                    for fi in &para.floating_images {
-                        place_cell_float(
-                            content,
-                            &mut behind,
-                            &mut tagger,
-                            cell_para,
-                            fi,
-                            cell_x,
-                            cursor_y,
-                        );
-                    }
-                }
-
-                if let Some(ref img_name) = para.image_name {
-                    let picture = (para.image_alt.as_deref(), para.image_decorative);
-                    cursor_y -= cell_figure(content, &mut tagger, None, picture, |c| {
-                        render_cell_inline_image(c, para, img_name, cell_x, col_w, cursor_y, cm)
-                    });
-                    cursor_y -= para.bottom_band.1;
-                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
-                    continue;
-                }
-
-                let text_x = cell_x + cm.left + para.indent_left + para.float_indent_left;
-                // Must match the wrap width in table_layout.rs (incl. indent_right),
-                // or centered text shifts right and justify overshoots the border.
-                let text_w = (col_w
-                    - cm.left
-                    - cm.right
-                    - para.indent_left
-                    - para.indent_right
-                    - para.float_indent_left)
-                    .max(0.0);
-                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
-
-                let first_line_hanging = if para.list_label.is_empty() {
-                    para.text_hanging
-                } else {
-                    if l0 == 0 {
-                        let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging
-                            + para.indent_first_line
-                            + cell_label_alignment_offset(para, col_w - cm.left - cm.right);
-                        draw_tagged_cell_label(
-                            content,
-                            &mut tagger,
-                            cell_nodes,
-                            para,
-                            label_x,
-                            baseline_y,
-                            ctx.fonts,
-                        );
-                    }
-                    para.text_hanging
-                };
-
-                let l1 = l1.unwrap_or(para.lines.len());
-                let lines_h = super::table_layout::cell_lines_h(para, l0..l1);
-                let picture_clip =
-                    clip_fixed_cell_pictures(content, para, cell_x, col_w, cursor_y, lines_h);
-                render_paragraph_lines(
-                    content,
-                    &para.lines[l0..l1],
-                    &para.alignment,
-                    text_x,
-                    para.indent_left,
-                    text_w,
-                    baseline_y,
-                    para.line_h,
-                    para.picture_metrics(),
-                    para.lines.len(),
-                    l0,
-                    links,
-                    first_line_hanging,
-                    ctx.fonts,
-                    beside_float_geometry(para, text_x, text_w).as_deref(),
-                    gradient_specs,
-                    Some(&mut ctx.cell_comment_anchors.borrow_mut()),
-                    None,
-                    cell_link_tagger(&mut tagger, cell_para),
-                    None,
-                    para.line_grid.map(|g| super::layout::LineGrid {
-                        page_height: ctx.page_height.get(),
-                        ..g
-                    }),
-                );
-                if picture_clip {
-                    content.restore_state();
-                }
-                end_cell_tag(content, &tagger);
-
-                cursor_y -= if para.lines.is_empty() {
-                    para_block_height(para)
-                } else {
-                    lines_h
-                };
-                if l1 == para.lines.len() {
-                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
-                }
-            }
-            CellContentItem::NestedTable {
-                col_widths,
-                rows,
-                space_before,
-                floating_offset,
-                floating_x_offset,
-                bottom_band,
-            } => {
-                let bi = item_to_block.get(pi).copied().unwrap_or(0);
-                if let Some(Block::Table(table)) = blocks.get(bi) {
-                    let saved_y = cursor_y;
-                    if chunk.l0 == 0 && chunk.from.is_empty() {
-                        let drop_anchor = pi == start.item && start.item > 0 && start.line == 0;
-                        let gap = if let Some(offset) = floating_offset {
-                            super::table_layout::floating_anchor_gap(
-                                *space_before,
-                                *offset,
-                                floating_x_offset.is_some(),
-                                drop_anchor,
-                                &mut reanchor_shift,
-                            )
-                        } else if drop_anchor {
-                            0.0
-                        } else {
-                            *space_before
-                        };
-                        cursor_y -= gap;
-                    }
-                    render_nested_table(
-                        table,
-                        content,
-                        cell_x
-                            + cm.left
-                            + if chunk.l0 == 0
-                                && chunk.from.is_empty()
-                                && pi == start.item
-                                && start.item > 0
-                                && start.line == 0
-                            {
-                                0.0
-                            } else {
-                                floating_x_offset.unwrap_or(0.0)
-                            },
-                        col_w - cm.left - cm.right,
-                        floating_offset.map(|_| cm),
-                        &mut cursor_y,
-                        ctx,
-                        gradient_specs,
-                        links,
-                        &mut tagger,
-                        (col_widths, rows),
-                        &chunk,
-                        behind.as_deref_mut(),
-                        floor,
-                    );
-                    if floating_offset.is_some() {
-                        cursor_y = saved_y;
-                    } else if chunk.l1.is_none() && chunk.to.is_empty() {
-                        cursor_y -= bottom_band;
-                    }
-                } else {
-                    cursor_y -= item_chunk_height(&items[pi], &chunk, cursor_y - floor);
-                }
-            }
-        }
-    }
-}
-
 // A separately painted label follows the alignment of its first text line,
 // including an empty numbered paragraph whose suffix still occupies a tab.
 fn cell_label_alignment_offset(para: &CellParagraphLayout, inner_w: f32) -> f32 {
@@ -1556,45 +1385,45 @@ fn draw_cell_label(
     baseline_y: f32,
     fonts: &HashMap<String, FontEntry>,
 ) {
-    if para.label_pieces.len() > 1 {
-        if let Some(c) = para.label_color {
-            fill_rgb(content, c);
-        }
-        content
-            .begin_text()
-            .next_line(label_x + para.label_shift, baseline_y);
-        super::list_label::show_label_pieces(
-            content,
-            &para.label_pieces,
-            fonts,
-            para.label_font_size,
-        );
-        content.end_text();
-        if para.label_color.is_some() {
-            content.set_fill_gray(0.0);
-        }
-        return;
-    }
-    let Some(entry) = para
-        .label_pieces
-        .first()
-        .and_then(|(k, _)| k.as_deref())
-        .and_then(|k| fonts.get(k))
-    else {
-        return;
+    // A one-piece label shows in its own font; a mixed one piece by piece.
+    let single = if para.label_pieces.len() > 1 {
+        None
+    } else {
+        let Some(entry) = para
+            .label_pieces
+            .first()
+            .and_then(|(k, _)| k.as_deref())
+            .and_then(|k| fonts.get(k))
+        else {
+            return;
+        };
+        let bytes = super::list_label::encode_label(entry, &para.list_label)
+            .unwrap_or_else(|| entry.encode(&para.list_label));
+        Some((entry, bytes))
     };
-    let bytes = super::list_label::encode_label(entry, &para.list_label)
-        .unwrap_or_else(|| entry.encode(&para.list_label));
 
     if let Some(c) = para.label_color {
         fill_rgb(content, c);
     }
-    content
-        .begin_text()
-        .set_font(Name(entry.pdf_name.as_bytes()), para.label_font_size)
-        .next_line(label_x + para.label_shift, baseline_y)
-        .show(Str(&bytes))
-        .end_text();
+    content.begin_text();
+    match &single {
+        Some((entry, bytes)) => {
+            content
+                .set_font(Name(entry.pdf_name.as_bytes()), para.label_font_size)
+                .next_line(label_x + para.label_shift, baseline_y)
+                .show(Str(bytes));
+        }
+        None => {
+            content.next_line(label_x + para.label_shift, baseline_y);
+            super::list_label::show_label_pieces(
+                content,
+                &para.label_pieces,
+                fonts,
+                para.label_font_size,
+            );
+        }
+    }
+    content.end_text();
     if para.label_color.is_some() {
         content.set_fill_gray(0.0);
     }
@@ -1622,14 +1451,17 @@ fn render_table_row(
         let cell_x = cell_x_offset(col_widths, table_left, grid_col);
         // None while repeated header rows are drawn (render_header_rows).
         let page = pb.all_contents.len();
-        let tagger = pb.table_tags.as_mut().map(|table| CellTagger {
-            tags: &mut pb.tags,
-            table,
-            page,
-            row: row_idx,
-            cell: ci,
-            col_span: row_tag_span(row, ci, span, col_widths.len(), grid_col + span),
-        });
+        let tagger = cell_tagger(
+            pb.table_tags
+                .as_mut()
+                .map(|table| (&mut pb.tags, table, page)),
+            row,
+            row_idx,
+            ci,
+            span,
+            col_widths,
+            grid_col,
+        );
 
         if cell.v_merge == VMerge::Continue {
             if let Some(mut t) = tagger {
@@ -1656,14 +1488,7 @@ fn render_table_row(
         );
 
         let has_content = cell_has_visible_content(&cell_layout.items);
-        let ecm = &cell_layout.cm;
-        let mut no_links = Vec::new();
-
-        if !has_content {
-            if let Some(t) = tagger {
-                t.empty_para(&mut pb.content);
-            }
-        } else if cell_layout.text_direction == TextDirection::TbRl {
+        if has_content && cell_layout.text_direction == TextDirection::TbRl {
             render_vertical_cjk_cell(
                 &mut pb.content,
                 cell_layout,
@@ -1672,39 +1497,36 @@ fn render_table_row(
                 row_top,
                 effective_h,
                 col_w,
-                ecm,
+                &cell_layout.cm,
                 ctx,
                 tagger,
             );
         } else {
-            let content_h = cell_content_h_for_valign(&cell_layout.items);
-
-            let avail = effective_h - ecm.top - ecm.bottom;
-            let v_offset = valign_offset(cell.v_align, avail, content_h);
-            let cursor_y = row_top - ecm.top - v_offset;
-
-            render_cell_content(
+            // Repeated header rows are untagged artifacts: no link annotations.
+            let mut no_links = Vec::new();
+            let links = if tagger.is_some() {
+                &mut pb.links
+            } else {
+                &mut no_links
+            };
+            render_cell_box(
                 &mut pb.content,
-                &cell_layout.items,
-                &cell.content,
+                cell,
+                cell_layout,
                 cell_x,
+                row_top,
+                effective_h,
                 col_w,
-                cursor_y,
-                v_offset,
-                ecm,
                 ctx,
                 &mut pb.gradient_specs,
-                // Repeated header rows are untagged artifacts: no link annotations.
-                if tagger.is_some() {
-                    &mut pb.links
-                } else {
-                    &mut no_links
-                },
+                links,
                 tagger,
                 None,
                 Some(&mut pb.behind_shapes),
             );
-            move_cell_comment_anchors(ctx, &mut pb.comment_anchors);
+            if has_content {
+                move_cell_comment_anchors(ctx, &mut pb.comment_anchors);
+            }
         }
     }
 
@@ -1750,11 +1572,7 @@ fn render_vertical_cjk_cell(
     // Tags each paragraph as the cell's P, like a horizontal cell's.
     mut tagger: Option<CellTagger<'_>>,
 ) {
-    let pdf_name_to_entry: HashMap<&str, &FontEntry> = ctx
-        .fonts
-        .values()
-        .map(|e| (e.pdf_name.as_str(), e))
-        .collect();
+    let pdf_name_to_entry = super::fonts::by_pdf_name(ctx.fonts);
 
     let paras: Vec<&CellParagraphLayout> = cell_layout
         .items
@@ -1892,14 +1710,15 @@ fn render_partial_row(
     {
         let col_w = cell_span_width(col_widths, grid_col, span);
         let cell_x = cell_x_offset(col_widths, table_left, grid_col);
-        let tagger = tag.as_mut().map(|(tags, table, page)| CellTagger {
-            tags,
-            table,
-            page: *page,
-            row: row_idx,
-            cell: ci,
-            col_span: row_tag_span(row, ci, span, col_widths.len(), grid_col + span),
-        });
+        let tagger = cell_tagger(
+            reborrow(&mut tag),
+            row,
+            row_idx,
+            ci,
+            span,
+            col_widths,
+            grid_col,
+        );
 
         if cell.v_merge == VMerge::Continue {
             if let Some(mut t) = tagger {
@@ -1923,15 +1742,12 @@ fn render_partial_row(
             row_h,
         );
 
-        let has_content = cursor_chunks(&cell_layout.items, start, end).any(|c| match &cell_layout
-            .items[c.item]
-        {
-            CellContentItem::Paragraph(p) => para_has_visible_content(p),
-            CellContentItem::NestedTable { rows, .. } => rows.iter().any(|r| r.height > 0.0),
-        });
+        let has_content = cell_has_visible_content(
+            cursor_chunks(&cell_layout.items, start, end).map(|c| &cell_layout.items[c.item]),
+        );
 
         if has_content {
-            render_partial_cell_content(
+            render_cell_content(
                 content,
                 &cell_layout.items,
                 &cell.content,
@@ -1940,13 +1756,16 @@ fn render_partial_row(
                 cell_x,
                 col_w,
                 row_top - cell_layout.cm.top,
+                0.0,
                 &cell_layout.cm,
                 ctx,
                 gradient_specs,
                 links,
                 tagger,
+                None,
                 behind.as_deref_mut(),
                 floor + cell_layout.cm.bottom,
+                false,
             );
         } else if let Some(t) = tagger.filter(|_| *start == CELL_START) {
             t.empty_para(content);
@@ -2132,8 +1951,11 @@ pub(super) fn render_table(
     column_bounds: Option<(f32, f32)>,
 ) {
     let col_widths = resolved_col_widths(table, sp, ctx, column_bounds);
+    let total_w: f32 = col_widths.iter().sum();
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
+    // The table's column (the page's text area in one column): where it
+    // aligns and where its footnotes go.
     let area = column_bounds.unwrap_or((sp.margin_left, sp.text_width()));
 
     let preceding_float_zone = table
@@ -2155,10 +1977,9 @@ pub(super) fn render_table(
         && let Some(ref zone) = pb.float_zone
         && let Some(ref mut fp) = override_pos
     {
-        let width: f32 = col_widths.iter().sum();
         let height: f32 = row_layouts.iter().map(|r| r.height).sum();
         if fp.x < zone.obj_right
-            && fp.x + width > zone.obj_left
+            && fp.x + total_w > zone.obj_left
             && fp.y > zone.bottom_y
             && fp.y - height < zone.top_y
         {
@@ -2218,14 +2039,13 @@ pub(super) fn render_table(
         pb.slot_top = fp.y;
         (fp.x, saved, (fp.top_from_text, fp.bottom_from_text))
     } else {
-        let total_w: f32 = col_widths.iter().sum();
         let left = aligned_table_left(table, area, total_w, ctx.compat_mode);
         (left, None, (0.0, 0.0))
     };
     if let Some(fp) = &override_pos {
         pb.float_table_extent = Some(super::FloatTableExtent {
             left: table_left,
-            right: table_left + col_widths.iter().sum::<f32>(),
+            right: table_left + total_w,
             left_from_text: fp.left_from_text,
             right_from_text: fp.right_from_text,
         });
@@ -2245,12 +2065,11 @@ pub(super) fn render_table(
     // paragraph's narrow wrapping strip. Clear a preceding floating table
     // when the actual table rectangles intersect.
     if !is_floating {
-        let total_width: f32 = col_widths.iter().sum();
         let total_height: f32 = row_layouts.iter().map(|row| row.height).sum();
         if let Some(zone) = pb.float_zone.as_ref()
             && zone.from_table
             && table_left < zone.wrap_right()
-            && table_left + total_width > zone.wrap_left()
+            && table_left + total_w > zone.wrap_left()
             // A float whose wrap area stays in the margin pushes nothing, even a
             // table running onto its box (dutch_government_budget_letter; Word
             // probes 2026-10-28: 1pt outside the column stays beside, 1pt inside clears).
@@ -2271,48 +2090,22 @@ pub(super) fn render_table(
 
     // Pre-scan each row for footnote and endnote references so we can reserve
     // space as rows containing notes are rendered.
-    let row_footnote_ids: Vec<Vec<u32>> = table
-        .rows
-        .iter()
-        .map(|row| {
-            let mut ids = Vec::new();
-            for cell in &row.cells {
-                for p in cell.all_paragraphs() {
-                    for run in &p.runs {
-                        if let Some(id) = run.footnote_id {
-                            ids.push(id);
-                        }
-                    }
-                }
-            }
-            ids
-        })
-        .collect();
-    let row_endnote_ids: Vec<Vec<u32>> = table
-        .rows
-        .iter()
-        .map(|row| {
-            let mut ids = Vec::new();
-            for cell in &row.cells {
-                for p in cell.all_paragraphs() {
-                    for run in &p.runs {
-                        if let Some(id) = run.endnote_id {
-                            ids.push(id);
-                        }
-                    }
-                }
-            }
-            ids
-        })
-        .collect();
-
-    // Text width for footnote height computation (same as paragraph layout uses).
-    // A table's notes go to the foot of its column (the page in one column).
-    let fn_col = column_bounds.unwrap_or((
-        sp.margin_left,
-        sp.page_width - sp.margin_left - sp.margin_right,
-    ));
-    let fn_text_width = fn_col.1;
+    let note_ids = |pick: fn(&crate::model::Run) -> Option<u32>| -> Vec<Vec<u32>> {
+        table
+            .rows
+            .iter()
+            .map(|row| {
+                row.cells
+                    .iter()
+                    .flat_map(|cell| cell.all_paragraphs())
+                    .flat_map(|p| &p.runs)
+                    .filter_map(pick)
+                    .collect()
+            })
+            .collect()
+    };
+    let row_footnote_ids = note_ids(|run| run.footnote_id);
+    let row_endnote_ids = note_ids(|run| run.endnote_id);
 
     // Word repeats no header rows above a row whose minimum does not fit
     // below them on a fresh page (examples: a 30pt header over a
@@ -2478,7 +2271,7 @@ pub(super) fn render_table(
         let h: f32 = row_footnote_ids[ri]
             .iter()
             .filter(|id| !pb.footnote_ids_set.contains(id))
-            .map(|&id| super::footnotes::footnote_height(id, footnotes, ctx, fn_text_width))
+            .map(|&id| super::footnotes::footnote_height(id, footnotes, ctx, area.1))
             .sum();
         if h > 0.0 && pb.col_fn_reserved == 0.0 {
             h + ctx.note_separator.height
@@ -2585,6 +2378,7 @@ pub(super) fn render_table(
                             from: &[],
                             to: &[],
                         },
+                        &CELL_START,
                         f32::INFINITY,
                     )
                     <= available_h
@@ -2743,17 +2537,17 @@ pub(super) fn render_table(
         for &fn_id in &row_footnote_ids[ri] {
             let fn_h = footnotes
                 .contains_key(&fn_id)
-                .then(|| super::footnotes::footnote_height(fn_id, footnotes, ctx, fn_text_width));
+                .then(|| super::footnotes::footnote_height(fn_id, footnotes, ctx, area.1));
             if notes_fit {
                 pb.book_footnote(
                     fn_id,
-                    fn_col,
+                    area,
                     fn_h,
                     ctx.note_separator.height,
                     effective_margin_bottom,
                 );
             } else {
-                pb.carry_footnote(fn_id, fn_col, fn_h, ctx.note_separator.height);
+                pb.carry_footnote(fn_id, area, fn_h, ctx.note_separator.height);
             }
         }
 
@@ -2806,7 +2600,6 @@ pub(super) fn render_table(
                 pb.slot_top += text_anchor_offset;
             }
         } else {
-            let table_total_w: f32 = col_widths.iter().sum();
             let (top_margin, bottom_margin) = text_margins;
             let table_bottom = pb.slot_top;
 
@@ -2821,7 +2614,7 @@ pub(super) fn render_table(
                 let text_area_left = sp.margin_left;
                 let text_area_right = sp.page_width - sp.margin_right;
                 let space_left = table_left - text_area_left;
-                let space_right = text_area_right - (table_left + table_total_w);
+                let space_right = text_area_right - (table_left + total_w);
                 let wrap_text = if space_left >= 72.0 && space_right >= 72.0 {
                     crate::model::WrapText::BothSides
                 } else {
@@ -2831,7 +2624,7 @@ pub(super) fn render_table(
                     top_y: table_top_y + top_margin,
                     bottom_y: table_bottom - bottom_margin,
                     obj_left: table_left,
-                    obj_right: table_left + table_total_w,
+                    obj_right: table_left + total_w,
                     left_from_text: fp.left_from_text,
                     right_from_text: fp.right_from_text,
                     polygon_pts: None,
