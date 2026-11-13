@@ -167,20 +167,11 @@ pub(super) fn generate_shadow_mask(
     let pad_x = (blur_radius * SHADOW_SCALE).round() as u32;
     let pad_y = (blur_radius * SHADOW_SCALE).round() as u32;
     let inner_val = (alpha * 255.0).round().min(255.0) as u8;
-    let inner_w = px_w.saturating_sub(2 * pad_x);
+    let inner_w = px_w.saturating_sub(2 * pad_x) as usize;
     let inner_h = px_h.saturating_sub(2 * pad_y);
-    for row in 0..inner_h {
-        let y = pad_y + row;
-        if y >= px_h {
-            break;
-        }
-        for col in 0..inner_w {
-            let x = pad_x + col;
-            if x >= px_w {
-                break;
-            }
-            buf[(y * px_w + x) as usize] = inner_val;
-        }
+    for y in pad_y..pad_y + inner_h {
+        let row = (y * px_w + pad_x) as usize;
+        buf[row..row + inner_w].fill(inner_val);
     }
 
     // 3-pass box blur approximates Gaussian blur
