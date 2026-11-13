@@ -337,14 +337,7 @@ mod tests {
                 sw_ang: "cd4",
             },
         ];
-        let resolved = resolve_path(
-            CMDS.iter(),
-            &env,
-            100.0,
-            100.0,
-            1_000_000.0,
-            1_000_000.0,
-        );
+        let resolved = resolve_path(CMDS.iter(), &env, 100.0, 100.0, 1_000_000.0, 1_000_000.0);
         // Should have MoveTo + at least one CubicTo
         assert!(resolved.len() >= 2);
         assert!(matches!(resolved[0], ResolvedCommand::MoveTo(..)));

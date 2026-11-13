@@ -6,8 +6,8 @@ pub mod text_warp_definitions;
 use crate::model::CustomGeometry;
 
 use definitions::PresetDef;
-pub use formulas::{FormulaOp, GuideDef};
 use formulas::GuideEnv;
+pub use formulas::{FormulaOp, GuideDef};
 pub use path::{PathCommandDef, PathFill, ResolvedCommand};
 
 pub struct EvaluatedPath {

@@ -496,9 +496,9 @@ impl Translator<'_> {
             _ => 0.0,
         };
         let down = match align & 24 {
-            24 => 0.0,                                       // TA_BASELINE
+            24 => 0.0,                                     // TA_BASELINE
             8 => -(line_ratio - ascent_ratio) as f64 * em, // TA_BOTTOM
-            _ => ascent_ratio as f64 * em,                   // TA_TOP
+            _ => ascent_ratio as f64 * em,                 // TA_TOP
         };
         // The escapement turns the text counter-clockwise; logical y runs down.
         let (sin, cos) = (*escapement as f64 / 10.0).to_radians().sin_cos();

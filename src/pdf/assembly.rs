@@ -408,8 +408,7 @@ pub(super) fn assemble_pdf_pages(
             combined.push(b'\n');
             super::tagging::wrap_artifact(&mut combined, &pane_raw, false);
         }
-        let compressed =
-            miniz_oxide::deflate::compress_to_vec_zlib(&combined, 9);
+        let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&combined, 9);
         pdf.stream(content_ids[i], &compressed)
             .filter(Filter::FlateDecode);
     }

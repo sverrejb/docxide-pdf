@@ -170,7 +170,11 @@ pub(crate) fn test_index() -> &'static FontIndex {
 fn is_font_file(path: &Path) -> bool {
     path.extension()
         .and_then(std::ffi::OsStr::to_str)
-        .is_some_and(|e| ["ttf", "otf", "ttc"].iter().any(|x| e.eq_ignore_ascii_case(x)))
+        .is_some_and(|e| {
+            ["ttf", "otf", "ttc"]
+                .iter()
+                .any(|x| e.eq_ignore_ascii_case(x))
+        })
 }
 
 fn scan_font_dirs(setup: &FontSetup) -> FontIndex {
