@@ -127,7 +127,37 @@ pub(super) fn footnote_height(
         return 0.0;
     };
     let mark = ctx.footnote_marks.get(&id).map_or("1", String::as_str);
-    let mut total = 0.0f32;
+    let (paras, trailing) = note_paragraphs(footnote, mark, ctx, text_width);
+    let total = paras.iter().fold(0.0f32, |t, p| t + p.gap_above + p.height);
+    // Word puts a note's last space-after before the next note (erasmus_plus
+    // endnotes 5pt, master_thesis footnotes 3pt). ponytail: the last note is
+    // charged too, so a bottom-anchored block ends that far above the margin;
+    // the next note's space-before is untested.
+    total + trailing
+}
+
+/// A note's paragraph as both the height pass and the renderer see it.
+struct NotePara<'a> {
+    para: &'a Paragraph,
+    /// The spacing above it within the note (none before the first).
+    gap_above: f32,
+    text_width: f32,
+    hanging: f32,
+    /// None: an empty paragraph, one line of its mark's font.
+    layout: Option<ParagraphLayout>,
+    height: f32,
+}
+
+/// `footnote`'s paragraphs laid out at `text_width` with `mark` as the
+/// reference mark (a vanished empty paragraph takes no room), and the note's
+/// trailing space after.
+fn note_paragraphs<'a>(
+    footnote: &'a Footnote,
+    mark: &str,
+    ctx: &RenderContext,
+    text_width: f32,
+) -> (Vec<NotePara<'a>>, f32) {
+    let mut paras = Vec::new();
     let mut prev_space_after = 0.0f32;
     let mut prev_para = None;
     for (i, para) in footnote.paragraphs.iter().enumerate() {
@@ -139,21 +169,27 @@ pub(super) fn footnote_height(
         if layout.is_none() && para.paragraph_mark_vanish {
             continue;
         }
-        if i > 0 {
-            total += f32::max(prev_space_after, effective_space_before(para, prev_para));
-        }
-        total += layout.as_ref().map_or_else(
+        let gap_above = if i > 0 {
+            f32::max(prev_space_after, effective_space_before(para, prev_para))
+        } else {
+            0.0
+        };
+        let height = layout.as_ref().map_or_else(
             || empty_paragraph_line_h(para, ls, ctx),
             ParagraphLayout::height,
         );
+        paras.push(NotePara {
+            para,
+            gap_above,
+            text_width: para_text_width,
+            hanging,
+            layout,
+            height,
+        });
         prev_space_after = effective_space_after(para, footnote.paragraphs.get(i + 1));
         prev_para = Some(para);
     }
-    // Word puts a note's last space-after before the next note (erasmus_plus
-    // endnotes 5pt, master_thesis footnotes 3pt). ponytail: the last note is
-    // charged too, so a bottom-anchored block ends that far above the margin;
-    // the next note's space-before is untested.
-    total + prev_space_after
+    (paras, prev_space_after)
 }
 
 /// The separator above a page's footnotes, laid out as Word lays out
@@ -329,27 +365,14 @@ fn render_notes_downward(
             .cloned()
             .unwrap_or_else(|| "1".to_string());
 
-        let mut prev_space_after = 0.0f32;
-        let mut prev_para = None;
-        for (pi, para) in footnote.paragraphs.iter().enumerate() {
-            let runs = substitute_ref_marks(&para.runs, &display_num);
-            let ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
-
+        let (paras, trailing) = note_paragraphs(footnote, &display_num, ctx, text_width);
+        for np in &paras {
+            let para = np.para;
             let para_text_x = margin_left + para.indent_left;
-            let para_text_width = (text_width - para.indent_left - para.indent_right).max(1.0);
-
-            let hanging = super::compute_text_hanging(para, 0.0, ctx.fonts);
-            let layout = layout_paragraph(&runs, para, ls, ctx, para_text_width, hanging);
-            if layout.is_none() && para.paragraph_mark_vanish {
-                continue;
-            }
-
             // Inter-paragraph spacing within the footnote
-            if pi > 0 {
-                fn_y -= f32::max(prev_space_after, effective_space_before(para, prev_para));
-            }
+            fn_y -= np.gap_above;
 
-            if let Some(layout) = layout {
+            if let Some(layout) = &np.layout {
                 let baseline_y = fn_y - layout.font_size * layout.ascender_ratio;
                 let line_count = layout.lines.len();
 
@@ -370,7 +393,7 @@ fn render_notes_downward(
                     &para.alignment,
                     para_text_x,
                     para.indent_left,
-                    para_text_width,
+                    np.text_width,
                     baseline_y,
                     layout.line_height,
                     // Footnote lines carry no inline pictures, so no descent is needed.
@@ -378,7 +401,7 @@ fn render_notes_downward(
                     line_count,
                     0,
                     notes.links,
-                    hanging,
+                    np.hanging,
                     ctx.fonts,
                     None,
                     gradient_specs,
@@ -389,16 +412,11 @@ fn render_notes_downward(
                     None,
                 );
                 super::tagging::Tags::end(content);
-
-                fn_y -= layout.height();
-            } else {
-                fn_y -= empty_paragraph_line_h(para, ls, ctx);
             }
-            prev_space_after = effective_space_after(para, footnote.paragraphs.get(pi + 1));
-            prev_para = Some(para);
+            fn_y -= np.height;
         }
         // The note's trailing space, as `footnote_height` charges it.
-        fn_y -= prev_space_after;
+        fn_y -= trailing;
     }
     tops
 }

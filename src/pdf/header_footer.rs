@@ -11,12 +11,13 @@ use crate::model::{
 use super::color::stroke_border;
 use super::helpers::{align_offset, draw_horizontal_rule};
 use super::layout::{
-    LineOpts, LinkAnnotation, build_lines, is_text_empty, line_h_with_picture, lines_height,
-    picture_line_bottom, position_stretch, render_paragraph_lines, runs_max_image_h,
+    LineOpts, LinkAnnotation, TextLine, build_lines, is_text_empty, line_h_with_picture,
+    lines_height, picture_line_bottom, position_stretch, render_paragraph_lines, runs_max_image_h,
     size_lines_by_own_runs, tallest_run_metrics,
 };
 use super::positioning::resolve_h_position;
 use super::table;
+use super::table_layout::HfSubstitution;
 use super::{RenderContext, resolve_line_h};
 
 pub(super) fn substitute_hf_runs(
@@ -27,19 +28,24 @@ pub(super) fn substitute_hf_runs(
     styleref_values: &HashMap<String, String>,
     page_num_format: Option<&str>,
 ) -> Vec<Run> {
-    let values = FieldValues {
+    let sub = HfSubstitution {
         page_num,
         total_pages,
         section_pages,
         styleref_values,
         page_num_format,
     };
+    substitute_hf_runs_with(runs, &sub)
+}
+
+/// `runs` with their field codes replaced by this page's values.
+pub(super) fn substitute_hf_runs_with(runs: &[Run], sub: &HfSubstitution) -> Vec<Run> {
     runs.iter()
         .map(|run| {
             let mut r = run.clone();
             if let Some(ref fc) = run.field_code {
                 r.field_code = None;
-                r.text = values.eval(fc).unwrap_or_else(|| run.text.clone());
+                r.text = sub.eval(fc).unwrap_or_else(|| run.text.clone());
                 if matches!(fc, FieldCode::Page(_) | FieldCode::NumPages(_)) {
                     r.caps = false;
                     r.small_caps = false;
@@ -60,16 +66,7 @@ pub(super) fn page_field_text(n: usize, fmt: Option<&str>) -> String {
     )
 }
 
-/// What a header or footer field shows on one page.
-struct FieldValues<'a> {
-    page_num: usize,
-    total_pages: usize,
-    section_pages: usize,
-    styleref_values: &'a HashMap<String, String>,
-    page_num_format: Option<&'a str>,
-}
-
-impl FieldValues<'_> {
+impl HfSubstitution<'_> {
     /// None keeps the cached result.
     fn eval(&self, fc: &FieldCode) -> Option<String> {
         Some(match fc {
@@ -507,21 +504,12 @@ fn inline_canvas_tab_height(para: &Paragraph, width: f32, line_h: f32) -> Option
         .reduce(f32::max)
 }
 
-fn compute_header_height(
-    hf: &HeaderFooter,
-    ctx: &RenderContext,
-    sp: &SectionProperties,
-    is_header: bool,
-) -> f32 {
-    header_height(hf, ctx, sp, is_header, true)
-}
-
 /// A header/footer (by address, it lives as long as the document) and the
 /// section geometry its measured height depends on.
 pub(super) type HfHeightKey = (usize, [u32; 8], bool, bool);
 
-/// `compute_header_height`, optionally without the floats: the extent of the
-/// header's own text flow.
+/// The header's height, cached per section geometry; without the floats, the
+/// extent of the header's own text flow.
 fn header_height(
     hf: &HeaderFooter,
     ctx: &RenderContext,
@@ -829,7 +817,7 @@ pub(super) fn effective_slot_top(
     match header {
         Some(_) if sp.margin_top_fixed => base,
         Some(hf) => {
-            base.min(sp.page_height - sp.header_margin - compute_header_height(hf, ctx, sp, true))
+            base.min(sp.page_height - sp.header_margin - header_height(hf, ctx, sp, true, true))
         }
         None => base,
     }
@@ -908,7 +896,7 @@ pub(super) fn compute_effective_margin_bottom(
     let base = sp.margin_bottom;
     let mut bottom = match footer {
         Some(_) if sp.margin_bottom_fixed => base,
-        Some(hf) => base.max(sp.footer_margin + compute_header_height(hf, ctx, sp, false)),
+        Some(hf) => base.max(sp.footer_margin + header_height(hf, ctx, sp, false, true)),
         None => base,
     };
     let cols = super::column_geometry(sp);
@@ -985,7 +973,7 @@ pub(super) fn footer_top(
     ctx: &RenderContext,
 ) -> f32 {
     match layout_hf(sp, is_first, page_num, false, ctx) {
-        Some(hf) => sp.footer_margin + compute_header_height(hf, ctx, sp, false),
+        Some(hf) => sp.footer_margin + header_height(hf, ctx, sp, false, true),
         None => sp.footer_margin,
     }
 }
@@ -1255,6 +1243,80 @@ pub(super) struct HfPageContext<'a> {
     pub(super) page_num_format: Option<&'a str>,
 }
 
+/// A header text box's paragraph laid out at the box's content width: the
+/// anchor-offset pass and the draw pass advance by the same height.
+struct HfBoxPara {
+    lines: Vec<TextLine>,
+    inline_imgs: HashMap<usize, String>,
+    ls: LineSpacing,
+    text_w: f32,
+    fs: f32,
+    ar: Option<f32>,
+    line_h: f32,
+}
+
+impl HfBoxPara {
+    fn height(&self, tp: &Paragraph) -> f32 {
+        tp.space_before + self.lines.len().max(1) as f32 * self.line_h + tp.space_after
+    }
+}
+
+/// The text width inside a header text box: its content width less the
+/// paragraph's indents.
+fn hf_box_text_w(tp: &Paragraph, content_w: f32) -> f32 {
+    (content_w - tp.indent_left - tp.indent_right).max(1.0)
+}
+
+fn hf_box_paragraph(
+    tp: &Paragraph,
+    content_w: f32,
+    sub: &HfSubstitution,
+    ctx: &RenderContext,
+) -> HfBoxPara {
+    let ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    let text_w = hf_box_text_w(tp, content_w);
+    let hanging = if !tp.list_label.is_empty() {
+        if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
+            -tp.indent_first_line
+        } else {
+            0.0
+        }
+    } else if tp.indent_hanging > 0.0 {
+        tp.indent_hanging
+    } else {
+        -tp.indent_first_line
+    };
+    let inline_imgs = super::layout::run_image_map(&tp.runs, ctx.textbox_image_names);
+    // Footer page numbers live in text boxes as often as in plain paragraphs;
+    // without this the box kept the template's cached PAGE/NUMPAGES text.
+    let runs = substitute_hf_runs_with(&tp.runs, sub);
+    let lines = build_lines(
+        &runs,
+        ctx,
+        text_w,
+        ctx.cjk(true, tp),
+        &LineOpts {
+            inline_images: Some(&inline_imgs),
+            tab_stops: &tp.tab_stops,
+            indent_left: tp.indent_left,
+            indent_right: tp.indent_right,
+            hanging,
+            ..Default::default()
+        },
+    );
+    let (fs, lhr, ar) = tallest_run_metrics(&runs, ctx.fonts);
+    let line_h = resolve_line_h(ls, fs, lhr);
+    HfBoxPara {
+        lines,
+        inline_imgs,
+        ls,
+        text_w,
+        fs,
+        ar,
+        line_h,
+    }
+}
+
 pub(super) fn render_header_footer(
     content: &mut Content,
     hf: &HeaderFooter,
@@ -1266,19 +1328,18 @@ pub(super) fn render_header_footer(
     // The page's header/footer links; the text stays an artifact.
     links: &mut Vec<LinkAnnotation>,
 ) {
-    let page_num = pc.page_num;
-    let total_pages = pc.total_pages;
-    let section_pages = pc.section_pages;
-    let para_image_names = pc.para_image_names;
-    let inline_image_names = pc.inline_image_names;
-    let floating_image_names = pc.floating_image_names;
-    let styleref_values = pc.styleref_values;
-    let page_num_format = pc.page_num_format;
+    let sub = HfSubstitution {
+        page_num: pc.page_num,
+        total_pages: pc.total_pages,
+        section_pages: pc.section_pages,
+        styleref_values: pc.styleref_values,
+        page_num_format: pc.page_num_format,
+    };
     let text_width = sp.text_width();
     let mut cursor_y = if is_header {
         sp.page_height - sp.header_margin
     } else {
-        sp.footer_margin + compute_header_height(hf, ctx, sp, false)
+        sp.footer_margin + header_height(hf, ctx, sp, false, true)
     };
 
     let mut pi = 0usize;
@@ -1304,11 +1365,11 @@ pub(super) fn render_header_footer(
                     ctx,
                     content,
                     &mut cursor_y,
-                    page_num,
-                    total_pages,
-                    section_pages,
-                    styleref_values,
-                    page_num_format,
+                    sub.page_num,
+                    sub.total_pages,
+                    sub.section_pages,
+                    sub.styleref_values,
+                    sub.page_num_format,
                     gradient_specs,
                     links,
                     is_header,
@@ -1318,14 +1379,7 @@ pub(super) fn render_header_footer(
             }
             Block::Paragraph(para) if para.frame_props.is_some() => {
                 let fp = para.frame_props.as_ref().unwrap();
-                let substituted_runs = substitute_hf_runs(
-                    &para.runs,
-                    page_num,
-                    total_pages,
-                    section_pages,
-                    styleref_values,
-                    page_num_format,
-                );
+                let substituted_runs = substitute_hf_runs_with(&para.runs, &sub);
                 let (font_size, tallest_lhr, tallest_ar) =
                     tallest_run_metrics(&substituted_runs, ctx.fonts);
                 let ascender_ratio = tallest_ar.unwrap_or(0.75);
@@ -1428,14 +1482,7 @@ pub(super) fn render_header_footer(
                 let own_before = hf_own_space_before(prev_para, prev_space_after, para);
                 prev_para = Some(para);
 
-                let substituted_runs = substitute_hf_runs(
-                    &para.runs,
-                    page_num,
-                    total_pages,
-                    section_pages,
-                    styleref_values,
-                    page_num_format,
-                );
+                let substituted_runs = substitute_hf_runs_with(&para.runs, &sub);
 
                 let (font_size, tallest_lhr, tallest_ar) =
                     hf_run_metrics(&substituted_runs, para, ctx.fonts);
@@ -1451,7 +1498,7 @@ pub(super) fn render_header_footer(
                         &table_bands,
                     )
                     - gap;
-                // Mirrors compute_header_height: a line overlapping a frame the
+                // Mirrors header_height: a line overlapping a frame the
                 // text may not sit beside moves below it.
                 cursor_y = sp.page_height
                     - below_blocking_frames(sp.page_height - cursor_y, line_h, &bands);
@@ -1586,7 +1633,7 @@ pub(super) fn render_header_footer(
                         let mut by_z: Vec<_> = para.floating_images.iter().enumerate().collect();
                         by_z.sort_by_key(|(_, fi)| fi.z_index);
                         for (fi_idx, fi) in by_z {
-                            if let Some(pdf_name) = floating_image_names.get(&(pi, fi_idx)) {
+                            if let Some(pdf_name) = pc.floating_image_names.get(&(pi, fi_idx)) {
                                 let img = &fi.image;
                                 let zone = hf_float_zone(fi, sp, slot_top, own_before);
                                 super::smartart::render_image_with_clip(
@@ -1667,15 +1714,8 @@ pub(super) fn render_header_footer(
                             let content_x = tb_x + tb.margin_left;
                             let content_w =
                                 (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
-                            let hf_sub = super::table_layout::HfSubstitution {
-                                page_num,
-                                total_pages,
-                                section_pages,
-                                styleref_values,
-                                page_num_format,
-                            };
                             let hf_table = |t| {
-                                super::table::TextboxTable::layout(t, content_w, ctx, Some(&hf_sub))
+                                super::table::TextboxTable::layout(t, content_w, ctx, Some(&sub))
                             };
 
                             // WordArt (a header watermark) draws its glyphs as warped
@@ -1706,29 +1746,12 @@ pub(super) fn render_header_footer(
                             // Word vertically anchors textbox content per bodyPr anchor (ctr/b).
                             // The body textbox path (textbox_render::render_single_textbox) applies this,
                             // but the header/footer loop is a separate renderer that historically
-                            // top-anchored everything. Mirror the body math here. The per-paragraph
-                            // height calc must match the rendering advances below (block image / empty /
-                            // text), so keep the two in sync.
+                            // top-anchored everything. Mirror the body math here; `hf_box_paragraph`
+                            // gives this pass and the draw loop below the same advance.
                             let anchor_offset = match tb.text_anchor {
                                 TextAnchor::Top => 0.0,
                                 TextAnchor::Middle | TextAnchor::Bottom => {
                                     let tp_height = |tp: &Paragraph| -> f32 {
-                                        let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                                        let tp_text_w =
-                                            (content_w - tp.indent_left - tp.indent_right).max(1.0);
-                                        let tp_hanging = if !tp.list_label.is_empty() {
-                                            if tp.indent_first_line > 0.0
-                                                && tp.indent_hanging == 0.0
-                                            {
-                                                -tp.indent_first_line
-                                            } else {
-                                                0.0
-                                            }
-                                        } else if tp.indent_hanging > 0.0 {
-                                            tp.indent_hanging
-                                        } else {
-                                            -tp.indent_first_line
-                                        };
                                         if let Some(img) =
                                             super::textbox_render::textbox_para_block_image(tp)
                                         {
@@ -1737,40 +1760,7 @@ pub(super) fn render_header_footer(
                                                 + img.layout_extra_height
                                                 + tp.space_after;
                                         }
-                                        let inline_imgs = super::layout::run_image_map(
-                                            &tp.runs,
-                                            ctx.textbox_image_names,
-                                        );
-                                        // Footer page numbers live in text boxes as often
-                                        // as in plain paragraphs; without this the box
-                                        // kept the template's cached PAGE/NUMPAGES text.
-                                        let hf_runs = substitute_hf_runs(
-                                            &tp.runs,
-                                            page_num,
-                                            total_pages,
-                                            section_pages,
-                                            styleref_values,
-                                            page_num_format,
-                                        );
-                                        let tb_lines = build_lines(
-                                            &hf_runs,
-                                            ctx,
-                                            tp_text_w,
-                                            ctx.cjk(true, tp),
-                                            &LineOpts {
-                                                inline_images: Some(&inline_imgs),
-                                                tab_stops: &tp.tab_stops,
-                                                indent_left: tp.indent_left,
-                                                indent_right: tp.indent_right,
-                                                hanging: tp_hanging,
-                                                ..Default::default()
-                                            },
-                                        );
-                                        let (fs, lhr, _) = tallest_run_metrics(&hf_runs, ctx.fonts);
-                                        let line_h = resolve_line_h(tp_ls, fs, lhr);
-                                        tp.space_before
-                                            + tb_lines.len().max(1) as f32 * line_h
-                                            + tp.space_after
+                                        hf_box_paragraph(tp, content_w, &sub, ctx).height(tp)
                                     };
                                     let tables: f32 =
                                         tb.tables.iter().map(|(_, t)| hf_table(t).height()).sum();
@@ -1797,24 +1787,9 @@ pub(super) fn render_header_footer(
                                         gradient_specs,
                                         links,
                                         None,
-                                        Some(&hf_sub),
+                                        Some(&sub),
                                     );
                                 }
-                                let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                                let tp_text_w =
-                                    (content_w - tp.indent_left - tp.indent_right).max(1.0);
-                                let tp_hanging = if !tp.list_label.is_empty() {
-                                    if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
-                                        -tp.indent_first_line
-                                    } else {
-                                        0.0
-                                    }
-                                } else if tp.indent_hanging > 0.0 {
-                                    tp.indent_hanging
-                                } else {
-                                    -tp.indent_first_line
-                                };
-
                                 if let Some(img) =
                                     super::textbox_render::textbox_para_block_image(tp)
                                 {
@@ -1823,7 +1798,8 @@ pub(super) fn render_header_footer(
                                             + tp.indent_left
                                             + align_offset(
                                                 tp.alignment,
-                                                (tp_text_w - img.display_width).max(0.0),
+                                                (hf_box_text_w(tp, content_w) - img.display_width)
+                                                    .max(0.0),
                                             );
                                         let img_y =
                                             tb_cursor - tp.space_before - img.display_height;
@@ -1844,48 +1820,19 @@ pub(super) fn render_header_footer(
                                     continue;
                                 }
 
-                                let inline_imgs =
-                                    super::layout::run_image_map(&tp.runs, ctx.textbox_image_names);
-                                // Same substitution as the height pass above: the
-                                // footer text box's PAGE/NUMPAGES must be evaluated
-                                // for this page, not left at the cached value.
-                                let hf_runs = substitute_hf_runs(
-                                    &tp.runs,
-                                    page_num,
-                                    total_pages,
-                                    section_pages,
-                                    styleref_values,
-                                    page_num_format,
-                                );
-                                let tb_lines = build_lines(
-                                    &hf_runs,
-                                    ctx,
-                                    tp_text_w,
-                                    ctx.cjk(true, tp),
-                                    &LineOpts {
-                                        inline_images: Some(&inline_imgs),
-                                        tab_stops: &tp.tab_stops,
-                                        indent_left: tp.indent_left,
-                                        indent_right: tp.indent_right,
-                                        hanging: tp_hanging,
-                                        ..Default::default()
-                                    },
-                                );
-                                let (tb_fs, tb_lhr, tb_ar) =
-                                    tallest_run_metrics(&hf_runs, ctx.fonts);
-                                let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
-                                if tb_lines.is_empty() {
-                                    tb_cursor -= tp.space_before + tb_line_h + tp.space_after;
+                                let bp = hf_box_paragraph(tp, content_w, &sub, ctx);
+                                if bp.lines.is_empty() {
+                                    tb_cursor -= bp.height(tp);
                                     continue;
                                 }
-                                let tb_ascender = tb_ar.unwrap_or(0.75);
-                                let tb_baseline = tb_cursor - tp.space_before - tb_fs * tb_ascender;
+                                let tb_ascender = bp.ar.unwrap_or(0.75);
+                                let tb_baseline = tb_cursor - tp.space_before - bp.fs * tb_ascender;
                                 let tb_metrics = (
-                                    tb_fs * tb_ascender,
-                                    if inline_imgs.is_empty() {
+                                    bp.fs * tb_ascender,
+                                    if bp.inline_imgs.is_empty() {
                                         0.0
                                     } else {
-                                        picture_line_bottom(&tp.runs, tp, ctx.fonts, tp_ls)
+                                        picture_line_bottom(&tp.runs, tp, ctx.fonts, bp.ls)
                                     },
                                 );
                                 super::render_list_label(
@@ -1894,19 +1841,19 @@ pub(super) fn render_header_footer(
                                     ctx.fonts,
                                     content_x + tp.indent_left - tp.indent_hanging,
                                     tb_baseline,
-                                    tb_fs,
+                                    bp.fs,
                                 );
                                 render_paragraph_lines(
                                     content,
-                                    &tb_lines,
+                                    &bp.lines,
                                     &tp.alignment,
                                     content_x + tp.indent_left,
                                     tp.indent_left,
-                                    tp_text_w,
+                                    bp.text_w,
                                     tb_baseline,
-                                    tb_line_h,
+                                    bp.line_h,
                                     tb_metrics,
-                                    tb_lines.len(),
+                                    bp.lines.len(),
                                     0,
                                     links,
                                     0.0,
@@ -1919,9 +1866,7 @@ pub(super) fn render_header_footer(
                                     None,
                                     None,
                                 );
-                                tb_cursor -= tp.space_before
-                                    + (tb_lines.len() as f32) * tb_line_h
-                                    + tp.space_after;
+                                tb_cursor -= bp.height(tp);
                             }
                             if needs_clip {
                                 content.restore_state();
@@ -1934,7 +1879,7 @@ pub(super) fn render_header_footer(
                 }
 
                 if (has_para_image || text_empty) && para.content_height > 0.0 {
-                    if let Some(pdf_name) = para_image_names.get(&pi) {
+                    if let Some(pdf_name) = pc.para_image_names.get(&pi) {
                         let img = para.image.as_ref().unwrap();
                         let natural_line_h = font_size * tallest_lhr.unwrap_or(1.2);
                         let bottom_depth = if para.content_height > line_h {
@@ -2050,7 +1995,8 @@ pub(super) fn render_header_footer(
                     continue;
                 }
 
-                let block_inline_images: HashMap<usize, String> = inline_image_names
+                let block_inline_images: HashMap<usize, String> = pc
+                    .inline_image_names
                     .iter()
                     .filter(|((pi2, _), _)| *pi2 == pi)
                     .map(|((_, ri), name)| (*ri, name.clone()))
@@ -2319,46 +2265,47 @@ fn inherited_hf(
         })
 }
 
-/// Resolve which header to use for a given page, walking sections backward
-/// for inheritance. Returns `(header_data, hf_type_id, section_index)`.
+/// Resolve which header (or footer) to use for a given page, walking sections
+/// backward for inheritance. Returns `(header_data, hf_type_id, section_index)`.
+fn resolve_hf_for_page(
+    doc: &Document,
+    section_idx: usize,
+    is_first_page: bool,
+    page_num: usize,
+    is_header: bool,
+) -> (Option<&HeaderFooter>, u8, usize) {
+    let sp = &doc.sections[section_idx].properties;
+    let variant = hf_variant(doc.even_and_odd_headers, sp, is_first_page, page_num);
+    let t = match (variant, is_header) {
+        (HfVariant::Default, true) => 0,
+        (HfVariant::First, true) => 1,
+        (HfVariant::Even, true) => 4,
+        (HfVariant::Default, false) => 2,
+        (HfVariant::First, false) => 3,
+        (HfVariant::Even, false) => 5,
+    };
+    match inherited_hf(&doc.sections, section_idx, variant, is_header) {
+        Some((hf, idx)) => (Some(hf), t, idx),
+        None => (None, t, section_idx),
+    }
+}
+
 pub(super) fn resolve_header_for_page(
     doc: &Document,
     section_idx: usize,
     is_first_page: bool,
     page_num: usize,
 ) -> (Option<&HeaderFooter>, u8, usize) {
-    let sp = &doc.sections[section_idx].properties;
-    let variant = hf_variant(doc.even_and_odd_headers, sp, is_first_page, page_num);
-    let t = match variant {
-        HfVariant::Default => 0,
-        HfVariant::First => 1,
-        HfVariant::Even => 4,
-    };
-    match inherited_hf(&doc.sections, section_idx, variant, true) {
-        Some((hf, idx)) => (Some(hf), t, idx),
-        None => (None, t, section_idx),
-    }
+    resolve_hf_for_page(doc, section_idx, is_first_page, page_num, true)
 }
 
-/// Resolve which footer to use for a given page, walking sections backward
-/// for inheritance. Returns `(footer_data, hf_type_id, section_index)`.
 pub(super) fn resolve_footer_for_page(
     doc: &Document,
     section_idx: usize,
     is_first_page: bool,
     page_num: usize,
 ) -> (Option<&HeaderFooter>, u8, usize) {
-    let sp = &doc.sections[section_idx].properties;
-    let variant = hf_variant(doc.even_and_odd_headers, sp, is_first_page, page_num);
-    let t = match variant {
-        HfVariant::Default => 2,
-        HfVariant::First => 3,
-        HfVariant::Even => 5,
-    };
-    match inherited_hf(&doc.sections, section_idx, variant, false) {
-        Some((hf, idx)) => (Some(hf), t, idx),
-        None => (None, t, section_idx),
-    }
+    resolve_hf_for_page(doc, section_idx, is_first_page, page_num, false)
 }
 
 /// The gap above a header/footer paragraph: contextual spacing drops both
@@ -2419,7 +2366,7 @@ mod tests {
         ];
         let mut styleref_values = HashMap::new();
         let eval = |values: &HashMap<String, String>| {
-            FieldValues {
+            HfSubstitution {
                 page_num: 1,
                 total_pages: 1,
                 section_pages: 1,

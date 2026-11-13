@@ -204,15 +204,14 @@ pub(super) fn render_list_label(
     }
     let baseline_y =
         baseline_y + para.list_label_rise - centred_label_drop(para, fonts, fallback_font_size);
+    let x = label_x + label_shift(para, fonts);
     let pieces = label_pieces(para);
     if pieces.len() > 1 && !para.bidi {
         let label_fs = para.list_label_font_size.unwrap_or(fallback_font_size);
         if let Some(c) = para.list_label_color {
             fill_rgb(content, c);
         }
-        content
-            .begin_text()
-            .next_line(label_x + label_shift(para, fonts), baseline_y);
+        content.begin_text().next_line(x, baseline_y);
         show_label_pieces(content, &pieces, fonts, label_fs);
         content.end_text();
         if para.list_label_color.is_some() {
@@ -236,14 +235,10 @@ pub(super) fn render_list_label(
         content.next_line(label_x, baseline_y);
         super::layout::show_visual(content, entry, &para.list_label);
     } else {
-        content
-            .next_line(label_x + label_shift(para, fonts), baseline_y)
-            .show(Str(&label_bytes));
+        content.next_line(x, baseline_y).show(Str(&label_bytes));
     }
     content.end_text();
-    let strike = |entry: &FontEntry| {
-        super::layout::os2_strike(entry, label_fs).map(|(top, th)| (baseline_y + top - th, th))
-    };
+    let strike = |entry: &FontEntry| super::layout::strike_line(entry, label_fs, baseline_y);
     // Underlines follow the item's text font, strikes the label's own (Word
     // for Mac probe: a Symbol bullet before Calibri 12 text is underlined
     // 0.72pt like Calibri but struck 0.48pt like Symbol).
@@ -268,7 +263,6 @@ pub(super) fn render_list_label(
         // at Calibri 11), over the label's width; the tab gap to the text
         // carries a 0.48pt strike after a deleted label and the full
         // underline after an inserted one.
-        let x = label_x + label_shift(para, fonts);
         let w = label_width(para, fonts);
         let line = if rev.deleted {
             strike(entry)
@@ -301,7 +295,6 @@ pub(super) fn render_list_label(
     }
     if let (Some(split), Some(entry)) = (para.list_label_renumbered, entry) {
         // "4.2.": the original number struck, the final one underlined.
-        let x = label_x + label_shift(para, fonts);
         let orig: String = para.list_label.chars().take(split).collect();
         let w_orig = label_text_width(para, fonts, label_font_key(para), &orig);
         let w_all = label_width(para, fonts);
