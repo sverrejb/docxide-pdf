@@ -459,8 +459,7 @@ pub(super) fn num_tab_override(ppr: Option<roxmltree::Node>) -> Option<f32> {
         .children()
         .filter(|t| t.has_tag_name((WML_NS, "tab")) && t.attribute((WML_NS, "val")) == Some("num"))
         .filter_map(|t| super::twips_attr(t, "pos"))
-        .filter(|&pos| pos > 0.0)
-        .last()
+        .rfind(|&pos| pos > 0.0)
 }
 
 /// `w:keepLines`, direct or from the style.
