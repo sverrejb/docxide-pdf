@@ -122,6 +122,7 @@ fn compose(parent: GroupTransform, xfrm: &Xfrm) -> GroupTransform {
     }
 }
 
+#[derive(Default)]
 struct BaseAnchor {
     x: f32,
     /// An aligned group's alignment and width; its shapes then count `x`
@@ -183,15 +184,8 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
         }
     } else {
         BaseAnchor {
-            x: 0.0,
-            h_align: None,
-            y: 0.0,
-            h_rel: HRelativeFrom::Column,
-            v_rel: VRelativeFrom::Paragraph,
-            behind_doc: false,
-            z_index: 0,
             on_line: true,
-            v_from_line: false,
+            ..Default::default()
         }
     };
 
@@ -435,15 +429,11 @@ pub(super) fn parse_vml_group<R: Read + Seek>(
     let box_style = parse_vml_box_style(style);
     let (behind_doc, z_index) = vml_z_order(box_style.z_index);
     let base = BaseAnchor {
-        x: 0.0,
-        h_align: None,
-        y: 0.0,
         h_rel: box_style.h_relative,
         v_rel: box_style.v_relative,
         behind_doc,
         z_index,
-        on_line: false,
-        v_from_line: false,
+        ..Default::default()
     };
     let mut out = Vec::new();
     walk_vml_group(group, GroupTransform::IDENTITY, &base, 0, ctx, &mut out);
