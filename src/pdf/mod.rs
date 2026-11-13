@@ -14,6 +14,7 @@ mod header_footer;
 mod helpers;
 mod images;
 mod layout;
+mod line_render;
 mod list_label;
 mod objstm;
 mod positioning;
