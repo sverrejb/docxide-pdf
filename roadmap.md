@@ -96,7 +96,7 @@ Leads from the 2026-11-07/08 triage round, still open:
   `empty_frame_table_bands` only reserves the box on the first page. Word
   reserves it on the page where the anchor lands (2026-11-08), so the fix
   needs to know which page the preceding table ends on before layout.
-- Double underline geometry is done (`layout.rs` `double_underline`,
+- Double underline geometry is done (`line_render.rs` `double_underline`,
   2026-11-09, 170/172 online probe points exact); unchecked: the 2026-11-07
   note that Word also underlines a line's trailing space.
 - nested-floats-spaced-text-bottom-cell (42.8): the same two registration
@@ -225,7 +225,7 @@ between lines. Open:
 - **covid_insomnia p5 right column**: the reference list sits one line low
   ("[10]" at 146.3pt, Word 135.3pt). Its two-column flow also regressed with
   the justified squeeze.
-- **Two thresholds for one rule**: `MIN_EMPTY_STRIP` (18.0pt, `pdf/mod.rs`,
+- **Two thresholds for one rule**: `MIN_EMPTY_STRIP` (18.0pt, `pdf/positioning.rs`,
   bracketed only between 0 and ~42pt) and `MIN_NESTED_FLOAT_STRIP` (18.75pt,
   `pdf/table_layout.rs`, measured between 18.70 and 18.75pt) both decide
   whether an empty line fits beside a float. Probe the body case and share
@@ -707,25 +707,35 @@ Backlog (details in `current_focus/A11Y.md`):
 - Floating-table keep-together could be geometric (`fp.y > saved`) instead of
   reading raw `tblpY` (`text_anchor_offset`).
 - Spring-cleaning next rounds (`current_focus/spring_cleaning.md`, whose
-  "Not done" list is still accurate while its branch notes are stale):
-  parameter bundling (`render_paragraph_lines` and `assemble_pdf_pages` take
-  21 parameters each), `PageBuilder` (14 parallel `all_*` Vecs) →
-  `Vec<FinishedPage>`, the 4× textbox layout, 5× picture effects, the
-  triplicated `table.rs` row renderers.
+  "Not done" list is otherwise still accurate). Done in the 2026-11-13
+  simplify pass: `render_paragraph_lines` takes `RenderOpts`, picture
+  effects go through `color::draw_image_halo`/`draw_image_afterglow`, and
+  whole and split table cells share one renderer. Left: `assemble_pdf_pages`
+  parameter bundling, `PageBuilder` (parallel `all_*` Vecs) →
+  `Vec<FinishedPage>`, the 4× textbox layout.
 - `pdf/images.rs`: the seven per-kind name maps remain beside the shared
   `ImageKey` XObjects; `build_paragraph_lines` taking `&HashMap<usize,
-  &str>`; pair `image_names` + `effect_names`. `--no-resample` threads
-  `resample: bool` through 6 functions and ~13 calls; an `ImageEnv { fonts,
-  options }` passed instead puts the calls back on one line and makes the
-  next image option (interpolation, JPEG quality) a field, not another
-  parameter.
+  &str>`; pair `image_names` + `effect_names`; inline image maps are keyed
+  by (block, run) and refiltered per paragraph (key them by block). The
+  embedding pass threads one `Embedder` (pdf, alloc, fonts, resample).
+- Header text boxes (`header_footer.rs` `render_hf_textbox`) re-implement
+  `textbox_render::render_single_textbox` / `render_textbox_paragraphs`,
+  which already take `hf_sub`: the header copy ignores picture descent and
+  the `size_break_lines`/`size_unsized_lines`/`size_mark_line` passes and
+  uses a 3-way hanging rule (textbox_render's is 4-way). Routing it through
+  textbox_render is the fix, but moves header output.
+- `measure_header_height` lays out `para.runs` while the header render uses
+  the PAGE/NUMPAGES-substituted runs, so field text whose cached and live
+  widths differ can measure one height and draw another. One shared
+  per-paragraph layout (as `hf_box_paragraph` and `note_paragraphs` now do
+  for text boxes and notes) fixes it; moves output.
 
 ### Restructurings left by the v0.20.2 simplify review (2026-11-07)
 
 Each is a larger change; every entry says what it buys and what it risks.
 All are meant to keep output identical unless the entry says otherwise.
 
-- **Change bars out of thread-local state** (`pdf/layout.rs` `CHANGE_BARS` /
+- **Change bars out of thread-local state** (`pdf/line_render.rs` `CHANGE_BARS` /
   `BAR_EXTENSION`). Today `mod.rs` sets and clears the extension around each
   paragraph (3 set sites, 2 clears), bars are flushed by `take_change_bars`
   per page in `flush_page`, at render start, after footnotes and after
@@ -758,7 +768,7 @@ All are meant to keep output identical unless the entry says otherwise.
   paragraphs" limit becomes "anchor estimated on this page". Large; the
   estimator merge moves output (the two line counters differ), the band
   cache alone does not. Part of the Paginator extraction above.
-- **One float-blocks-band rule** (`pdf/mod.rs` `textbox_blocks_band` vs
+- **One float-blocks-band rule** (`pdf/positioning.rs` `textbox_blocks_band` vs
   `positioning.rs` `image_blocks_band`; `hangs_below_anchor` exists for
   textboxes only). The two already differ: `side_room(wrap_text)` for
   textboxes, `no_strip_beside`'s `left.max(right)` for pictures. Change: one
@@ -772,7 +782,7 @@ All are meant to keep output identical unless the entry says otherwise.
   Change: `VRelativeFrom::region(sp) -> (top, bottom)` used by every
   non-paragraph anchor. Small to medium; `(H+h)/2` vs `H-(H-h)/2` can differ
   in the last f32 bit, so check the visual hashes.
-- **`render_floating_images` by `(index, &fi)`** (`pdf/mod.rs` `float_subset`).
+- **`render_floating_images` by `(index, &fi)`** (`pdf/paragraph.rs` `float_subset`).
   The split path clones its floats and re-keys two name maps only because
   the renderer keys XObject names by position. Change: take index/float
   pairs or a predicate. Small to medium, output identical.
@@ -806,7 +816,7 @@ All are meant to keep output identical unless the entry says otherwise.
   label's strike/underline and the renumbered "4.2." by special-case code.
   Change: segments of (text, strike, underline, colour). Large for a
   markup-only gain; only if labels grow more styling.
-- **Bahnschrift as a table row** (`fonts/mod.rs` `register_font`: the rule
+- **Bahnschrift as a table row** (`fonts/resolve.rs` `register_font`: the rule
   sits in five places — primary filter, altName reject, Helv skip,
   hard-coded "Calibri", metric override). Change: one
   `[(prefix, drawn_face, ascent, line_h)]` table; see Fonts for the open
@@ -830,7 +840,14 @@ All are meant to keep output identical unless the entry says otherwise.
 ## Test harness and tooling
 
 - Deterministic output regressed once: scraped/door_air_cooling_unit_spec gave
-  two different PDFs over three runs (2026-10-03); not investigated.
+  two different PDFs over three runs (2026-10-03); likely the font-index
+  cache race below.
+- The font-index cache (`fonts/cache.rs` `save_cache`) is written with a
+  plain `fs::write`, so a concurrent conversion can read it truncated and
+  fall back to Helvetica (2026-11-13: two runs of one binary differed on 12
+  fixtures until `DOCXIDE_NO_FONT_CACHE=1`). Write to a temp file and
+  rename. Every worktree's `fonts/` symlink is its own dir entry, so each
+  one rewrites the cache.
 - Engine-comparison site: veraPDF already runs once per fixture; if runs
   grow, batch it per shard via a `page-metrics` pre-pass.
   `engine_compare.py` `pdf_creator()` truncates Quartz producers at the

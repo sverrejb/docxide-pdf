@@ -38,7 +38,7 @@ Word's file is smaller. The model predicts case13's +338 KB; measured +328 KB.
 From case13 page 50 (Word 18.7 KB raw / 3.6 KB compressed, ours 48.8 KB /
 5.8 KB):
 
-1. **One TJ per word.** The chunk loop in `src/pdf/layout.rs` (`move_to`
+1. **One TJ per word.** The chunk loop in `src/pdf/line_render.rs` (`move_to`
    then the `GlyphDraw` match, ~line 6060) writes `x 0 Td`, the word's TJ and
    the trailing space as a separate `Tj` for every chunk: 388 `Td` on the
    page. Word writes one TJ per line with the word gaps as adjustments.
@@ -96,7 +96,7 @@ baselines on Word's 0.25pt grid often sit exactly on a step at 150 dpi, so
 federal_procurement_terms −0.29pp, with identical stext lines apart from
 line-box right edges 0.0003pt off (a threshold in the metric, not found).
 
-1. **One TJ per line**: `TjRun` in `src/pdf/layout.rs`. Chunks drawn as
+1. **One TJ per line**: `TjRun` in `src/pdf/line_render.rs`. Chunks drawn as
    `Placed` (one face), `Kerned` or `Plain` in an embedded font join the open
    run; the run is flushed before anything else is written (colour, font,
    Tc, Tz, rendering mode, marked-content switch via `LinkTagger::chunk`'s
@@ -107,7 +107,7 @@ line-box right edges 0.0003pt off (a threshold in the metric, not found).
    Flate `CIDToGIDMap`. A font with more than 8281 glyphs keeps Identity.
 3. **3-decimal `Td`**: dropped. With one `Td` per line it saved 0.09 MB and
    moved every baseline by up to 0.0005pt (see above).
-4. **Tight arrays**: `TjArray` in `src/pdf/layout.rs`, a pdf-writer
+4. **Tight arrays**: `TjArray` in `src/pdf/line_render.rs`, a pdf-writer
    `Primitive` that writes a TJ array without separators; `show_kerned`,
    `show_placed` and `TjRun::flush` write through it.
 5. **Deflate 9** for page content, object streams and the xref stream.

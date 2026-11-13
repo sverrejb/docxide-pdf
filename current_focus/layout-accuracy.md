@@ -167,7 +167,7 @@ Diagnostics: `pdf_lines.py` (rules and baselines, y from page top),
 - Fonts in `~/Library/Fonts` outrank system fonts in our discovery; a big
   user font folder collapses the suite. Worktrees need `fonts -> ../../fonts`.
 - `cargo fmt` on `main` reformats two pre-existing spots in
-  `src/pdf/layout.rs` (`push_decoration` and its call); leave them out of rule
+  `src/pdf/line_render.rs` (`push_decoration` and its call); leave them out of rule
   commits or format them in a commit of their own.
 - Word's PDFs carry a whitespace-only text line per empty paragraph mark;
   match lines by text, not by "first line". Word count beats text recall for
