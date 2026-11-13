@@ -29,9 +29,9 @@ use std::io::Read;
 
 use crate::error::Error;
 use crate::model::{
-    Block, BorderStyle, CellBorder, DocGridType, Document, DropCap, FrameProperties, HRelativeFrom,
+    Block, BorderStyle, CellBorder, Document, DropCap, FrameProperties, HRelativeFrom,
     HorizontalPosition, LineSpacing, ParagraphBorder, ParagraphBorders, Section, SectionBreakType,
-    SectionProperties, TabAlignment, TabStop, VRelativeFrom, VerticalPosition,
+    TabAlignment, TabStop, VRelativeFrom, VerticalPosition,
 };
 
 use styles::{ParagraphStyle, StyleDefaults, parse_line_spacing, parse_styles, parse_theme};
@@ -39,7 +39,7 @@ use styles::{ParagraphStyle, StyleDefaults, parse_line_spacing, parse_styles, pa
 use embedded_fonts::parse_font_table;
 use headers_footers::{parse_endnotes, parse_footnotes};
 use numbering::parse_numbering;
-use relationships::parse_relationships;
+use relationships::parse_part_relationships;
 use sections::parse_section_properties;
 use settings::parse_settings;
 use tables::parse_table_node;
@@ -392,10 +392,8 @@ pub(super) fn parse_hex_color(val: &str) -> Option<[u8; 3]> {
     if val == "auto" || val.len() != 6 {
         return None;
     }
-    let r = u8::from_str_radix(&val[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&val[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&val[4..6], 16).ok()?;
-    Some([r, g, b])
+    let v = u32::from_str_radix(val, 16).ok()?;
+    Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
 }
 
 pub(super) fn parse_text_color(val: &str) -> Option<[u8; 3]> {
@@ -947,13 +945,6 @@ pub(in crate::docx) fn parse_paragraph_spacing(
     (space_before, space_after, line_spacing)
 }
 
-/// Convert a character-unit indent attribute (hundredths of character width) to points.
-fn chars_to_pts(ind: roxmltree::Node, attr: &str, char_width: f32) -> Option<f32> {
-    ind.attribute((WML_NS, attr))
-        .and_then(|v| v.parse::<f32>().ok())
-        .map(|hundredths| hundredths / 100.0 * char_width)
-}
-
 /// A `w:ind`'s character-unit attributes, in characters (the attributes are
 /// hundredths). An explicit zero switches the value off, also over a style's
 /// (taiwanese_education_fraud_ruling: `leftChars="0" left="0"` under a
@@ -1038,7 +1029,11 @@ pub(super) fn extract_indents(
         twips
             .iter()
             .find_map(|t| twips_attr(ind, t))
-            .or_else(|| char_width.and_then(|cw| chars_to_pts(ind, chars, cw)))
+            // The `*Chars` attributes are hundredths of a character width.
+            .or_else(|| {
+                let hundredths: f32 = ind.attribute((WML_NS, chars))?.parse().ok()?;
+                Some(hundredths / 100.0 * char_width?)
+            })
     };
     (
         side("leftChars", &["start", "left"]),
@@ -1095,6 +1090,29 @@ pub(super) fn collect_block_nodes<'a>(
         }
     }
     nodes
+}
+
+/// A document parsed from `(zip path, XML)` parts.
+#[cfg(test)]
+pub(crate) fn parse_parts(parts: &[(&str, &str)]) -> Document {
+    use std::io::Write;
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for (name, xml) in parts {
+        zip.start_file(*name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(xml.as_bytes()).unwrap();
+    }
+    parse_bytes(
+        &zip.finish().unwrap().into_inner(),
+        crate::RevisionView::Final,
+    )
+    .unwrap()
+}
+
+/// `parse_parts` with only a word/document.xml.
+#[cfg(test)]
+pub(crate) fn parse_document_xml(xml: &str) -> Document {
+    parse_parts(&[("word/document.xml", xml)])
 }
 
 pub(super) fn read_zip_text<R: Read + std::io::Seek>(
@@ -1173,15 +1191,6 @@ mod relationships {
                 ))
             })
             .collect()
-    }
-
-    pub(in crate::docx) fn parse_relationships<R: Read + std::io::Seek>(
-        zip: &mut zip::ZipArchive<R>,
-    ) -> HashMap<String, String> {
-        let Some(xml_content) = read_zip_text(zip, "word/_rels/document.xml.rels") else {
-            return HashMap::new();
-        };
-        parse_rels_xml(&xml_content)
     }
 
     pub(in crate::docx) fn parse_part_relationships<R: Read + std::io::Seek>(
@@ -1297,7 +1306,7 @@ fn parse_zip<R: Read + std::io::Seek>(
     styles.defaults.no_html_auto_spacing = settings.no_html_auto_spacing;
     styles.defaults.no_indent_as_num_tab = settings.no_indent_as_num_tab;
     let numbering = parse_numbering(zip);
-    let rels = parse_relationships(zip);
+    let rels = parse_part_relationships(zip, "word/document.xml");
     let ft = parse_font_table(zip);
     let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
     let mut media = images::MediaParts::default();
@@ -1308,11 +1317,9 @@ fn parse_zip<R: Read + std::io::Seek>(
     let mut comments = comments::parse_comments(zip);
     let (title, author, subject, keywords) = parse_core_props(zip);
 
-    let mut xml_content = String::new();
-    zip.by_name("word/document.xml")
-        .map_err(|_| Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into()))?
-        .read_to_string(&mut xml_content)?;
-    let xml_content = join_split_run_properties(strict_to_transitional(xml_content));
+    let xml_content = read_zip_text(zip, "word/document.xml").ok_or_else(|| {
+        Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into())
+    })?;
 
     let xml = roxmltree::Document::parse(&xml_content)?;
     let root = xml.root_element();
@@ -1479,46 +1486,23 @@ fn parse_zip<R: Read + std::io::Seek>(
         blocks.push(Block::Paragraph(crate::model::Paragraph::default()));
     }
 
-    // Final section: body-level sectPr
-    let final_props = if let Some(sect_node) = wml(body, "sectPr") {
-        parse_section_properties(
-            sect_node,
-            &mut ctx,
-            default_line_pitch,
-            settings.gutter_at_top,
-        )
-    } else {
-        SectionProperties {
-            page_width: 612.0,
-            page_height: 792.0,
-            margin_top: 72.0,
-            margin_bottom: 72.0,
-            margin_top_fixed: false,
-            margin_bottom_fixed: false,
-            margin_left: 72.0,
-            margin_right: 72.0,
-            header_margin: 36.0,
-            footer_margin: 36.0,
-            header_default: None,
-            header_first: None,
-            header_even: None,
-            footer_default: None,
-            footer_first: None,
-            footer_even: None,
-            different_first_page: false,
-            line_pitch: default_line_pitch,
-            grid_type: DocGridType::Default,
-            break_type: SectionBreakType::NextPage,
-            columns: None,
-            page_num_start: None,
-            page_num_format: None,
-            page_borders: None,
-            vertical_align: crate::model::PageVerticalAlign::Top,
-            line_numbering: None,
-            footnote_num_fmt: None,
-            endnote_num_fmt: None,
+    // Final section: body-level sectPr. A body without one takes what an
+    // empty sectPr parses to, so the defaults live in one place.
+    let (empty_xml, empty_sect_pr);
+    let sect_node = match wml(body, "sectPr") {
+        Some(node) => node,
+        None => {
+            empty_xml = format!(r#"<w:sectPr xmlns:w="{WML_NS}"/>"#);
+            empty_sect_pr = roxmltree::Document::parse(&empty_xml).expect("constant XML");
+            empty_sect_pr.root_element()
         }
     };
+    let final_props = parse_section_properties(
+        sect_node,
+        &mut ctx,
+        default_line_pitch,
+        settings.gutter_at_top,
+    );
     sections.push(Section {
         properties: final_props,
         blocks,
@@ -1585,15 +1569,15 @@ fn parse_zip<R: Read + std::io::Seek>(
     // face, bold, the comment text in its own face, both at its size.
     let balloon_style = styles.paragraph_styles.get("BalloonText");
     let comment_label_font = balloon_style
-        .and_then(|s| s.font_name.clone())
+        .and_then(|s| s.run.font_name.clone())
         .unwrap_or_else(|| "Times New Roman".into());
-    let comment_font_size = balloon_style.and_then(|s| s.font_size).unwrap_or(9.0);
+    let comment_font_size = balloon_style.and_then(|s| s.run.font_size).unwrap_or(9.0);
     // With no CommentText style the text takes Normal's face, as the built-in
     // CommentText would: case63's Aptos Normal over a Cambria theme draws its
     // comments in Aptos (whose "✓" Cambria lacks).
     let comment_body_font = ["CommentText", styles.default_paragraph_style_id.as_str()]
         .iter()
-        .find_map(|id| styles.paragraph_styles.get(*id)?.font_name.clone())
+        .find_map(|id| styles.paragraph_styles.get(*id)?.run.font_name.clone())
         .unwrap_or_else(|| styles.defaults.font_name.clone());
 
     let mut doc = Document {
@@ -1817,18 +1801,12 @@ impl TocSpec {
     }
 }
 
-/// The argument after a TOC switch (`\o "1-3"`), if the switch is present.
-fn toc_switch_arg<'a>(instr: &'a str, switch: &str) -> Option<&'a str> {
-    let lower = instr.to_ascii_lowercase();
-    let after = lower
-        .match_indices(&switch.to_ascii_lowercase())
-        .map(|(start, m)| (start, start + m.len()))
-        .find(|&(start, end)| {
-            (start == 0 || lower.as_bytes()[start - 1].is_ascii_whitespace())
-                && lower[end..].chars().next().is_none_or(char::is_whitespace)
-        })
-        .map(|(_, end)| end)?;
-    runs::quoted_or_word(&instr[after..])
+/// The argument after a TOC switch (`\o "1-3"`), if the switch is present
+/// and followed by one (not by the next switch).
+fn toc_switch_arg<'a>(instr: &'a str, switch: &'a str) -> Option<&'a str> {
+    runs::switch_args(instr, switch)
+        .next()
+        .filter(|arg| !arg.starts_with('\\'))
 }
 
 fn xml_text(s: &str) -> String {

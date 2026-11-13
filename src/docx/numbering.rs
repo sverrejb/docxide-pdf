@@ -3,10 +3,10 @@ use std::io::{Read, Seek};
 
 use super::styles::{ParagraphStyle, parse_font_size, rfonts_ascii_name};
 use super::{WML_NS, parse_hex_color, twips_attr, wml, wml_attr, wml_bool};
-use crate::model::{Alignment, LabelRevision, LabelSuffix, ListItem, Run};
+use crate::model::{Alignment, LabelRevision, LabelSuffix, ListItem, Paragraph, Run};
 use pdf_writer::types::ListNumbering;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(super) struct LevelDef {
     pub(super) num_fmt: String,
     pub(super) lvl_text: String,
@@ -60,6 +60,31 @@ pub(super) struct ListLabelInfo {
     pub(super) jc: Alignment,
     /// None when the paragraph shows no label.
     pub(super) item: Option<ListItem>,
+}
+
+impl ListLabelInfo {
+    /// A default Paragraph carrying this label: the `..` base of the body and
+    /// cell paragraph literals. The indents and the num tab stay with the
+    /// caller, which merges them with the paragraph's own.
+    pub(super) fn into_paragraph(self) -> Paragraph {
+        Paragraph {
+            list_label: self.label,
+            list_number: self.number,
+            list_label_font: self.font,
+            list_label_east_asia_font: self.east_asia_font,
+            list_label_font_size: self.font_size,
+            list_label_rise: self.rise,
+            list_label_bold: self.bold,
+            list_label_italic: self.italic,
+            list_label_color: self.color,
+            list_label_revision: self.revision,
+            list_label_renumbered: self.renumbered,
+            list_label_jc: self.jc,
+            list_label_suff: label_suffix(&self.suff),
+            list_item: self.item,
+            ..Paragraph::default()
+        }
+    }
 }
 
 /// The tagged L's `/ListNumbering`: the level's number format, or for
@@ -1041,20 +1066,9 @@ mod tests {
             lvl_text: "%1.".into(),
             indent_left: 36.0,
             indent_hanging: 18.0,
-            tab_stop: None,
             start: 1,
-            label_font_size: None,
-            label_vert_align: None,
-            label_bold: None,
-            label_italic: None,
-            label_caps: None,
-            label_color: None,
             suff: "tab".into(),
-            jc: Alignment::Left,
-            label_font: None,
-            is_lgl: false,
-            lvl_restart: None,
-            pstyle: None,
+            ..Default::default()
         };
         let override_def = LevelDef {
             num_fmt: "upperLetter".into(),
@@ -1276,20 +1290,9 @@ mod tests {
             lvl_text: "%1.".into(),
             indent_left: 36.0,
             indent_hanging: 18.0,
-            tab_stop: None,
             start: 1,
-            label_font_size: None,
-            label_vert_align: None,
-            label_bold: None,
-            label_italic: None,
-            label_caps: None,
-            label_color: None,
             suff: "tab".into(),
-            jc: Alignment::Left,
-            label_font: None,
-            is_lgl: false,
-            lvl_restart: None,
-            pstyle: None,
+            ..Default::default()
         };
         numbering
             .abstract_nums

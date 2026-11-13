@@ -6,7 +6,7 @@ use crate::model::{
     TableCell, TablePosition, TableRow, TextDirection, VMerge,
 };
 
-use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
+use super::numbering::{ListCounters, parse_list_info};
 use super::runs::parse_runs;
 use super::styles::{TableBordersDef, TableStyleDef, parse_table_borders_def};
 use super::{
@@ -144,24 +144,12 @@ impl CondFormat {
             self.borders.left = border_or_fallback(cl, self.borders.left);
             self.borders.right = border_or_fallback(cr, self.borders.right);
         }
-        if let Some(s) = cond.shading {
-            self.shading = Some(s);
-        }
-        if let Some(b) = cond.bold {
-            self.bold = Some(b);
-        }
-        if let Some(i) = cond.italic {
-            self.italic = Some(i);
-        }
-        if let Some(c) = cond.color {
-            self.color = Some(c);
-        }
-        if let Some(fs) = cond.font_size {
-            self.font_size = Some(fs);
-        }
-        if let Some(ref fn_name) = cond.font_name {
-            self.font_name = Some(fn_name.clone());
-        }
+        self.shading = cond.shading.or(self.shading);
+        self.bold = cond.bold.or(self.bold);
+        self.italic = cond.italic.or(self.italic);
+        self.color = cond.color.or(self.color);
+        self.font_size = cond.font_size.or(self.font_size);
+        self.font_name = cond.font_name.clone().or(self.font_name.take());
     }
 }
 
@@ -418,11 +406,19 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     // omit it. Infer the grid from the widest row's cell widths so layout
     // has real columns to work with, splitting spanned cells evenly.
     let grid_inferred = col_widths.is_empty() && !tbl_rows.is_empty();
-    let cell_widths: Vec<_> = tbl_rows
+    let row_cells: Vec<Vec<_>> = tbl_rows
         .iter()
-        .flat_map(|tr| collect_block_nodes(*tr, ctx.revisions.markup))
-        .filter(|n| n.has_tag_name((WML_NS, "tc")))
-        .map(|tc| wml(tc, "tcPr").and_then(|pr| wml(pr, "tcW")))
+        .map(|tr| {
+            collect_block_nodes(*tr, ctx.revisions.markup)
+                .into_iter()
+                .filter(|n| n.has_tag_name((WML_NS, "tc")))
+                .collect()
+        })
+        .collect();
+    let cell_widths: Vec<_> = row_cells
+        .iter()
+        .flatten()
+        .map(|tc| wml(*tc, "tcPr").and_then(|pr| wml(pr, "tcW")))
         .collect();
     let cells_unsized = cell_widths.iter().all(|w| {
         w.is_none_or(|w| {
@@ -439,13 +435,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         })
     });
     if col_widths.is_empty() {
-        for tr in &tbl_rows {
+        for cells in &row_cells {
             let mut row_widths: Vec<f32> = Vec::new();
-            for tc in collect_block_nodes(*tr, ctx.revisions.markup)
-                .into_iter()
-                .filter(|n| n.has_tag_name((WML_NS, "tc")))
-            {
-                let tc_pr = wml(tc, "tcPr");
+            for tc in cells {
+                let tc_pr = wml(*tc, "tcPr");
                 let w = tc_pr
                     .and_then(|pr| wml(pr, "tcW"))
                     .and_then(|n| twips_attr(n, "w"))
@@ -512,10 +505,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             .map(|mar| merge_cell_margins(mar, cell_margins));
         let mut cells = Vec::new();
         let mut grid_col = grid_before;
-        for tc in collect_block_nodes(*tr, ctx.revisions.markup)
-            .into_iter()
-            .filter(|n| n.has_tag_name((WML_NS, "tc")))
-        {
+        for &tc in &row_cells[ri] {
             let ci = grid_col;
             let tc_pr = wml(tc, "tcPr");
             let tc_w = tc_pr.and_then(|pr| wml(pr, "tcW"));
@@ -605,78 +595,52 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 let is_last_col = span_end >= num_cols;
                 let is_first_row = ri == 0;
                 let is_last_row = ri == num_rows - 1;
+                // The first/last regions the cell is in and the tblLook turns on.
+                let first_row = look_first_row && is_first_row;
+                let last_row = look_last_row && is_last_row;
+                let first_col = look_first_col && is_first_col;
+                let last_col = look_last_col && is_last_col;
                 // Row banding — skip rows consumed by firstRow/lastRow
-                if !look_no_h_band {
-                    let skip_first = look_first_row && is_first_row;
-                    let skip_last = look_last_row && is_last_row;
-                    if !skip_first && !skip_last {
-                        let band_row = if look_first_row { ri - 1 } else { ri };
-                        let key = if band_row % 2 == 0 {
-                            "band1Horz"
-                        } else {
-                            "band2Horz"
-                        };
-                        // Row bands: single row, so top/bottom are always edges
-                        cond.apply(style_def, key, (true, true, is_first_col, is_last_col));
-                    }
+                if !look_no_h_band && !first_row && !last_row {
+                    let band_row = if look_first_row { ri - 1 } else { ri };
+                    let key = if band_row % 2 == 0 {
+                        "band1Horz"
+                    } else {
+                        "band2Horz"
+                    };
+                    // Row bands: single row, so top/bottom are always edges
+                    cond.apply(style_def, key, (true, true, is_first_col, is_last_col));
                 }
                 // Column banding — skip cols consumed by firstCol/lastCol
-                if !look_no_v_band {
-                    let skip_first = look_first_col && is_first_col;
-                    let skip_last = look_last_col && is_last_col;
-                    if !skip_first && !skip_last {
-                        let band_col = if look_first_col { ci - 1 } else { ci };
-                        let key = if band_col % 2 == 0 {
-                            "band1Vert"
-                        } else {
-                            "band2Vert"
-                        };
-                        // Column bands: single column, so left/right are always edges
-                        cond.apply(style_def, key, (is_first_row, is_last_row, true, true));
+                if !look_no_v_band && !first_col && !last_col {
+                    let band_col = if look_first_col { ci - 1 } else { ci };
+                    let key = if band_col % 2 == 0 {
+                        "band1Vert"
+                    } else {
+                        "band2Vert"
+                    };
+                    // Column bands: single column, so left/right are always edges
+                    cond.apply(style_def, key, (is_first_row, is_last_row, true, true));
+                }
+                // Row regions: top/bottom are edges, left/right depend on the
+                // column; column regions the other way round; a corner cell
+                // is a single cell, all edges. Spec order, later ones winning.
+                let row = (true, true, is_first_col, is_last_col);
+                let col = (is_first_row, is_last_row, true, true);
+                let all = (true, true, true, true);
+                for (on, key, edges) in [
+                    (first_row, "firstRow", row),
+                    (last_row, "lastRow", row),
+                    (first_col, "firstCol", col),
+                    (last_col, "lastCol", col),
+                    (first_row && first_col, "nwCell", all),
+                    (first_row && last_col, "neCell", all),
+                    (last_row && first_col, "swCell", all),
+                    (last_row && last_col, "seCell", all),
+                ] {
+                    if on {
+                        cond.apply(style_def, key, edges);
                     }
-                }
-                // First/last row — row region: top/bottom are edges, left/right depend on col
-                if look_first_row && is_first_row {
-                    cond.apply(
-                        style_def,
-                        "firstRow",
-                        (true, true, is_first_col, is_last_col),
-                    );
-                }
-                if look_last_row && is_last_row {
-                    cond.apply(
-                        style_def,
-                        "lastRow",
-                        (true, true, is_first_col, is_last_col),
-                    );
-                }
-                // First/last column — column region: left/right are edges, top/bottom depend on row
-                if look_first_col && is_first_col {
-                    cond.apply(
-                        style_def,
-                        "firstCol",
-                        (is_first_row, is_last_row, true, true),
-                    );
-                }
-                if look_last_col && is_last_col {
-                    cond.apply(
-                        style_def,
-                        "lastCol",
-                        (is_first_row, is_last_row, true, true),
-                    );
-                }
-                // Corner cells — single cell, all edges
-                if look_first_row && is_first_row && look_first_col && is_first_col {
-                    cond.apply(style_def, "nwCell", (true, true, true, true));
-                }
-                if look_first_row && is_first_row && look_last_col && is_last_col {
-                    cond.apply(style_def, "neCell", (true, true, true, true));
-                }
-                if look_last_row && is_last_row && look_first_col && is_first_col {
-                    cond.apply(style_def, "swCell", (true, true, true, true));
-                }
-                if look_last_row && is_last_row && look_last_col && is_last_col {
-                    cond.apply(style_def, "seCell", (true, true, true, true));
                 }
             }
 
@@ -851,25 +815,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         ),
                     );
                     let (indent_left, indent_right, indent_hanging, indent_first_line) = indents;
-                    let ListLabelInfo {
-                        indent_left: _,
-                        indent_hanging: _,
-                        tab_stop: mut num_tab_stop,
-                        label: list_label,
-                        number: list_number,
-                        font: list_label_font,
-                        east_asia_font: list_label_east_asia_font,
-                        font_size: list_label_font_size,
-                        rise: list_label_rise,
-                        bold: list_label_bold,
-                        italic: list_label_italic,
-                        color: list_label_color,
-                        revision: list_label_revision,
-                        renumbered: list_label_renumbered,
-                        suff: list_label_suff,
-                        jc: list_label_jc,
-                        item: list_item,
-                    } = numbering;
+                    let num_tab_stop =
+                        super::paragraph::num_tab_override(ppr).or(numbering.tab_stop);
                     let (auto_space_de, auto_space_dn) =
                         super::paragraph::auto_space(ppr, para_style);
                     let space_before =
@@ -897,16 +844,6 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     } else {
                         space_after
                     };
-                    if let Some(tabs) = ppr.and_then(|ppr| wml(ppr, "tabs")) {
-                        for t in tabs.children().filter(|n| n.has_tag_name((WML_NS, "tab"))) {
-                            if t.attribute((WML_NS, "val")) == Some("num")
-                                && let Some(pos) = super::twips_attr(t, "pos")
-                                && pos > 0.0
-                            {
-                                num_tab_stop = Some(pos);
-                            }
-                        }
-                    }
                     let tab_stops = super::resolve_tab_stops(ppr, para_style);
                     cell_blocks.push(Block::Paragraph(Paragraph {
                         widow_control: super::paragraph::widow_control(
@@ -924,33 +861,16 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         indent_right,
                         indent_hanging,
                         indent_first_line,
-                        list_label,
-                        list_number,
                         num_level_tab_stop: num_tab_stop,
                         no_indent_num_tab: ctx.styles.defaults.no_indent_as_num_tab,
                         horizontal_rule: parsed.horizontal_rule,
                         field_code_mark: parsed.mark_in_field_code,
-                        list_label_font,
-                        list_label_east_asia_font,
-                        list_label_font_size,
-                        list_label_rise,
-                        list_label_bold,
-                        list_label_italic,
-                        list_label_color,
-                        list_label_revision,
-                        list_label_renumbered,
-                        list_label_jc,
-                        list_label_suff: super::numbering::label_suffix(&list_label_suff),
-                        list_item,
                         line_spacing,
                         space_before,
                         space_after,
                         image: para_image,
                         content_height,
-                        snap_to_grid: ppr
-                            .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
-                            .or_else(|| para_style.and_then(|s| s.snap_to_grid))
-                            .unwrap_or(true),
+                        snap_to_grid: super::paragraph::snap_to_grid(ppr, para_style),
                         text_alignment: super::paragraph::text_alignment(
                             ppr,
                             para_style,
@@ -965,10 +885,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         connectors: parsed.connectors,
                         style_id: Some(para_style_id.to_string()),
                         contextual_spacing,
-                        keep_next: ppr
-                            .and_then(|ppr| wml_bool(ppr, "keepNext"))
-                            .or_else(|| para_style.and_then(|s| s.keep_next))
-                            .unwrap_or(false),
+                        keep_next: super::paragraph::keep_next(ppr, para_style),
                         paragraph_mark_font_size: Some(mark.font_size),
                         paragraph_mark_font_name: Some(mark.font_name),
                         paragraph_mark_position: super::paragraph::paragraph_mark_position(
@@ -980,7 +897,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             ppr,
                             para_style.and_then(|s| s.frame_attrs.as_ref()),
                         ),
-                        ..Paragraph::default()
+                        ..numbering.into_paragraph()
                     }));
                     super::paragraph::merge_field_code_paragraphs(&mut cell_blocks);
                 } else if n.has_tag_name((WML_NS, "tbl")) {
@@ -1244,7 +1161,6 @@ mod border_conflict_tests {
 
     #[test]
     fn row_margin_exceptions_inherit_per_side_and_do_not_leak() {
-        use std::io::{Cursor, Write};
         let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
           <w:tblPr><w:tblCellMar><w:top w:w="20"/><w:left w:w="100"/><w:bottom w:w="40"/><w:right w:w="120"/></w:tblCellMar></w:tblPr>
           <w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="1000"/></w:tblGrid>
@@ -1252,15 +1168,7 @@ mod border_conflict_tests {
             <w:tc><w:p/></w:tc><w:tc><w:tcPr><w:tcMar><w:left w:w="0"/><w:bottom w:w="60"/></w:tcMar></w:tcPr><w:p/></w:tc>
           </w:tr><w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
         </w:tbl><w:sectPr/></w:body></w:document>"#;
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        zip.start_file(
-            "word/document.xml",
-            zip::write::SimpleFileOptions::default(),
-        )
-        .unwrap();
-        zip.write_all(xml.as_bytes()).unwrap();
-        let bytes = zip.finish().unwrap().into_inner();
-        let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+        let doc = crate::docx::parse_document_xml(xml);
         let Block::Table(table) = &doc.sections[0].blocks[0] else {
             panic!("expected table")
         };
@@ -1278,7 +1186,6 @@ mod border_conflict_tests {
 
     #[test]
     fn cell_spacing_widens_insets_double_at_the_table_edge() {
-        use std::io::{Cursor, Write};
         // 20 twips = 1pt spacing on the table, 0 on the second row.
         let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
           <w:tblPr><w:tblCellSpacing w:w="20" w:type="dxa"/><w:tblCellMar><w:left w:w="0"/><w:right w:w="0"/></w:tblCellMar></w:tblPr>
@@ -1287,15 +1194,7 @@ mod border_conflict_tests {
           <w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
           <w:tr><w:trPr><w:tblCellSpacing w:w="0" w:type="dxa"/></w:trPr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
         </w:tbl><w:sectPr/></w:body></w:document>"#;
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        zip.start_file(
-            "word/document.xml",
-            zip::write::SimpleFileOptions::default(),
-        )
-        .unwrap();
-        zip.write_all(xml.as_bytes()).unwrap();
-        let bytes = zip.finish().unwrap().into_inner();
-        let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+        let doc = crate::docx::parse_document_xml(xml);
         let Block::Table(table) = &doc.sections[0].blocks[0] else {
             panic!("expected table")
         };
@@ -1313,21 +1212,16 @@ mod border_conflict_tests {
 
     #[test]
     fn default_side_margins_need_a_default_style_or_tbl_cell_mar() {
-        use std::io::{Cursor, Write};
         let left = |styles: Option<&str>, tbl_pr: &str| {
             let xml = format!(
                 r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tblPr>{tbl_pr}</w:tblPr><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcMar><w:right w:w="108"/></w:tcMar></w:tcPr><w:p/></w:tc></w:tr></w:tbl><w:sectPr/></w:body></w:document>"#
             );
-            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-            let opts = zip::write::SimpleFileOptions::default();
-            zip.start_file("word/document.xml", opts).unwrap();
-            zip.write_all(xml.as_bytes()).unwrap();
-            if let Some(s) = styles {
-                zip.start_file("word/styles.xml", opts).unwrap();
-                zip.write_all(format!(r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{s}</w:styles>"#).as_bytes()).unwrap();
-            }
-            let bytes = zip.finish().unwrap().into_inner();
-            let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+            let styles = styles.map(|s| {
+                format!(r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{s}</w:styles>"#)
+            });
+            let mut parts = vec![("word/document.xml", xml.as_str())];
+            parts.extend(styles.as_deref().map(|s| ("word/styles.xml", s)));
+            let doc = crate::docx::parse_parts(&parts);
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("expected table")
             };
@@ -1354,7 +1248,6 @@ mod border_conflict_tests {
 
     #[test]
     fn side_insets_grow_to_half_the_border_band() {
-        use std::io::{Cursor, Write};
         let lefts = |tbl_cell_mar: &str| {
             let b = |tag: &str, sz: u32| format!(r#"<w:{tag} w:val="single" w:sz="{sz}"/>"#);
             let borders = [b("left", 48), b("right", 4), b("insideV", 4)].concat();
@@ -1362,12 +1255,7 @@ mod border_conflict_tests {
             let xml = format!(
                 r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tblPr><w:tblBorders>{borders}</w:tblBorders>{tbl_cell_mar}</w:tblPr><w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="1000"/></w:tblGrid><w:tr>{cell}{cell}</w:tr></w:tbl><w:sectPr/></w:body></w:document>"#
             );
-            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-            let opts = zip::write::SimpleFileOptions::default();
-            zip.start_file("word/document.xml", opts).unwrap();
-            zip.write_all(xml.as_bytes()).unwrap();
-            let bytes = zip.finish().unwrap().into_inner();
-            let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+            let doc = crate::docx::parse_document_xml(&xml);
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("expected table")
             };

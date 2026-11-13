@@ -43,18 +43,10 @@ pub(super) fn parse_color_transforms(scheme_clr: roxmltree::Node) -> ColorTransf
 pub(super) fn apply_color_transforms(base: [u8; 3], t: &ColorTransforms) -> [u8; 3] {
     let mut color = base;
     if let Some(tint) = t.tint {
-        color = [
-            (255.0 - tint * (255.0 - color[0] as f32)).clamp(0.0, 255.0) as u8,
-            (255.0 - tint * (255.0 - color[1] as f32)).clamp(0.0, 255.0) as u8,
-            (255.0 - tint * (255.0 - color[2] as f32)).clamp(0.0, 255.0) as u8,
-        ];
+        color = color.map(|c| (255.0 - tint * (255.0 - c as f32)).clamp(0.0, 255.0) as u8);
     }
     if let Some(shade) = t.shade {
-        color = [
-            (color[0] as f32 * shade).clamp(0.0, 255.0) as u8,
-            (color[1] as f32 * shade).clamp(0.0, 255.0) as u8,
-            (color[2] as f32 * shade).clamp(0.0, 255.0) as u8,
-        ];
+        color = color.map(|c| (c as f32 * shade).clamp(0.0, 255.0) as u8);
     }
     if let Some(sat_mod) = t.sat_mod
         && (sat_mod - 1.0).abs() > 0.001
@@ -65,11 +57,7 @@ pub(super) fn apply_color_transforms(base: [u8; 3], t: &ColorTransforms) -> [u8;
     if t.lum_mod.is_some() || t.lum_off.is_some() {
         let m = t.lum_mod.unwrap_or(1.0);
         let o = t.lum_off.unwrap_or(0.0);
-        color = [
-            ((color[0] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-            ((color[1] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-            ((color[2] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-        ];
+        color = color.map(|c| ((c as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8);
     }
     // HSL offsets (used by SmartArt for per-shape color variation)
     if t.hue_off.is_some() || t.sat_off.is_some() {

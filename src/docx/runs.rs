@@ -145,7 +145,10 @@ pub(super) fn has_switch(instr: &str, switch: &str) -> bool {
 
 /// The word after each `switch` in a field instruction (`\* ROMAN \*
 /// MERGEFORMAT` → "ROMAN", "MERGEFORMAT").
-fn switch_args<'a>(instr: &'a str, switch: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+pub(super) fn switch_args<'a>(
+    instr: &'a str,
+    switch: &'a str,
+) -> impl Iterator<Item = &'a str> + 'a {
     field_words(instr)
         .zip(field_words(instr).skip(1))
         .filter(move |&(word, _)| is_switch(word, switch))
@@ -175,6 +178,7 @@ fn number_format_switch(instr: &str) -> Option<&'static str> {
 /// parent's evaluated result. A field that begins inside a parent's *result*
 /// region (after `separate`, e.g. a `PAGEREF` inside a `TOC` result) is visible
 /// content and is processed normally. `visible` records which case applies.
+#[derive(Default)]
 struct FieldFrame {
     seen_sep: bool,
     visible: bool,
@@ -217,24 +221,12 @@ fn fields_visible(stack: &[FieldFrame]) -> bool {
     stack.iter().all(|f| f.seen_sep)
 }
 
-impl FieldFrame {
-    fn new(visible: bool) -> Self {
-        Self {
-            seen_sep: false,
-            visible,
-            carried: false,
-            instr: String::new(),
-            result: String::new(),
-            parts: Vec::new(),
-            opaque: false,
-            checkbox: None,
-            macrobutton: false,
-            instr_deleted: false,
-            instr_fmt: None,
-            result_fmt: None,
-        }
-    }
+/// Inside the cached result of a field that is re-evaluated at render time.
+fn dynamic_result(stack: &[FieldFrame]) -> bool {
+    stack.last().is_some_and(|f| f.seen_sep && f.dynamic())
+}
 
+impl FieldFrame {
     /// Word lays a regenerated result out in the formatting of the
     /// instruction's first character, or with `\* MERGEFORMAT` in that of
     /// the cached result's; hidden when the instruction is
@@ -511,47 +503,46 @@ pub(super) fn paragraph_mark_run<R: Read + Seek>(
 
 impl ParagraphRunDefaults {
     fn from_style(para_style: Option<&ParagraphStyle>, defaults: &StyleDefaults) -> Self {
-        let para_font_size = para_style.and_then(|s| s.font_size);
-        let para_font_name = para_style.and_then(|s| s.font_name.as_deref());
-        let style_or = |f: fn(&ParagraphStyle) -> Option<bool>, default: bool| {
-            para_style.and_then(f).unwrap_or(default)
-        };
-        let style_or_clone = |f: fn(&ParagraphStyle) -> Option<&String>,
-                              default: &Option<String>| {
-            para_style.and_then(f).or(default.as_ref()).cloned()
+        let run = para_style.map(|s| &s.run);
+        let para_font_size = run.and_then(|r| r.font_size);
+        let para_font_name = run.and_then(|r| r.font_name.as_deref());
+        let style_or =
+            |f: fn(&RunProps) -> Option<bool>, default: bool| run.and_then(f).unwrap_or(default);
+        let style_or_clone = |f: fn(&RunProps) -> Option<&String>, default: &Option<String>| {
+            run.and_then(f).or(default.as_ref()).cloned()
         };
         Self {
             font_size: para_font_size.unwrap_or(defaults.font_size),
             font_name: para_font_name.unwrap_or(&defaults.font_name).to_string(),
             font_size_is_doc_default: para_font_size.is_none(),
             font_name_is_doc_default: para_font_name.is_none(),
-            bold: style_or(|s| s.bold, defaults.bold),
-            italic: style_or(|s| s.italic, defaults.italic),
-            caps: style_or(|s| s.caps, defaults.caps),
-            small_caps: style_or(|s| s.small_caps, defaults.small_caps),
-            vanish: style_or(|s| s.vanish, defaults.vanish),
-            underline: style_or(|s| s.underline, defaults.underline),
-            double_underline: style_or(|s| s.double_underline, defaults.double_underline),
-            strikethrough: style_or(|s| s.strikethrough, defaults.strikethrough),
-            dstrike: style_or(|s| s.dstrike, defaults.dstrike),
-            color: para_style.and_then(|s| s.color).or(defaults.color),
-            char_spacing: para_style
-                .and_then(|s| s.char_spacing)
+            bold: style_or(|r| r.bold, defaults.bold),
+            italic: style_or(|r| r.italic, defaults.italic),
+            caps: style_or(|r| r.caps, defaults.caps),
+            small_caps: style_or(|r| r.small_caps, defaults.small_caps),
+            vanish: style_or(|r| r.vanish, defaults.vanish),
+            underline: style_or(|r| r.underline, defaults.underline),
+            double_underline: style_or(|r| r.double_underline, defaults.double_underline),
+            strikethrough: style_or(|r| r.strikethrough, defaults.strikethrough),
+            dstrike: style_or(|r| r.dstrike, defaults.dstrike),
+            color: run.and_then(|r| r.color).or(defaults.color),
+            char_spacing: run
+                .and_then(|r| r.char_spacing)
                 .unwrap_or(defaults.char_spacing),
-            lang: style_or_clone(|s| s.lang.as_ref(), &defaults.lang),
-            lang_east_asia: style_or_clone(|s| s.lang_east_asia.as_ref(), &defaults.lang_east_asia),
-            lang_bidi: style_or_clone(|s| s.lang_bidi.as_ref(), &defaults.lang_bidi),
-            complex: para_style.map_or(defaults.complex, |s| s.complex.or(defaults.complex)),
-            kern_threshold: para_style
-                .and_then(|s| s.kern_threshold)
+            lang: style_or_clone(|r| r.lang.as_ref(), &defaults.lang),
+            lang_east_asia: style_or_clone(|r| r.lang_east_asia.as_ref(), &defaults.lang_east_asia),
+            lang_bidi: style_or_clone(|r| r.lang_bidi.as_ref(), &defaults.lang_bidi),
+            complex: run.map_or(defaults.complex, |r| r.complex.or(defaults.complex)),
+            kern_threshold: run
+                .and_then(|r| r.kern_threshold)
                 .or(defaults.kern_threshold),
-            position: para_style.and_then(|s| s.position).or(defaults.position),
-            east_asia_font: style_or_clone(|s| s.east_asia_font.as_ref(), &defaults.east_asia_font),
-            cs_font: style_or_clone(|s| s.cs_font.as_ref(), &defaults.cs_font),
-            text_outline: para_style.and_then(|s| s.text_outline.clone()),
-            text_fill: para_style.and_then(|s| s.text_fill.clone()),
-            text_shadow: para_style.and_then(|s| s.text_shadow.clone()),
-            text_glow: para_style.and_then(|s| s.text_glow.clone()),
+            position: run.and_then(|r| r.position).or(defaults.position),
+            east_asia_font: style_or_clone(|r| r.east_asia_font.as_ref(), &defaults.east_asia_font),
+            cs_font: style_or_clone(|r| r.cs_font.as_ref(), &defaults.cs_font),
+            text_outline: run.and_then(|r| r.text_outline.clone()),
+            text_fill: run.and_then(|r| r.text_fill.clone()),
+            text_shadow: run.and_then(|r| r.text_shadow.clone()),
+            text_glow: run.and_then(|r| r.text_glow.clone()),
         }
     }
 
@@ -1169,45 +1160,30 @@ pub(super) fn push_textbox(fis: &[FloatingImage], tbs: &mut Vec<Textbox>, mut tb
 macro_rules! handle_drawing_result {
     ($result:expr, $fmt:expr, $runs:expr, $floating_images:expr, $textboxes:expr,
      $inline_chart:expr, $smartart:expr, $connectors:expr, $pending:expr) => {
-        match $result {
-            Some(RunDrawingResult::Inline(img)) => {
-                $runs.push($fmt.picture_run(img));
-            }
-            Some(RunDrawingResult::Floating(mut fi)) => {
-                fi.anchor_at_start = $pending.is_empty() && anchor_precedes_text(&$runs);
-                fi.anchor_run = $runs.len();
-                push_floating(&mut $floating_images, &$textboxes, fi)
-            }
-            Some(RunDrawingResult::TextBox(tb)) => {
-                push_textbox(&$floating_images, &mut $textboxes, tb)
-            }
-            Some(RunDrawingResult::Chart(ic)) => $inline_chart = Some(ic),
-            Some(RunDrawingResult::SmartArt(diagram)) => $smartart.push(diagram),
-            Some(RunDrawingResult::Connector(c)) => $connectors.push(c),
-            Some(RunDrawingResult::Group(items)) => {
-                // Flattened groups contain only leaf shapes, never nested Groups
-                for item in items {
-                    match item {
-                        RunDrawingResult::Inline(img) => {
-                            $runs.push($fmt.picture_run(img));
-                        }
-                        RunDrawingResult::Floating(mut fi) => {
-                            fi.anchor_at_start =
-                                $pending.is_empty() && anchor_precedes_text(&$runs);
-                            fi.anchor_run = $runs.len();
-                            push_floating(&mut $floating_images, &$textboxes, fi)
-                        }
-                        RunDrawingResult::TextBox(tb) => {
-                            push_textbox(&$floating_images, &mut $textboxes, tb)
-                        }
-                        RunDrawingResult::Chart(ic) => $inline_chart = Some(ic),
-                        RunDrawingResult::SmartArt(diagram) => $smartart.push(diagram),
-                        RunDrawingResult::Connector(c) => $connectors.push(c),
-                        RunDrawingResult::Group(_) => {}
-                    }
+        // Flattened groups contain only leaf shapes, never nested Groups
+        let items = match $result {
+            Some(RunDrawingResult::Group(items)) => items,
+            Some(item) => vec![item],
+            None => Vec::new(),
+        };
+        for item in items {
+            match item {
+                RunDrawingResult::Inline(img) => {
+                    $runs.push($fmt.picture_run(img));
                 }
+                RunDrawingResult::Floating(mut fi) => {
+                    fi.anchor_at_start = $pending.is_empty() && anchor_precedes_text(&$runs);
+                    fi.anchor_run = $runs.len();
+                    push_floating(&mut $floating_images, &$textboxes, fi)
+                }
+                RunDrawingResult::TextBox(tb) => {
+                    push_textbox(&$floating_images, &mut $textboxes, tb)
+                }
+                RunDrawingResult::Chart(ic) => $inline_chart = Some(ic),
+                RunDrawingResult::SmartArt(diagram) => $smartart.push(diagram),
+                RunDrawingResult::Connector(c) => $connectors.push(c),
+                RunDrawingResult::Group(_) => {}
             }
-            None => {}
         }
     };
 }
@@ -1637,8 +1613,9 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             flush_pending(&mut pending_text, &mut runs);
                         }
                         field_stack.push(FieldFrame {
+                            visible: parent_visible,
                             checkbox: parse_checkbox(child, fmt.font_size),
-                            ..FieldFrame::new(parent_visible)
+                            ..Default::default()
                         });
                     }
                     Some("separate") => {
@@ -1750,9 +1727,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                 }
                 "t" | "delText" => {
                     let visible = fields_visible(&field_stack);
-                    let dyn_result = field_stack
-                        .last()
-                        .is_some_and(|f| f.seen_sep && f.dynamic());
+                    let dyn_result = dynamic_result(&field_stack);
                     if dyn_result {
                         // Cached result of a dynamic field — keep it as the
                         // field run's placeholder text (re-evaluated at render).
@@ -1797,17 +1772,15 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     } else {
                         '\u{AD}'
                     };
-                    if let Some(f) = field_stack.last_mut().filter(|f| f.seen_sep && f.dynamic()) {
-                        f.result.push(c);
+                    if dynamic_result(&field_stack) {
+                        field_stack.last_mut().unwrap().result.push(c);
                     } else if fields_visible(&field_stack) {
                         pending_text.push(c);
                     }
                 }
                 "tab" => {
                     let visible = fields_visible(&field_stack);
-                    let dyn_result = field_stack
-                        .last()
-                        .is_some_and(|f| f.seen_sep && f.dynamic());
+                    let dyn_result = dynamic_result(&field_stack);
                     // A hidden tab takes no space and doesn't make the line tabbed.
                     if visible && !dyn_result && !fmt.vanish {
                         flush_pending(&mut pending_text, &mut runs);
@@ -1818,9 +1791,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     // Positional tab: alignment positions the FOLLOWING text against the
                     // margin box (left/center/right), independent of paragraph tab stops.
                     let visible = fields_visible(&field_stack);
-                    let dyn_result = field_stack
-                        .last()
-                        .is_some_and(|f| f.seen_sep && f.dynamic());
+                    let dyn_result = dynamic_result(&field_stack);
                     if visible && !dyn_result {
                         let alignment = match child.attribute((WML_NS, "alignment")) {
                             Some("center") => TabAlignment::Center,

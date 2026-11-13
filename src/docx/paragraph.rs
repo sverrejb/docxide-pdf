@@ -62,16 +62,14 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         para_style.and_then(|s| s.shading)
     };
 
-    let style_color = para_style.and_then(|s| s.color);
+    let style_color = para_style.and_then(|s| s.run.color);
 
     let alignment = super::runs::paragraph_alignment(node, ppr, para_style)
         .unwrap_or(ctx.styles.defaults.alignment);
 
     let contextual_spacing = contextual_spacing(ppr, para_style);
 
-    let keep_next = ppr
-        .and_then(|ppr| wml_bool(ppr, "keepNext"))
-        .unwrap_or_else(|| para_style.and_then(|s| s.keep_next).unwrap_or(false));
+    let keep_next = keep_next(ppr, para_style);
 
     // Word never splits display math over pages: a wrapped equation that
     // doesn't fit moves whole (probe `mp20_relpos`).
@@ -87,10 +85,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .or_else(|| para_style.and_then(|s| s.word_wrap))
         == Some(false);
 
-    let snap_to_grid = ppr
-        .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
-        .or_else(|| para_style.and_then(|s| s.snap_to_grid))
-        .unwrap_or(true);
+    let snap_to_grid = snap_to_grid(ppr, para_style);
 
     let (auto_space_de, auto_space_dn) = auto_space(ppr, para_style);
 
@@ -115,40 +110,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     );
     let (mut indents, indent_chars) =
         resolve_indents(ppr, para_style, &numbering, &ctx.styles.defaults);
-    let ListLabelInfo {
-        indent_left: _,
-        indent_hanging: _,
-        tab_stop: mut num_tab_stop,
-        label: list_label,
-        number: list_number,
-        font: list_label_font,
-        east_asia_font: list_label_east_asia_font,
-        font_size: list_label_font_size,
-        rise: list_label_rise,
-        bold: list_label_bold,
-        italic: list_label_italic,
-        color: list_label_color,
-        revision: list_label_revision,
-        renumbered: list_label_renumbered,
-        suff: list_label_suff,
-        jc: list_label_jc,
-        item: list_item,
-    } = numbering;
-    // Paragraph-level `<w:tab val="num" pos="..."/>` overrides the numbering
-    // level's num tab (paired with a `clear` of the inherited value when
-    // Word-authored). `pos="0"` is a Word sentinel meaning "disable the num
-    // tab for this paragraph" — ignore it so we don't collapse text onto the
-    // label.
-    if let Some(tabs) = ppr.and_then(|ppr| wml(ppr, "tabs")) {
-        for t in tabs.children().filter(|n| n.has_tag_name((WML_NS, "tab"))) {
-            if t.attribute((WML_NS, "val")) == Some("num")
-                && let Some(pos) = super::twips_attr(t, "pos")
-                && pos > 0.0
-            {
-                num_tab_stop = Some(pos);
-            }
-        }
-    }
+    let num_tab_stop = num_tab_override(ppr).or(numbering.tab_stop);
 
     let parsed = parse_runs(node, ctx);
     apply_indent_chars(
@@ -292,20 +254,6 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         indent_right: if bidi { indent_left } else { indent_right },
         indent_hanging,
         indent_first_line,
-        list_label,
-        list_number,
-        list_label_font,
-        list_label_east_asia_font,
-        list_label_font_size,
-        list_label_rise,
-        list_label_bold,
-        list_label_italic,
-        list_label_color,
-        list_label_revision,
-        list_label_renumbered,
-        list_label_jc,
-        list_label_suff: super::numbering::label_suffix(&list_label_suff),
-        list_item,
         starts_toc_field: node.descendants().any(|n| {
             n.has_tag_name((WML_NS, "instrText")) && n.text().is_some_and(super::runs::is_toc_instr)
         }),
@@ -361,6 +309,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         auto_space_dn,
         bidi,
         frame_props: parse_frame_props(ppr, para_style.and_then(|s| s.frame_attrs.as_ref())),
+        ..numbering.into_paragraph()
     }
 }
 
@@ -456,7 +405,7 @@ pub(super) fn paragraph_mark_position(
 ) -> f32 {
     ppr_rpr
         .and_then(|rpr| half_points(rpr, "position"))
-        .or_else(|| para_style.and_then(|s| s.position))
+        .or_else(|| para_style.and_then(|s| s.run.position))
         .unwrap_or(0.0)
 }
 
@@ -481,6 +430,36 @@ pub(super) fn borders(
         None => own,
     }
     .resolve()
+}
+
+/// `w:keepNext`, direct or from the style.
+pub(super) fn keep_next(ppr: Option<roxmltree::Node>, para_style: Option<&ParagraphStyle>) -> bool {
+    ppr.and_then(|ppr| wml_bool(ppr, "keepNext"))
+        .or_else(|| para_style.and_then(|s| s.keep_next))
+        .unwrap_or(false)
+}
+
+/// `w:snapToGrid`, on unless the paragraph or its style turns it off.
+pub(super) fn snap_to_grid(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> bool {
+    ppr.and_then(|ppr| wml_bool(ppr, "snapToGrid"))
+        .or_else(|| para_style.and_then(|s| s.snap_to_grid))
+        .unwrap_or(true)
+}
+
+/// A paragraph-level `<w:tab val="num" pos="..."/>` overrides the numbering
+/// level's num tab (paired with a `clear` of the inherited value when
+/// Word-authored). `pos="0"` is a Word sentinel meaning "disable the num
+/// tab for this paragraph" — ignore it so we don't collapse text onto the
+/// label.
+pub(super) fn num_tab_override(ppr: Option<roxmltree::Node>) -> Option<f32> {
+    ppr.and_then(|ppr| wml(ppr, "tabs"))?
+        .children()
+        .filter(|t| t.has_tag_name((WML_NS, "tab")) && t.attribute((WML_NS, "val")) == Some("num"))
+        .filter_map(|t| super::twips_attr(t, "pos"))
+        .rfind(|&pos| pos > 0.0)
 }
 
 /// `w:keepLines`, direct or from the style.
@@ -556,11 +535,11 @@ pub(super) fn indent_char_widths(
     let normal = styles
         .paragraph_styles
         .get(&styles.default_paragraph_style_id)
-        .and_then(|s| s.font_size)
+        .and_then(|s| s.run.font_size)
         .unwrap_or(defaults.font_size);
     let first_run = runs.first().map(|r| r.font_size).unwrap_or_else(|| {
         para_style
-            .and_then(|s| s.font_size)
+            .and_then(|s| s.run.font_size)
             .unwrap_or(defaults.font_size)
     });
     (normal + grid_char_delta, first_run + grid_char_delta)
@@ -685,9 +664,6 @@ mod tests {
 
     #[test]
     fn list_level_hanging_survives_direct_left_or_right() {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
-
         for (ind, left, hanging, first) in [
             (r#"w:left="1418""#, 70.9, 18.0, 0.0),
             (r#"w:right="100""#, 98.95, 18.0, 0.0),
@@ -704,20 +680,11 @@ mod tests {
             let numbering = format!(
                 r#"<w:numbering xmlns:w="{WML_NS}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="1979" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>"#
             );
-            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-            for (name, xml) in [
-                ("word/document.xml", document),
-                ("word/styles.xml", styles),
-                ("word/numbering.xml", numbering),
-            ] {
-                zip.start_file(name, SimpleFileOptions::default()).unwrap();
-                zip.write_all(xml.as_bytes()).unwrap();
-            }
-            let parsed = crate::docx::parse_bytes(
-                &zip.finish().unwrap().into_inner(),
-                crate::RevisionView::Final,
-            )
-            .unwrap();
+            let parsed = crate::docx::parse_parts(&[
+                ("word/document.xml", &document),
+                ("word/styles.xml", &styles),
+                ("word/numbering.xml", &numbering),
+            ]);
             let crate::model::Block::Paragraph(p) = &parsed.sections[0].blocks[0] else {
                 panic!("expected a paragraph");
             };
@@ -740,9 +707,6 @@ mod tests {
 
     #[test]
     fn paragraph_mark_inherits_character_style_with_direct_overrides() {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
-
         for (mark, font, size) in [
             (r#"<w:rStyle w:val="Child"/>"#, "Times New Roman", 11.0),
             (
@@ -763,13 +727,10 @@ mod tests {
             let styles = format!(
                 r#"<w:styles xmlns:w="{WML_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="character" w:styleId="Base"><w:name w:val="Base"/><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="22"/></w:rPr></w:style><w:style w:type="character" w:styleId="Child"><w:name w:val="Child"/><w:basedOn w:val="Base"/></w:style></w:styles>"#
             );
-            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-            for (name, xml) in [("word/document.xml", document), ("word/styles.xml", styles)] {
-                zip.start_file(name, SimpleFileOptions::default()).unwrap();
-                zip.write_all(xml.as_bytes()).unwrap();
-            }
-            let bytes = zip.finish().unwrap().into_inner();
-            let parsed = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+            let parsed = crate::docx::parse_parts(&[
+                ("word/document.xml", &document),
+                ("word/styles.xml", &styles),
+            ]);
             let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
                 panic!("expected a paragraph");
             };
@@ -782,9 +743,6 @@ mod tests {
 
     #[test]
     fn rtl_and_cs_runs_take_the_complex_script_formatting() {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
-
         let rpr = r#"<w:rFonts w:ascii="Courier New" w:cs="Times New Roman"/><w:b/><w:sz w:val="24"/><w:szCs w:val="40"/>"#;
         let document = format!(
             r#"<w:document xmlns:w="{WML_NS}"><w:body><w:p><w:pPr><w:pStyle w:val="Rtl"/></w:pPr><w:r><w:rPr>{rpr}</w:rPr><w:t>plain</w:t></w:r><w:r><w:rPr>{rpr}<w:rtl/></w:rPr><w:t>rtl</w:t></w:r><w:r><w:rPr>{rpr}<w:iCs/><w:cs/></w:rPr><w:t>cs</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="Sub"/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t>sub</w:t></w:r></w:p><w:sectPr/></w:body></w:document>"#
@@ -792,13 +750,10 @@ mod tests {
         let styles = format!(
             r#"<w:styles xmlns:w="{WML_NS}"><w:style w:type="paragraph" w:styleId="Rtl"><w:name w:val="Rtl"/><w:pPr><w:bidi/></w:pPr><w:rPr><w:bCs/><w:szCs w:val="30"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Sub"><w:name w:val="Sub"/><w:basedOn w:val="Rtl"/></w:style></w:styles>"#
         );
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        for (name, xml) in [("word/document.xml", document), ("word/styles.xml", styles)] {
-            zip.start_file(name, SimpleFileOptions::default()).unwrap();
-            zip.write_all(xml.as_bytes()).unwrap();
-        }
-        let bytes = zip.finish().unwrap().into_inner();
-        let parsed = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+        let parsed = crate::docx::parse_parts(&[
+            ("word/document.xml", &document),
+            ("word/styles.xml", &styles),
+        ]);
         let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
             panic!("expected a paragraph");
         };
@@ -873,22 +828,16 @@ mod tests {
 
     #[test]
     fn a_pstyle_naming_a_character_style_falls_back_to_normal() {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
-
         let document = format!(
             r#"<w:document xmlns:w="{WML_NS}"><w:body><w:p><w:pPr><w:pStyle w:val="BodyChar"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="Missing"/></w:pPr></w:p><w:sectPr/></w:body></w:document>"#
         );
         let styles = format!(
             r#"<w:styles xmlns:w="{WML_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="259" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="18"/></w:rPr></w:style><w:style w:type="character" w:styleId="BodyChar"><w:name w:val="Body Char"/><w:rPr><w:sz w:val="40"/></w:rPr></w:style></w:styles>"#
         );
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        for (name, xml) in [("word/document.xml", document), ("word/styles.xml", styles)] {
-            zip.start_file(name, SimpleFileOptions::default()).unwrap();
-            zip.write_all(xml.as_bytes()).unwrap();
-        }
-        let bytes = zip.finish().unwrap().into_inner();
-        let parsed = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+        let parsed = crate::docx::parse_parts(&[
+            ("word/document.xml", &document),
+            ("word/styles.xml", &styles),
+        ]);
         for block in &parsed.sections[0].blocks[..2] {
             let crate::model::Block::Paragraph(para) = block else {
                 panic!("expected a paragraph");
