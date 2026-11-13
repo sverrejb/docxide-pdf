@@ -1630,11 +1630,7 @@ fn render_vertical_cjk_cell(
     // Tags each paragraph as the cell's P, like a horizontal cell's.
     mut tagger: Option<CellTagger<'_>>,
 ) {
-    let pdf_name_to_entry: HashMap<&str, &FontEntry> = ctx
-        .fonts
-        .values()
-        .map(|e| (e.pdf_name.as_str(), e))
-        .collect();
+    let pdf_name_to_entry = super::fonts::by_pdf_name(ctx.fonts);
 
     let paras: Vec<&CellParagraphLayout> = cell_layout
         .items
