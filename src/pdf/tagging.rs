@@ -22,6 +22,7 @@ enum Kid {
     Mcid { page: usize, mcid: i32 },
 }
 
+#[derive(Default)]
 struct Node {
     kind: &'static str,
     parent: usize,
@@ -44,13 +45,7 @@ impl Node {
         Self {
             kind,
             parent,
-            kids: Vec::new(),
-            cell: None,
-            alt: None,
-            id: None,
-            actual: None,
-            lang: None,
-            numbering: None,
+            ..Default::default()
         }
     }
 
@@ -95,6 +90,7 @@ impl Lists {
 /// Structure of the table being rendered. A row split across pages looks its
 /// TR/TH/TD/P up again, so a cell paragraph continued on the next page stays
 /// one element. Repeated header rows are drawn with tagging suspended.
+#[derive(Default)]
 pub(crate) struct TableTags {
     table: usize,
     head_rows: usize,
@@ -124,13 +120,7 @@ impl TableTags {
                 usize::from(table.header_first_row)
             },
             first_col_header: table.header_first_col,
-            head: None,
-            body: None,
-            rows: HashMap::new(),
-            cells: HashMap::new(),
-            paras: HashMap::new(),
-            lists: HashMap::new(),
-            nested: HashMap::new(),
+            ..Default::default()
         }
     }
 
