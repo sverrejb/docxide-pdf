@@ -3,6 +3,7 @@ mod bidi;
 mod cell_draw;
 mod chart_legend;
 mod charts;
+mod charts_3d;
 mod charts_ex;
 mod charts_radial;
 pub(crate) mod color;
