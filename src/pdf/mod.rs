@@ -70,7 +70,7 @@ use fonts::collect_and_register_fonts;
 use footnotes::{footnote_height, render_endnotes_inline, render_page_footnotes};
 use header_footer::{
     HfPageContext, compute_effective_margin_bottom, effective_slot_top, render_header_footer,
-    resolve_footer_for_page, resolve_header_for_page,
+    resolve_hf_for_page,
 };
 pub(super) use helpers::resolve_line_h;
 use helpers::{
@@ -1858,11 +1858,10 @@ fn render_pass(
         let mut has_hf = false;
 
         // Header first: the content stream order is part of the output.
-        for (resolved, is_header) in [
-            (resolve_header_for_page(doc, si, is_first, page_num), true),
-            (resolve_footer_for_page(doc, si, is_first, page_num), false),
-        ] {
-            let (Some(data), hf_type, hf_si) = resolved else {
+        for is_header in [true, false] {
+            let (Some(data), hf_type, hf_si) =
+                resolve_hf_for_page(doc, si, is_first, page_num, is_header)
+            else {
                 continue;
             };
             let (pi_map, ii_map, fi_map, sh_para) = hf_maps_index

@@ -9,7 +9,7 @@ use crate::model::{
 
 use super::color::stroke_border;
 use super::helpers::{align_offset, draw_horizontal_rule};
-pub(super) use super::hf_fields::{page_field_text, substitute_hf_runs, substitute_hf_runs_with};
+pub(super) use super::hf_fields::{page_field_text, substitute_hf_runs};
 use super::layout::{
     LineOpts, LinkAnnotation, RenderOpts, TextLine, build_lines, is_text_empty,
     line_h_with_picture, lines_height, picture_line_bottom, position_stretch,
@@ -1159,7 +1159,7 @@ fn hf_box_paragraph(
     let inline_imgs = super::layout::run_image_map(&tp.runs, ctx.textbox_image_names);
     // Footer page numbers live in text boxes as often as in plain paragraphs;
     // without this the box kept the template's cached PAGE/NUMPAGES text.
-    let runs = substitute_hf_runs_with(&tp.runs, sub);
+    let runs = substitute_hf_runs(&tp.runs, sub);
     let lines = build_lines(
         &runs,
         ctx,
@@ -1270,7 +1270,7 @@ pub(super) fn render_header_footer(
                 let own_before = hf_own_space_before(prev_para, prev_space_after, para);
                 prev_para = Some(para);
 
-                let substituted_runs = substitute_hf_runs_with(&para.runs, &sub);
+                let substituted_runs = substitute_hf_runs(&para.runs, &sub);
 
                 let (font_size, tallest_lhr, tallest_ar) =
                     hf_run_metrics(&substituted_runs, para, ctx.fonts);
@@ -1800,7 +1800,7 @@ fn render_hf_frame_paragraph(
 ) {
     let text_width = sp.text_width();
     let fp = para.frame_props.as_ref().unwrap();
-    let substituted_runs = substitute_hf_runs_with(&para.runs, sub);
+    let substituted_runs = substitute_hf_runs(&para.runs, sub);
     let (font_size, tallest_lhr, tallest_ar) = tallest_run_metrics(&substituted_runs, ctx.fonts);
     let ascender_ratio = tallest_ar.unwrap_or(0.75);
     let frame_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
@@ -2138,7 +2138,7 @@ fn inherited_hf(
 
 /// Resolve which header (or footer) to use for a given page, walking sections
 /// backward for inheritance. Returns `(header_data, hf_type_id, section_index)`.
-fn resolve_hf_for_page(
+pub(super) fn resolve_hf_for_page(
     doc: &Document,
     section_idx: usize,
     is_first_page: bool,
@@ -2159,24 +2159,6 @@ fn resolve_hf_for_page(
         Some((hf, idx)) => (Some(hf), t, idx),
         None => (None, t, section_idx),
     }
-}
-
-pub(super) fn resolve_header_for_page(
-    doc: &Document,
-    section_idx: usize,
-    is_first_page: bool,
-    page_num: usize,
-) -> (Option<&HeaderFooter>, u8, usize) {
-    resolve_hf_for_page(doc, section_idx, is_first_page, page_num, true)
-}
-
-pub(super) fn resolve_footer_for_page(
-    doc: &Document,
-    section_idx: usize,
-    is_first_page: bool,
-    page_num: usize,
-) -> (Option<&HeaderFooter>, u8, usize) {
-    resolve_hf_for_page(doc, section_idx, is_first_page, page_num, false)
 }
 
 /// The gap above a header/footer paragraph: contextual spacing drops both

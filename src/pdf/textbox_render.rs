@@ -893,14 +893,7 @@ pub(super) fn render_textbox_paragraphs(
         let hf_runs: Vec<Run>;
         let runs: &[Run] = match hf_sub {
             Some(sub) => {
-                hf_runs = super::header_footer::substitute_hf_runs(
-                    &tp.runs,
-                    sub.page_num,
-                    sub.total_pages,
-                    sub.section_pages,
-                    sub.styleref_values,
-                    sub.page_num_format,
-                );
+                hf_runs = super::header_footer::substitute_hf_runs(&tp.runs, sub);
                 &hf_runs
             }
             None => &tp.runs,

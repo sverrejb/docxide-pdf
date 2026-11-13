@@ -654,14 +654,7 @@ pub(super) fn compute_row_layouts(
                                 } else { 0.0 };
                                 let substituted;
                                 let runs = if let Some(sub) = hf_sub {
-                                    substituted = substitute_hf_runs(
-                                        &para.runs,
-                                        sub.page_num,
-                                        sub.total_pages,
-                                        sub.section_pages,
-                                        sub.styleref_values,
-                                        sub.page_num_format,
-                                    );
+                                    substituted = substitute_hf_runs(&para.runs, sub);
                                     &substituted
                                 } else if let Some(marked) = ctx.with_note_marks(&para.runs) {
                                     // A note reference mark's run is empty until it

@@ -1,31 +1,11 @@
 //! Header and footer field results: PAGE, NUMPAGES, SECTIONPAGES, STYLEREF and IF.
 
-use std::collections::HashMap;
-
 use crate::model::{FieldCode, IfPart, Run, styleref_key};
 
 use super::table_layout::HfSubstitution;
 
-pub(super) fn substitute_hf_runs(
-    runs: &[Run],
-    page_num: usize,
-    total_pages: usize,
-    section_pages: usize,
-    styleref_values: &HashMap<String, String>,
-    page_num_format: Option<&str>,
-) -> Vec<Run> {
-    let sub = HfSubstitution {
-        page_num,
-        total_pages,
-        section_pages,
-        styleref_values,
-        page_num_format,
-    };
-    substitute_hf_runs_with(runs, &sub)
-}
-
 /// `runs` with their field codes replaced by this page's values.
-pub(super) fn substitute_hf_runs_with(runs: &[Run], sub: &HfSubstitution) -> Vec<Run> {
+pub(super) fn substitute_hf_runs(runs: &[Run], sub: &HfSubstitution) -> Vec<Run> {
     runs.iter()
         .map(|run| {
             let mut r = run.clone();
@@ -135,6 +115,7 @@ fn field_args(s: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::model::StyleRefForm;
+    use std::collections::HashMap;
 
     #[test]
     fn if_over_stylerefs_takes_the_page_value() {
@@ -191,7 +172,14 @@ mod tests {
             cased(FieldCode::NumPages(Some("lowerLetter"))),
             cased(FieldCode::SectionPages(Some("lowerLetter"))),
         ];
-        let out = substitute_hf_runs(&runs, 1, 2, 2, &HashMap::new(), None);
+        let sub = HfSubstitution {
+            page_num: 1,
+            total_pages: 2,
+            section_pages: 2,
+            styleref_values: &HashMap::new(),
+            page_num_format: None,
+        };
+        let out = substitute_hf_runs(&runs, &sub);
         assert_eq!(
             out.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(),
             ["a", "b", "b"]
