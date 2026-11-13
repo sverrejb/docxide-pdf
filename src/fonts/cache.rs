@@ -128,7 +128,13 @@ pub(super) fn save_cache(cache: &FontCache) {
             }
         }
     }
-    let _ = fs::write(&path, out);
+    // Concurrent conversions share this file; a reader that caught a plain
+    // fs::write half-done saw a truncated index and fell back to Helvetica.
+    // rename is atomic on one filesystem, and the pid keeps writers apart.
+    let tmp = path.with_extension(format!("tsv.{}.tmp", std::process::id()));
+    if fs::write(&tmp, out).is_ok() && fs::rename(&tmp, &path).is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
 }
 
 pub(super) fn dir_mtime(path: &Path) -> i64 {
