@@ -348,8 +348,8 @@
     "a11y_text": 1.0
   },
   "cases/behind-text-layer": {
-    "jaccard": 0.7831,
-    "ssim": 0.9136,
+    "jaccard": 0.7833,
+    "ssim": 0.9138,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -4409,8 +4409,8 @@
     "a11y_text": 1.0
   },
   "cases/field-result-formatting": {
-    "jaccard": 0.8067,
-    "ssim": 0.931,
+    "jaccard": 0.807,
+    "ssim": 0.9312,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -6933,8 +6933,8 @@
     "ssim": 0.9932
   },
   "cases/paragraph-border-indents": {
-    "jaccard": 0.957,
-    "ssim": 0.9812,
+    "jaccard": 0.9599,
+    "ssim": 0.9839,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10739,8 +10739,8 @@
     "a11y_text": 1.0
   },
   "scraped/irish_school_enrollment_form": {
-    "jaccard": 0.9263,
-    "ssim": 0.9574,
+    "jaccard": 0.9281,
+    "ssim": 0.9598,
     "text_boundary": 0.823,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -11214,8 +11214,8 @@
     "a11y_text": 0.8721
   },
   "scraped/renewable_dispatch_committee_agenda": {
-    "jaccard": 0.9626,
-    "ssim": 0.943,
+    "jaccard": 0.9632,
+    "ssim": 0.9441,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,

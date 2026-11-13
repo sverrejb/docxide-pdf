@@ -310,13 +310,9 @@ Open queue from the large-corpus and focus-fixture rounds:
 - **`w:ind` character units** (issue #143, `apply_indent_chars`):
   numbering-level `*Chars` are not read (`docx/numbering.rs` reads only the
   twip values); headers and footnotes use no grid delta.
-- **Paragraph shading width**: Word fills a borderless shaded paragraph
-  1.475pt left and 1.725pt right of its text box (renewable_dispatch's body
-  bars 70.525–541.725 on a 72–540 measure). Cells do this
-  (`helpers::shading_outsets`); body and header shading still stop at the
-  text box.
-  Two consecutive same-fill paragraphs in a cell keep a white gap between
-  them where the body closes it (unmeasured in cells).
+- **Paragraph shading in cells**: two consecutive same-fill paragraphs in
+  a cell keep a white gap between them where the body closes it
+  (unmeasured in cells).
 - **Paragraph borders** (issue #145): table cell borders keep their own dash arrays and draw wave and thin/thick pairs
   as one line (`pdf::table::draw_border` has no Wave or ThinThick arm).
 - **Trailing punctuation**: Word never lets a Latin mark hang past the margin
@@ -351,8 +347,16 @@ Open queue from the large-corpus and focus-fixture rounds:
   stop.
 - Tab stops: decimal precision unverified; bar tabs act as left stops and draw
   no line (no `Bar` variant in `TabAlignment`).
-- Underlines: dotted/dash/wave/thick draw single; underline colour ignored
-  (`docx/styles.rs` reads only none and double).
+- Underlines (`UnderlineStyle`; dotted, dash, dashLong, dotDash, dotDotDash
+  and words follow Word, probe kit `tests/output/probe_ustyle/`): thick and
+  the Heavy variants draw at the single thickness. Word's thick line fits
+  no rule yet: 1.25–3.0pt over Calibri/Arial/TNR/Aptos at 8–36pt, thick −
+  single anywhere from 0.25 to 1.0pt (`measure_thick.py` on `thick.pdf`).
+  Waves draw single: Word strokes a 0.25pt zigzag (1pt half-period,
+  amplitude growing with size) whose height above the single line is
+  irregular (Arial 10pt sits above the baseline; `wave.pdf`). `w:u
+  w:color` is ignored (no fixture's colour differs from its text). Word
+  draws nothing for an unknown `w:u` value; we draw single.
 - `w:textAlignment`: top is laid out and center only centres list markers;
   baseline, bottom and auto parse as auto.
 - `w:mirrorMargins`: parsed (used for odd/even filler pages and the change-bar
@@ -674,8 +678,6 @@ Backlog (details in `current_focus/A11Y.md`):
   - "Zqx Sans" with no fontTable entry draws Calibri in Word (python-docx's
     template, Calibri theme), where `family_fallback` says Cambria; check
     whether the theme's minor font decides.
-- `w:afterLines` alone is ignored (we fall back to the style's `after`); Word
-  counts a line as 12pt (afterLines 80 = 9.6pt, same as after 192).
 - Bundle metric-compatible open fonts behind a feature flag (Liberation
   Sans/Serif/Mono, Carlito, Caladea) for servers and Docker; today only
   installed fonts and the assets repo count (Carlito/Caladea are used when
