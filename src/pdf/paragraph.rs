@@ -1763,7 +1763,8 @@ pub(super) fn render_paragraph_block(
                 first_link.get_or_insert(extra + next_inter + next_first_line_h);
                 let col_w = col_geometry[state.current_col].1;
                 let blocks = &section_blocks[i..];
-                extra += next_inter + frame_box_h(fp, blocks, ctx, frame_width(fp, blocks, ctx, col_w));
+                extra +=
+                    next_inter + frame_box_h(fp, blocks, ctx, frame_width(fp, blocks, ctx, col_w));
                 break;
             }
             // The chain needs as many of the next paragraph's lines as must
@@ -2233,7 +2234,9 @@ pub(super) fn render_paragraph_block(
                 let trailing_images_fit = last_fragment
                     && trailing.iter().all(|fi| {
                         fi.wrap_type.wraps_beside()
-                            && offset_picture_without_strip(fi, sp, rest_col_x, rest_col_w, text_width)
+                            && offset_picture_without_strip(
+                                fi, sp, rest_col_x, rest_col_w, text_width,
+                            )
                             && resolve_fi_y_top(fi, sp, state.pb.slot_top)
                                 - fi.image.display_height
                                 - fi.dist_bottom

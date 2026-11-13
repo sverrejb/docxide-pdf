@@ -114,7 +114,10 @@ pub(super) fn unsized_line_font(
     }
 }
 
-pub(super) fn break_font(br: &Run, fonts: &HashMap<String, FontEntry>) -> (f32, (Option<f32>, Option<f32>)) {
+pub(super) fn break_font(
+    br: &Run,
+    fonts: &HashMap<String, FontEntry>,
+) -> (f32, (Option<f32>, Option<f32>)) {
     let metrics = fonts
         .get(&font_key(br))
         .map_or((None, None), |e| run_line_metrics(e, ""));
@@ -292,7 +295,11 @@ pub(super) fn size_tab_mark_line(
 }
 
 /// Look up the line_h_ratio for a break run's font, matching by font_size.
-pub(super) fn break_run_lhr(runs: &[Run], break_fs: f32, fonts: &HashMap<String, FontEntry>) -> Option<f32> {
+pub(super) fn break_run_lhr(
+    runs: &[Run],
+    break_fs: f32,
+    fonts: &HashMap<String, FontEntry>,
+) -> Option<f32> {
     // Find the break run with the matching font size
     let br_run = runs
         .iter()

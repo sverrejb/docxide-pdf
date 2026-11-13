@@ -276,7 +276,11 @@ pub(super) fn compute_bookmark_positions(
 
 /// An empty section mark keeps its line after an inline table (the rule is
 /// explained in `render_paragraph_block`); bookmark positions follow it too.
-pub(super) fn keeps_section_mark_line(compat_mode: u32, next_continuous: bool, prev: Option<&Block>) -> bool {
+pub(super) fn keeps_section_mark_line(
+    compat_mode: u32,
+    next_continuous: bool,
+    prev: Option<&Block>,
+) -> bool {
     compat_mode >= 15
         && next_continuous
         && matches!(prev, Some(Block::Table(t)) if t.position.is_none())

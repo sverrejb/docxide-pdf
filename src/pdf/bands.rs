@@ -195,7 +195,12 @@ pub(super) fn open_section_first_page(
 }
 
 /// Whether `paragraph_bands` has any, without measuring a textbox.
-pub(super) fn has_bands(p: &Paragraph, sp: &SectionProperties, col: (f32, f32), text_width: f32) -> bool {
+pub(super) fn has_bands(
+    p: &Paragraph,
+    sp: &SectionProperties,
+    col: (f32, f32),
+    text_width: f32,
+) -> bool {
     p.textboxes
         .iter()
         .any(|tb| textbox_blocks_band(tb, p, sp, col, text_width))
@@ -698,7 +703,12 @@ fn picture_marks(p: &Paragraph) -> HashMap<usize, String> {
 
 /// A paragraph's lines in a column `col_w` wide, with its inline pictures
 /// when `with_pictures`.
-fn paragraph_lines(p: &Paragraph, col_w: f32, ctx: &RenderContext, with_pictures: bool) -> Vec<TextLine> {
+fn paragraph_lines(
+    p: &Paragraph,
+    col_w: f32,
+    ctx: &RenderContext,
+    with_pictures: bool,
+) -> Vec<TextLine> {
     let pictures = with_pictures.then(|| picture_marks(p));
     build_lines(
         &p.runs,
@@ -849,7 +859,13 @@ impl<'a> OpenFrame<'a> {
             _ => props.height,
         };
         let top_y = |slot_top| {
-            header_footer::resolve_tb_y_top(props.v_relative_from, &props.v_position, height, sp, slot_top)
+            header_footer::resolve_tb_y_top(
+                props.v_relative_from,
+                &props.v_position,
+                height,
+                sp,
+                slot_top,
+            )
         };
         // A frame never splits: one anchored to the text that runs past the
         // bottom moves to the next column or page with its anchor (Word example,
@@ -980,7 +996,9 @@ impl<'a> FlowFrame<'a> {
         (sect_idx, col_geometry): (usize, &[(f32, f32)]),
     ) -> Self {
         take_frame_break(blocks, state, sp, ctx, (sect_idx, col_geometry.len()));
-        let col_width = |state: &LayoutState| frame_width(props, blocks, ctx, col_geometry[state.current_col].1);
+        let col_width = |state: &LayoutState| {
+            frame_width(props, blocks, ctx, col_geometry[state.current_col].1)
+        };
         let box_h = frame_box_h(props, blocks, ctx, col_width(state));
         let (start_page, col) = (state.pb.page_count(), state.current_col);
         let left = state.pb.column_top_y - state.pb.slot_top;
@@ -1000,7 +1018,12 @@ impl<'a> FlowFrame<'a> {
                 &mut state.pb.content,
                 Some((0.0, top - props.height, sp.page_width, props.height)),
             );
-        FlowFrame { props, top, page: state.pb.page_count(), exact }
+        FlowFrame {
+            props,
+            top,
+            page: state.pb.page_count(),
+            exact,
+        }
     }
 
     pub(super) fn close(self, state: &mut LayoutState) {
@@ -1131,10 +1154,19 @@ pub(super) fn frame_content_height(
                 let exact = matches!(ls, LineSpacing::Exact(_));
                 let lines_h = lines
                     .iter()
-                    .map(|l| if exact { line_h } else { line_h.max(layout::line_max_image_h(l)) })
+                    .map(|l| {
+                        if exact {
+                            line_h
+                        } else {
+                            line_h.max(layout::line_max_image_h(l))
+                        }
+                    })
                     .sum::<f32>()
                     .max(line_h);
-                height += p.image.as_ref().map_or(lines_h, |img| lines_h.max(img.layout_size().1));
+                height += p
+                    .image
+                    .as_ref()
+                    .map_or(lines_h, |img| lines_h.max(img.layout_size().1));
                 prev = Some(p);
                 prev_space_after = p.space_after;
             }
@@ -1249,14 +1281,13 @@ pub(super) fn empty_frame_table_bands(
             match b {
                 Block::Table(t) => {
                     if t.all_paragraphs().any(|q| {
-                            q.page_break_before
-                                || q.page_break_after
-                                || q.page_break_at.is_some()
-                                || q.runs
-                                    .iter()
-                                    .any(|r| r.footnote_id.is_some() || r.endnote_id.is_some())
-                        })
-                    {
+                        q.page_break_before
+                            || q.page_break_after
+                            || q.page_break_at.is_some()
+                            || q.runs
+                                .iter()
+                                .any(|r| r.footnote_id.is_some() || r.endnote_id.is_some())
+                    }) {
                         return false;
                     }
                     let widths = table_layout::auto_fit_columns(

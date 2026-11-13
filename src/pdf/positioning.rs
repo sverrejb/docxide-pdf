@@ -948,7 +948,12 @@ pub(crate) struct FloatZone {
 /// further right, for tables, pictures and text boxes alike (examples: a box
 /// whose wrap edge is 139pt in starts lines with a 0pt and a 129pt indent at
 /// its edge, a 200pt one at the indent).
-pub(super) fn right_text_region(col_x: f32, col_right: f32, float_right: f32, para: &Paragraph) -> (f32, f32) {
+pub(super) fn right_text_region(
+    col_x: f32,
+    col_right: f32,
+    float_right: f32,
+    para: &Paragraph,
+) -> (f32, f32) {
     let left = (col_x + para.indent_left).max(float_right);
     (left, (col_right - para.indent_right - left).max(0.0))
 }
@@ -956,7 +961,12 @@ pub(super) fn right_text_region(col_x: f32, col_right: f32, float_right: f32, pa
 /// The text region left of a float's wrap edge `float_left`: the paragraph's
 /// box cut off at the edge (example: a right indent inside the float's area
 /// takes nothing more off the line).
-pub(super) fn left_text_region(col_x: f32, col_right: f32, float_left: f32, para: &Paragraph) -> (f32, f32) {
+pub(super) fn left_text_region(
+    col_x: f32,
+    col_right: f32,
+    float_left: f32,
+    para: &Paragraph,
+) -> (f32, f32) {
     let left = col_x + para.indent_left;
     (
         left,
@@ -1144,7 +1154,13 @@ pub(super) fn wrap_side(wrap_text: WrapText, left: f32, right: f32) -> Option<bo
 /// it; french_sexual_health_youth_strategy's arrows beside its logo). The
 /// renderer shifts the first line by the hanging indent, so the region
 /// starts that much further right.
-pub(super) fn first_line_region_x(x: f32, edge: f32, para: &Paragraph, hanging: f32, legacy: bool) -> f32 {
+pub(super) fn first_line_region_x(
+    x: f32,
+    edge: f32,
+    para: &Paragraph,
+    hanging: f32,
+    legacy: bool,
+) -> f32 {
     if legacy && para.indent_hanging > 0.0 {
         edge + (para.indent_left - para.indent_hanging).max(0.0) + para.indent_hanging
     } else {
@@ -1346,8 +1362,16 @@ pub(super) fn draw_debug_wrap_overlay(content: &mut Content, fz: &FloatZone) {
     content.set_line_width(0.3);
     let page_left = fz.obj_left - 20.0;
     let page_right = fz.obj_right + 20.0;
-    polyline(content, &[(page_left, fz.top_y), (page_right, fz.top_y)], false);
-    polyline(content, &[(page_left, fz.bottom_y), (page_right, fz.bottom_y)], false);
+    polyline(
+        content,
+        &[(page_left, fz.top_y), (page_right, fz.top_y)],
+        false,
+    );
+    polyline(
+        content,
+        &[(page_left, fz.bottom_y), (page_right, fz.bottom_y)],
+        false,
+    );
 
     content.restore_state();
 }

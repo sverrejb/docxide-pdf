@@ -39,14 +39,22 @@ use crate::ConvertOptions;
 use crate::error::Error;
 use crate::fonts::FontEntry;
 use crate::model::{
-    Block, Document, FieldCode, FrameProperties, LineNumberRestart, LineSpacing,
-    PageVerticalAlign, Paragraph, ParagraphBorder, Run, SectionBreakType, SectionProperties,
-    ShapeFill, ShapeGeometry, VRelativeFrom, VerticalPosition, WrapText, WrapType,
+    Block, Document, FieldCode, FrameProperties, LineNumberRestart, LineSpacing, PageVerticalAlign,
+    Paragraph, ParagraphBorder, Run, SectionBreakType, SectionProperties, ShapeFill, ShapeGeometry,
+    VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
 use crate::fonts::font_key;
 use assembly::{HeadingEntry, assemble_pdf_pages};
-use bands::{Band, FlowFrame, OpenFrame, add_bands, auto_frame_width, block_para, column_geometry, empty_frame_table_bands, first_line_reach, first_word_width, floating_table_band, flow_frame, follows_floating_table, frame_beside_text, frame_content_height, has_bands, hf_page_bands, inter_gap, is_empty_wrapping_frame, lays_out_nothing, leading_para, lifted_frame, open_section_first_page, page_anchored, paragraph_line_count, place_first_line, place_moved_first_line, prescan_new_page, prescan_page_bands, step_below_bands, step_below_existing_bands, step_lines_below_bands, take_page_break_before};
+use bands::{
+    Band, FlowFrame, OpenFrame, add_bands, auto_frame_width, block_para, column_geometry,
+    empty_frame_table_bands, first_line_reach, first_word_width, floating_table_band, flow_frame,
+    follows_floating_table, frame_beside_text, frame_content_height, has_bands, hf_page_bands,
+    inter_gap, is_empty_wrapping_frame, lays_out_nothing, leading_para, lifted_frame,
+    open_section_first_page, page_anchored, paragraph_line_count, place_first_line,
+    place_moved_first_line, prescan_new_page, prescan_page_bands, step_below_bands,
+    step_below_existing_bands, step_lines_below_bands, take_page_break_before,
+};
 use color::{fill_rgb, stroke_border, stroke_segment};
 use fonts::collect_and_register_fonts;
 use footnotes::{footnote_height, render_endnotes_inline, render_page_footnotes};
@@ -56,9 +64,9 @@ use header_footer::{
 };
 pub(super) use helpers::resolve_line_h;
 use helpers::{
-    horizontal_border_ext, side_border_outsets,
     align_offset, auto_ascent_scale, between_space, border_band, border_box_indents, bottom_border,
-    collect_paras, draw_horizontal_rule, joins_border_group, spacing_leading,
+    collect_paras, draw_horizontal_rule, horizontal_border_ext, joins_border_group,
+    side_border_outsets, spacing_leading,
 };
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
@@ -69,21 +77,43 @@ use layout::{
     picture_line_bottom, render_paragraph_lines, run_line_metrics, size_lines_by_own_runs,
     tallest_glyph_run_metrics, tallest_run_metrics,
 };
-use line_metrics::{break_font, break_run_lhr, label_boosted_baseline_offset, label_boosted_line_h, mark_font, mark_line_h, mark_position_stretch, size_break_lines, size_mark_line, size_tab_mark_line, size_unsized_lines, unsized_line_font, unsized_line_metrics};
+use line_metrics::{
+    break_font, break_run_lhr, label_boosted_baseline_offset, label_boosted_line_h, mark_font,
+    mark_line_h, mark_position_stretch, size_break_lines, size_mark_line, size_tab_mark_line,
+    size_unsized_lines, unsized_line_font, unsized_line_metrics,
+};
 use list_label::{label_font_key, render_list_label};
-use page_builder::{AnchorKind, BodyPageFields, LayoutState, PageBuilder, ParaAnchor, PendingAnchor, last_page_number, page_number_formats, page_numbers, section_break_spacing, section_page_counts};
+use page_builder::{
+    AnchorKind, BodyPageFields, LayoutState, PageBuilder, ParaAnchor, PendingAnchor,
+    last_page_number, page_number_formats, page_numbers, section_break_spacing,
+    section_page_counts,
+};
 use paragraph::render_paragraph_block;
 use positioning::{
-    FloatTableExtent, FloatZone, FloatingTablePos, MIN_EMPTY_STRIP, MIN_TABLE_SIDE_ROOM, blocking_textbox_band, draw_debug_wrap_overlay, first_line_region_x, hangs_below_anchor, image_band, image_blocks_band, keep_open, left_text_region, no_strip_beside, para_line_h, plain_line_h, poly_scanline, polygon_edges, rectangular_polygon_clearance, render_connector, render_floating_images, resolve_fi_x, right_text_region, side_room, side_strip, skip_blocked_lines, step_lines_below_floats, textbox_blocks_band, textbox_room_beside, textbox_wraps_beside, textbox_zones, wrap_room, wrap_side, wraps_in_column,
+    FloatTableExtent, FloatZone, FloatingTablePos, MIN_EMPTY_STRIP, MIN_TABLE_SIDE_ROOM,
+    blocking_textbox_band, draw_debug_wrap_overlay, first_line_region_x, hangs_below_anchor,
+    image_band, image_blocks_band, keep_open, left_text_region, no_strip_beside, para_line_h,
+    plain_line_h, poly_scanline, polygon_edges, rectangular_polygon_clearance, render_connector,
+    render_floating_images, resolve_fi_x, right_text_region, side_room, side_strip,
+    skip_blocked_lines, step_lines_below_floats, textbox_blocks_band, textbox_room_beside,
+    textbox_wraps_beside, textbox_zones, wrap_room, wrap_side, wraps_in_column,
 };
 pub(super) use positioning::{resolve_fi_y_top, resolve_h_position};
-use prepass::{body_page_field_text, body_runs, cell_grid_pitch, compute_bookmark_positions, document_lang, keeps_section_mark_line};
+use prepass::{
+    body_page_field_text, body_runs, cell_grid_pitch, compute_bookmark_positions, document_lang,
+    keeps_section_mark_line,
+};
 use smartart::draw_shape_path;
 use table::render_table;
 use textbox_render::render_single_textbox;
 
 /// A frame's width: w:w, or its widest block within `avail_w`.
-fn frame_width(props: &FrameProperties, blocks: &[Block], ctx: &RenderContext, avail_w: f32) -> f32 {
+fn frame_width(
+    props: &FrameProperties,
+    blocks: &[Block],
+    ctx: &RenderContext,
+    avail_w: f32,
+) -> f32 {
     if props.width > 0.0 {
         props.width
     } else {
@@ -97,7 +127,9 @@ fn frame_box_h(props: &FrameProperties, blocks: &[Block], ctx: &RenderContext, w
     if props.height_exact {
         props.height
     } else {
-        props.height.max(frame_content_height(props, blocks, ctx, width))
+        props
+            .height
+            .max(frame_content_height(props, blocks, ctx, width))
     }
 }
 
@@ -994,8 +1026,14 @@ fn render_pass(
                     && let Some(fp) = block_flow_frame
                 {
                     let blocks = &section.blocks[block_idx..];
-                    open_flow_frame =
-                        Some(FlowFrame::open(fp, blocks, state, &ctx, sp, (sect_idx, &col_geometry)));
+                    open_flow_frame = Some(FlowFrame::open(
+                        fp,
+                        blocks,
+                        state,
+                        &ctx,
+                        sp,
+                        (sect_idx, &col_geometry),
+                    ));
                 }
                 // The first block stayed on this page, so a later break opens an
                 // ordinary one, even from where the first block started.
@@ -1009,7 +1047,14 @@ fn render_pass(
                     match block_frame {
                         Some(fp) => {
                             let blocks = &section.blocks[block_idx..];
-                            frame = Some(OpenFrame::open(fp, blocks, state, &ctx, sp, (sect_idx, &col_geometry)));
+                            frame = Some(OpenFrame::open(
+                                fp,
+                                blocks,
+                                state,
+                                &ctx,
+                                sp,
+                                (sect_idx, &col_geometry),
+                            ));
                         }
                         None => {
                             // The break comes first: the bands are those of the

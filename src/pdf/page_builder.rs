@@ -438,7 +438,12 @@ impl PageBuilder {
     /// a Figure whose drawing (labels included) stays an artifact, so only the
     /// alt text speaks for it.
     // ponytail: content-less Figure; tag the drawing itself if a validator asks for content
-    pub(super) fn figure_without_content(&mut self, para: &Paragraph, doc: &Document, alt: Option<&str>) {
+    pub(super) fn figure_without_content(
+        &mut self,
+        para: &Paragraph,
+        doc: &Document,
+        alt: Option<&str>,
+    ) {
         self.tag_empty_para(para, doc);
         self.tags.add_figure(tagging::ROOT, alt);
     }
@@ -789,8 +794,10 @@ impl PageBuilder {
 
     /// The text after a full-width picture resumes below the lowest one.
     pub(super) fn lower_next_text_to(&mut self, bottom: f32) {
-        self.next_text_below_picture =
-            Some(self.next_text_below_picture.map_or(bottom, |old| old.min(bottom)));
+        self.next_text_below_picture = Some(
+            self.next_text_below_picture
+                .map_or(bottom, |old| old.min(bottom)),
+        );
     }
 
     fn take_pending_first_page(&mut self, sect_idx: usize) -> bool {
@@ -907,7 +914,12 @@ impl LayoutState {
         );
     }
 
-    pub(super) fn begin_next_page(&mut self, sect_idx: usize, sp: &SectionProperties, ctx: &RenderContext) {
+    pub(super) fn begin_next_page(
+        &mut self,
+        sect_idx: usize,
+        sp: &SectionProperties,
+        ctx: &RenderContext,
+    ) {
         self.pb
             .begin_next_page(sect_idx, sp, &mut self.effective_margin_bottom, ctx);
     }
@@ -1060,7 +1072,11 @@ pub(super) fn page_number_formats<'a>(
 /// paragraph's space before (Word probes: 12pt after, 8pt on the break, 10pt
 /// before give 14pt; covid_insomnia's two columns start 12pt below its
 /// keywords). Before a new page the break's own space after counts.
-pub(super) fn section_break_spacing(prev_after: f32, break_after: f32, next_continuous: bool) -> (f32, f32) {
+pub(super) fn section_break_spacing(
+    prev_after: f32,
+    break_after: f32,
+    next_continuous: bool,
+) -> (f32, f32) {
     if next_continuous {
         (prev_after - break_after, break_after)
     } else {
