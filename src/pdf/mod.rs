@@ -1,5 +1,6 @@
 mod assembly;
 mod bidi;
+mod cell_draw;
 mod chart_legend;
 mod charts;
 mod charts_ex;
