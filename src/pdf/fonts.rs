@@ -687,10 +687,7 @@ pub(super) fn collect_and_register_fonts(
                 .as_deref()
                 .and_then(|p| crate::fonts::hhea_box(p, entry.face_index))
         {
-            entry.line_h_ratio = Some(asc + desc);
-            entry.ascender_ratio = Some(asc);
-            entry.plain_line_h_ratio = Some(asc + desc);
-            entry.plain_ascender_ratio = Some(asc);
+            entry.set_line_box(asc, asc + desc);
         }
         // Copy fallback char widths into each primary font so layout uses correct widths
         if let Some(fb_widths) = entry.char_widths_1000.clone() {
