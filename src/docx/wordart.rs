@@ -156,7 +156,7 @@ pub(super) fn parse_vml_wordart(
                 .children()
                 .find(|n| n.has_tag_name((super::VML_NS, "fill")))
                 .and_then(|f| f.attribute("opacity"))
-                .and_then(parse_vml_opacity)
+                .and_then(super::images::vml_fraction)
                 .unwrap_or(1.0);
             c.map(|v| (v as f32 * a + 255.0 * (1.0 - a)).round() as u8)
         });
@@ -220,18 +220,6 @@ pub(super) fn parse_vml_wordart(
         }),
         ..Textbox::default()
     })
-}
-
-/// VML opacity: a fraction (".5"), a percentage ("50%") or 16.16 fixed point ("32768f").
-fn parse_vml_opacity(val: &str) -> Option<f32> {
-    let val = val.trim();
-    if let Some(f) = val.strip_suffix('f') {
-        return f.parse::<f32>().ok().map(|v| v / 65536.0);
-    }
-    if let Some(p) = val.strip_suffix('%') {
-        return p.parse::<f32>().ok().map(|v| v / 100.0);
-    }
-    val.parse().ok()
 }
 
 /// Resolve a `w14:srgbClr` or `w14:schemeClr` child of `fill_node`.

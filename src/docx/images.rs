@@ -1160,13 +1160,17 @@ fn is_vml_frame_fill(node: roxmltree::Node) -> bool {
             .is_some_and(|shape| off(shape.attribute("filled")))
 }
 
-/// VML fractions are plain decimals or 16.16 fixed point with an `f` suffix
-/// ("19661f" = 0.3).
-fn vml_fraction(v: &str) -> Option<f32> {
-    match v.strip_suffix('f') {
-        Some(fixed) => fixed.parse::<f32>().ok().map(|f| f / 65536.0),
-        None => v.parse().ok(),
+/// VML fractions are plain decimals (".5"), percentages ("50%") or 16.16 fixed
+/// point with an `f` suffix ("19661f" = 0.3).
+pub(super) fn vml_fraction(v: &str) -> Option<f32> {
+    let v = v.trim();
+    if let Some(fixed) = v.strip_suffix('f') {
+        return fixed.parse::<f32>().ok().map(|f| f / 65536.0);
     }
+    if let Some(pct) = v.strip_suffix('%') {
+        return pct.parse::<f32>().ok().map(|p| p / 100.0);
+    }
+    v.parse().ok()
 }
 
 /// VML stacks by z-index; a negative one is behind the text. Word's VML
