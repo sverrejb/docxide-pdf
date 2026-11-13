@@ -572,7 +572,7 @@ mod tests {
 
         let bmp = emf_to_raster(&data).expect("bitmap EMF converts");
         assert_eq!(&bmp[54..], &bits);
-        let (w, h, fmt, _) = super::super::images::image_dimensions(&bmp).unwrap();
+        let (w, h, fmt, _) = super::super::media::image_dimensions(&bmp).unwrap();
         assert_eq!((w, h, fmt), (1, 1, crate::model::ImageFormat::Bmp));
 
         // Vector drawing (here FILLPATH) keeps the EMF on the translator path.

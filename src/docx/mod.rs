@@ -11,6 +11,7 @@ mod headers_footers;
 mod images;
 mod math;
 mod math_speech;
+mod media;
 pub(crate) mod numbering;
 mod paragraph;
 mod runs;

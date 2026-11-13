@@ -6,7 +6,7 @@ use crate::model::{
     EmbeddedImage, FloatingImage, HorizontalPosition, VerticalPosition, WrapText, WrapType,
 };
 
-use super::images::read_image_from_zip;
+use super::media::read_image_from_zip;
 use super::textbox::{parse_vml_box_style, vml_style_prop};
 use super::{ParseContext, REL_NS, VML_NS, W10_NS, WML_NS, parse_pt, twips_attr};
 

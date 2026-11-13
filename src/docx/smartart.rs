@@ -5,7 +5,7 @@ use crate::model::{EmbeddedImage, SmartArtDiagram, SmartArtShape};
 
 use super::color::{parse_line_stroke, parse_solid_fill, resolve_dml_color};
 use super::group::dml_pair;
-use super::images::{find_blip_embed, read_image_from_zip};
+use super::media::{find_blip_embed, read_image_from_zip};
 use super::styles::ThemeFonts;
 use super::textbox::parse_shape_geometry;
 use super::{

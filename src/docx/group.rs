@@ -15,8 +15,9 @@ use crate::model::{
 
 use super::images::{
     RunDrawingResult, anchor_z_order, anchored_to_line, extent_dimensions, parse_anchor_position,
-    parse_wrap_type, place_anchored, read_image_from_zip,
+    parse_wrap_type, place_anchored,
 };
+use super::media::read_image_from_zip;
 use super::textbox::{
     find_sp_pr, is_connector_wsp, parse_connector_shape_node, parse_vml_box_style, parse_vml_line,
     parse_wsp_shape, vml_style_prop,
