@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use pdf_writer::Content;
 
 use crate::model::{
-    Alignment, Block, Document, FieldCode, FrameProperties, HRelativeFrom, HeaderFooter, IfPart,
-    LineSpacing, Paragraph, Run, SectionProperties, TextAnchor, VRelativeFrom, VerticalPosition,
-    WrapType,
+    Alignment, Block, Document, FrameProperties, HRelativeFrom, HeaderFooter, LineSpacing,
+    Paragraph, Run, SectionProperties, TextAnchor, VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use super::color::stroke_border;
 use super::helpers::{align_offset, draw_horizontal_rule};
+pub(super) use super::hf_fields::{page_field_text, substitute_hf_runs, substitute_hf_runs_with};
 use super::layout::{
     LineOpts, LinkAnnotation, TextLine, build_lines, is_text_empty, line_h_with_picture,
     lines_height, picture_line_bottom, position_stretch, render_paragraph_lines, runs_max_image_h,
@@ -20,132 +20,7 @@ use super::table;
 use super::table_layout::HfSubstitution;
 use super::{RenderContext, resolve_line_h};
 
-pub(super) fn substitute_hf_runs(
-    runs: &[Run],
-    page_num: usize,
-    total_pages: usize,
-    section_pages: usize,
-    styleref_values: &HashMap<String, String>,
-    page_num_format: Option<&str>,
-) -> Vec<Run> {
-    let sub = HfSubstitution {
-        page_num,
-        total_pages,
-        section_pages,
-        styleref_values,
-        page_num_format,
-    };
-    substitute_hf_runs_with(runs, &sub)
-}
-
-/// `runs` with their field codes replaced by this page's values.
-pub(super) fn substitute_hf_runs_with(runs: &[Run], sub: &HfSubstitution) -> Vec<Run> {
-    runs.iter()
-        .map(|run| {
-            let mut r = run.clone();
-            if let Some(ref fc) = run.field_code {
-                r.field_code = None;
-                r.text = sub.eval(fc).unwrap_or_else(|| run.text.clone());
-                if matches!(fc, FieldCode::Page(_) | FieldCode::NumPages(_)) {
-                    r.caps = false;
-                    r.small_caps = false;
-                }
-            }
-            r
-        })
-        .collect()
-}
-
 pub(super) use crate::model::styleref_key;
-
-/// A PAGE, NUMPAGES or SECTIONPAGES value in its numFmt (None = decimal).
-pub(super) fn page_field_text(n: usize, fmt: Option<&str>) -> String {
-    fmt.map_or_else(
-        || n.to_string(),
-        |fmt| crate::docx::numbering::format_number(n as u32, fmt),
-    )
-}
-
-impl HfSubstitution<'_> {
-    /// None keeps the cached result.
-    fn eval(&self, fc: &FieldCode) -> Option<String> {
-        Some(match fc {
-            FieldCode::Page(fmt) => page_field_text(self.page_num, fmt.or(self.page_num_format)),
-            FieldCode::NumPages(fmt) => page_field_text(self.total_pages, *fmt),
-            FieldCode::SectionPages(fmt) => page_field_text(self.section_pages, *fmt),
-            FieldCode::StyleRef { name, form } => self
-                .styleref_values
-                .get(&styleref_key(name, *form))
-                .cloned()
-                .unwrap_or_default(),
-            FieldCode::PageRef(_) | FieldCode::Seq { .. } => return None,
-            FieldCode::If(parts) => return self.eval_if(parts),
-        })
-    }
-
-    /// `IF expr1 op expr2 "true" "false"` after substituting the nested
-    /// fields.
-    fn eval_if(&self, parts: &[IfPart]) -> Option<String> {
-        let mut instr = String::new();
-        for part in parts {
-            match part {
-                IfPart::Text(t) => instr.push_str(t),
-                IfPart::Field(fc) => instr.push_str(&self.eval(fc)?),
-            }
-        }
-        let args = field_args(instr.trim_start().get(2..)?);
-        let [a, op, b, t, f] = args.as_slice() else {
-            return None;
-        };
-        let ord = match (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
-            (Ok(x), Ok(y)) => x.partial_cmp(&y)?,
-            _ => a.cmp(b),
-        };
-        let holds = match op.as_str() {
-            "=" => ord.is_eq(),
-            "<>" => ord.is_ne(),
-            "<" => ord.is_lt(),
-            "<=" => ord.is_le(),
-            ">" => ord.is_gt(),
-            ">=" => ord.is_ge(),
-            _ => return None,
-        };
-        Some(if holds { t } else { f }.clone())
-    }
-}
-
-/// Field arguments: whitespace-separated, double quotes group (and are
-/// dropped), comparison operators stand alone even without spaces.
-fn field_args(s: &str) -> Vec<String> {
-    let mut args = Vec::new();
-    let mut chars = s.chars().peekable();
-    while let Some(&c) = chars.peek() {
-        if c.is_whitespace() {
-            chars.next();
-        } else if c == '"' {
-            chars.next();
-            args.push(chars.by_ref().take_while(|&c| c != '"').collect());
-        } else if "=<>".contains(c) {
-            let mut op = String::new();
-            while let Some(&c) = chars.peek().filter(|c| "=<>".contains(**c)) {
-                op.push(c);
-                chars.next();
-            }
-            args.push(op);
-        } else {
-            let mut word = String::new();
-            while let Some(&c) = chars
-                .peek()
-                .filter(|c| !c.is_whitespace() && !"\"=<>".contains(**c))
-            {
-                word.push(c);
-                chars.next();
-            }
-            args.push(word);
-        }
-    }
-    args
-}
 
 /// Header lines size as body lines do: runs of nothing but spaces or tabs
 /// size nothing, and a line left with nothing takes the paragraph mark's
@@ -1378,97 +1253,15 @@ pub(super) fn render_header_footer(
                 prev_para = None;
             }
             Block::Paragraph(para) if para.frame_props.is_some() => {
-                let fp = para.frame_props.as_ref().unwrap();
-                let substituted_runs = substitute_hf_runs_with(&para.runs, &sub);
-                let (font_size, tallest_lhr, tallest_ar) =
-                    tallest_run_metrics(&substituted_runs, ctx.fonts);
-                let ascender_ratio = tallest_ar.unwrap_or(0.75);
-                let frame_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                let frame_ascent = super::layout::boxed_line_ascent(
-                    frame_ls,
-                    resolve_line_h(frame_ls, font_size, tallest_lhr),
-                    font_size,
-                    tallest_lhr,
-                    tallest_ar,
-                    &substituted_runs,
-                    ctx.fonts,
-                )
-                .unwrap_or(font_size * ascender_ratio);
-
-                let lines = build_lines(
-                    &substituted_runs,
-                    ctx,
-                    text_width,
-                    ctx.cjk(true, para),
-                    &LineOpts {
-                        tab_stops: &para.tab_stops,
-                        ..Default::default()
-                    },
-                );
-                let content_width = lines.iter().map(|l| l.total_width).fold(0.0f32, f32::max);
-
-                // A framePr with an explicit width (w:w) positions a fixed-width
-                // frame box within the anchor area; text then flows from the
-                // frame's left edge. Without a width we fall back to aligning the
-                // text itself (legacy behaviour).
-                let frame_x = if fp.width > 0.0 {
-                    let (origin, area_width) = match fp.h_relative_from {
-                        HRelativeFrom::Page => (0.0, sp.page_width),
-                        HRelativeFrom::Margin | HRelativeFrom::Column => {
-                            (sp.margin_left, text_width)
-                        }
-                    };
-                    fp.h_position.place(origin, area_width, fp.width) + para.indent_left
-                } else {
-                    resolve_h_position(
-                        fp.h_relative_from,
-                        &fp.h_position,
-                        content_width,
-                        sp,
-                        sp.margin_left,
-                        text_width,
-                        text_width,
-                    )
-                };
-                // vAnchor + w:y pin the frame top to the page/margin, independent
-                // of the flowing header/footer cursor. Paragraph-anchored frames
-                // keep the in-flow position.
-                let frame_h = if fp.height > 0.0 {
-                    fp.height
-                } else {
-                    lines.len() as f32 * resolve_line_h(frame_ls, font_size, tallest_lhr)
-                };
-                let frame_top = anchored_frame_top(fp, frame_h, sp)
-                    .map_or(cursor_y, |top| sp.page_height - top);
-                let frame_baseline = frame_top - frame_ascent;
-
-                // Frame text carries no inline pictures, so no descent is needed.
-                render_paragraph_lines(
+                render_hf_frame_paragraph(
                     content,
-                    &lines,
-                    &Alignment::Left,
-                    frame_x,
-                    if fp.width > 0.0 {
-                        para.indent_left
-                    } else {
-                        0.0
-                    },
-                    content_width,
-                    frame_baseline,
-                    font_size,
-                    (font_size * ascender_ratio, 0.0),
-                    lines.len(),
-                    0,
-                    links,
-                    0.0,
-                    ctx.fonts,
-                    None,
+                    para,
+                    ctx,
+                    sp,
+                    &sub,
+                    cursor_y,
                     gradient_specs,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
+                    links,
                 );
                 // Frame paragraphs are out-of-flow: do not advance cursor_y
                 pi += 1;
@@ -1666,214 +1459,16 @@ pub(super) fn render_header_footer(
                     } else {
                         // Render textboxes
                         for tb in &para.textboxes {
-                            let tb_height = super::textbox_render::textbox_height(tb, ctx);
-                            let tb_x = super::resolve_h_position(
-                                tb.h_relative_from,
-                                &tb.h_position,
-                                tb.width_pt,
-                                sp,
-                                sp.margin_left,
-                                text_width,
-                                text_width,
-                            );
-                            let tb_y_top = resolve_tb_y_top(
-                                tb.v_relative_from,
-                                &tb.v_position,
-                                tb_height,
-                                sp,
-                                anchor_top(tb.on_line),
-                            );
-                            let rotated = super::textbox_render::rotate_about_center(
-                                content,
-                                tb.rotation_deg,
-                                tb_x,
-                                tb_y_top,
-                                tb.width_pt,
-                                tb_height,
-                            );
-
-                            if let Some(ref fill) = tb.fill {
-                                super::render_shape_fill(
-                                    content,
-                                    fill,
-                                    tb_x,
-                                    tb_y_top - tb_height,
-                                    tb.width_pt,
-                                    tb_height,
-                                    &tb.shape_type,
-                                    gradient_specs,
-                                );
-                            }
-                            super::textbox_render::render_picture_fill(
+                            render_hf_textbox(
                                 content,
                                 tb,
-                                (tb_x, tb_y_top - tb_height, tb.width_pt, tb_height),
                                 ctx,
+                                sp,
+                                anchor_top(tb.on_line),
+                                &sub,
+                                gradient_specs,
+                                links,
                             );
-
-                            let content_x = tb_x + tb.margin_left;
-                            let content_w =
-                                (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
-                            let hf_table = |t| {
-                                super::table::TextboxTable::layout(t, content_w, ctx, Some(&sub))
-                            };
-
-                            // WordArt (a header watermark) draws its glyphs as warped
-                            // outlines, as the body path does.
-                            if tb
-                                .text_warp
-                                .as_ref()
-                                .is_some_and(|w| w.preset != "textNoShape")
-                                && super::wordart::render_warped_textbox(
-                                    tb, content, ctx.fonts, tb_x, tb_y_top, content_w,
-                                )
-                            {
-                                if rotated {
-                                    content.restore_state();
-                                }
-                                continue;
-                            }
-
-                            // Match Word and body textboxes: fixed boxes clip overflow.
-                            let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape);
-                            if needs_clip {
-                                content.save_state();
-                                content.rect(tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
-                                content.clip_nonzero();
-                                content.end_path();
-                            }
-
-                            // Word vertically anchors textbox content per bodyPr anchor (ctr/b).
-                            // The body textbox path (textbox_render::render_single_textbox) applies this,
-                            // but the header/footer loop is a separate renderer that historically
-                            // top-anchored everything. Mirror the body math here; `hf_box_paragraph`
-                            // gives this pass and the draw loop below the same advance.
-                            let anchor_offset = match tb.text_anchor {
-                                TextAnchor::Top => 0.0,
-                                TextAnchor::Middle | TextAnchor::Bottom => {
-                                    let tp_height = |tp: &Paragraph| -> f32 {
-                                        if let Some(img) =
-                                            super::textbox_render::textbox_para_block_image(tp)
-                                        {
-                                            return tp.space_before
-                                                + img.display_height
-                                                + img.layout_extra_height
-                                                + tp.space_after;
-                                        }
-                                        hf_box_paragraph(tp, content_w, &sub, ctx).height(tp)
-                                    };
-                                    let tables: f32 =
-                                        tb.tables.iter().map(|(_, t)| hf_table(t).height()).sum();
-                                    let total_h: f32 =
-                                        tb.paragraphs.iter().map(tp_height).sum::<f32>() + tables;
-                                    let available =
-                                        (tb_height - tb.margin_top - tb.margin_bottom).max(0.0);
-                                    let gap = (available - total_h).max(0.0);
-                                    match tb.text_anchor {
-                                        TextAnchor::Middle => gap / 2.0,
-                                        TextAnchor::Bottom => gap,
-                                        TextAnchor::Top => 0.0,
-                                    }
-                                }
-                            };
-                            let mut tb_cursor = tb_y_top - tb.margin_top - anchor_offset;
-                            for (tp_idx, tp) in tb.paragraphs.iter().enumerate() {
-                                for (_, table) in tb.tables.iter().filter(|(at, _)| *at == tp_idx) {
-                                    hf_table(table).render(
-                                        (content_x, content_w),
-                                        &mut tb_cursor,
-                                        content,
-                                        ctx,
-                                        gradient_specs,
-                                        links,
-                                        None,
-                                        Some(&sub),
-                                    );
-                                }
-                                if let Some(img) =
-                                    super::textbox_render::textbox_para_block_image(tp)
-                                {
-                                    if let Some(pdf_name) = ctx.textbox_image_names.get(&img.id) {
-                                        let img_x = content_x
-                                            + tp.indent_left
-                                            + align_offset(
-                                                tp.alignment,
-                                                (hf_box_text_w(tp, content_w) - img.display_width)
-                                                    .max(0.0),
-                                            );
-                                        let img_y =
-                                            tb_cursor - tp.space_before - img.display_height;
-                                        super::smartart::render_image_with_clip(
-                                            content,
-                                            pdf_name,
-                                            img_x,
-                                            img_y,
-                                            img.display_width,
-                                            img.display_height,
-                                            img.clip_geometry.as_ref(),
-                                        );
-                                    }
-                                    tb_cursor -= tp.space_before
-                                        + img.display_height
-                                        + img.layout_extra_height
-                                        + tp.space_after;
-                                    continue;
-                                }
-
-                                let bp = hf_box_paragraph(tp, content_w, &sub, ctx);
-                                if bp.lines.is_empty() {
-                                    tb_cursor -= bp.height(tp);
-                                    continue;
-                                }
-                                let tb_ascender = bp.ar.unwrap_or(0.75);
-                                let tb_baseline = tb_cursor - tp.space_before - bp.fs * tb_ascender;
-                                let tb_metrics = (
-                                    bp.fs * tb_ascender,
-                                    if bp.inline_imgs.is_empty() {
-                                        0.0
-                                    } else {
-                                        picture_line_bottom(&tp.runs, tp, ctx.fonts, bp.ls)
-                                    },
-                                );
-                                super::render_list_label(
-                                    content,
-                                    tp,
-                                    ctx.fonts,
-                                    content_x + tp.indent_left - tp.indent_hanging,
-                                    tb_baseline,
-                                    bp.fs,
-                                );
-                                render_paragraph_lines(
-                                    content,
-                                    &bp.lines,
-                                    &tp.alignment,
-                                    content_x + tp.indent_left,
-                                    tp.indent_left,
-                                    bp.text_w,
-                                    tb_baseline,
-                                    bp.line_h,
-                                    tb_metrics,
-                                    bp.lines.len(),
-                                    0,
-                                    links,
-                                    0.0,
-                                    ctx.fonts,
-                                    None,
-                                    gradient_specs,
-                                    None,
-                                    None,
-                                    None,
-                                    None,
-                                    None,
-                                );
-                                tb_cursor -= bp.height(tp);
-                            }
-                            if needs_clip {
-                                content.restore_state();
-                            }
-                            if rotated {
-                                content.restore_state();
-                            }
                         }
                     }
                 }
@@ -2214,6 +1809,317 @@ pub(super) fn render_header_footer(
     }
 }
 
+/// A framed (`w:framePr`) header or footer paragraph: drawn where its frame
+/// sits, out of the flow.
+fn render_hf_frame_paragraph(
+    content: &mut Content,
+    para: &Paragraph,
+    ctx: &RenderContext,
+    sp: &SectionProperties,
+    sub: &HfSubstitution,
+    cursor_y: f32,
+    gradient_specs: &mut Vec<super::GradientSpec>,
+    links: &mut Vec<LinkAnnotation>,
+) {
+    let text_width = sp.text_width();
+    let fp = para.frame_props.as_ref().unwrap();
+    let substituted_runs = substitute_hf_runs_with(&para.runs, sub);
+    let (font_size, tallest_lhr, tallest_ar) = tallest_run_metrics(&substituted_runs, ctx.fonts);
+    let ascender_ratio = tallest_ar.unwrap_or(0.75);
+    let frame_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    let frame_ascent = super::layout::boxed_line_ascent(
+        frame_ls,
+        resolve_line_h(frame_ls, font_size, tallest_lhr),
+        font_size,
+        tallest_lhr,
+        tallest_ar,
+        &substituted_runs,
+        ctx.fonts,
+    )
+    .unwrap_or(font_size * ascender_ratio);
+
+    let lines = build_lines(
+        &substituted_runs,
+        ctx,
+        text_width,
+        ctx.cjk(true, para),
+        &LineOpts {
+            tab_stops: &para.tab_stops,
+            ..Default::default()
+        },
+    );
+    let content_width = lines.iter().map(|l| l.total_width).fold(0.0f32, f32::max);
+
+    // A framePr with an explicit width (w:w) positions a fixed-width
+    // frame box within the anchor area; text then flows from the
+    // frame's left edge. Without a width we fall back to aligning the
+    // text itself (legacy behaviour).
+    let frame_x = if fp.width > 0.0 {
+        let (origin, area_width) = match fp.h_relative_from {
+            HRelativeFrom::Page => (0.0, sp.page_width),
+            HRelativeFrom::Margin | HRelativeFrom::Column => (sp.margin_left, text_width),
+        };
+        fp.h_position.place(origin, area_width, fp.width) + para.indent_left
+    } else {
+        resolve_h_position(
+            fp.h_relative_from,
+            &fp.h_position,
+            content_width,
+            sp,
+            sp.margin_left,
+            text_width,
+            text_width,
+        )
+    };
+    // vAnchor + w:y pin the frame top to the page/margin, independent
+    // of the flowing header/footer cursor. Paragraph-anchored frames
+    // keep the in-flow position.
+    let frame_h = if fp.height > 0.0 {
+        fp.height
+    } else {
+        lines.len() as f32 * resolve_line_h(frame_ls, font_size, tallest_lhr)
+    };
+    let frame_top =
+        anchored_frame_top(fp, frame_h, sp).map_or(cursor_y, |top| sp.page_height - top);
+    let frame_baseline = frame_top - frame_ascent;
+
+    // Frame text carries no inline pictures, so no descent is needed.
+    render_paragraph_lines(
+        content,
+        &lines,
+        &Alignment::Left,
+        frame_x,
+        if fp.width > 0.0 {
+            para.indent_left
+        } else {
+            0.0
+        },
+        content_width,
+        frame_baseline,
+        font_size,
+        (font_size * ascender_ratio, 0.0),
+        lines.len(),
+        0,
+        links,
+        0.0,
+        ctx.fonts,
+        None,
+        gradient_specs,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+}
+
+/// One of a header or footer paragraph's text boxes: its fill, WordArt or
+/// paragraphs and tables, clipped and anchored as the body draws them.
+fn render_hf_textbox(
+    content: &mut Content,
+    tb: &crate::model::Textbox,
+    ctx: &RenderContext,
+    sp: &SectionProperties,
+    anchor_top: f32,
+    sub: &HfSubstitution,
+    gradient_specs: &mut Vec<super::GradientSpec>,
+    links: &mut Vec<LinkAnnotation>,
+) {
+    let text_width = sp.text_width();
+    let tb_height = super::textbox_render::textbox_height(tb, ctx);
+    let tb_x = super::resolve_h_position(
+        tb.h_relative_from,
+        &tb.h_position,
+        tb.width_pt,
+        sp,
+        sp.margin_left,
+        text_width,
+        text_width,
+    );
+    let tb_y_top = resolve_tb_y_top(
+        tb.v_relative_from,
+        &tb.v_position,
+        tb_height,
+        sp,
+        anchor_top,
+    );
+    let rotated = super::textbox_render::rotate_about_center(
+        content,
+        tb.rotation_deg,
+        tb_x,
+        tb_y_top,
+        tb.width_pt,
+        tb_height,
+    );
+
+    if let Some(ref fill) = tb.fill {
+        super::render_shape_fill(
+            content,
+            fill,
+            tb_x,
+            tb_y_top - tb_height,
+            tb.width_pt,
+            tb_height,
+            &tb.shape_type,
+            gradient_specs,
+        );
+    }
+    super::textbox_render::render_picture_fill(
+        content,
+        tb,
+        (tb_x, tb_y_top - tb_height, tb.width_pt, tb_height),
+        ctx,
+    );
+
+    let content_x = tb_x + tb.margin_left;
+    let content_w = (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
+    let hf_table = |t| super::table::TextboxTable::layout(t, content_w, ctx, Some(sub));
+
+    // WordArt (a header watermark) draws its glyphs as warped
+    // outlines, as the body path does.
+    if tb
+        .text_warp
+        .as_ref()
+        .is_some_and(|w| w.preset != "textNoShape")
+        && super::wordart::render_warped_textbox(tb, content, ctx.fonts, tb_x, tb_y_top, content_w)
+    {
+        if rotated {
+            content.restore_state();
+        }
+        return;
+    }
+
+    // Match Word and body textboxes: fixed boxes clip overflow.
+    let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape);
+    if needs_clip {
+        content.save_state();
+        content.rect(tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
+        content.clip_nonzero();
+        content.end_path();
+    }
+
+    // Word vertically anchors textbox content per bodyPr anchor (ctr/b).
+    // The body textbox path (textbox_render::render_single_textbox) applies this,
+    // but the header/footer loop is a separate renderer that historically
+    // top-anchored everything. Mirror the body math here; `hf_box_paragraph`
+    // gives this pass and the draw loop below the same advance.
+    let anchor_offset = match tb.text_anchor {
+        TextAnchor::Top => 0.0,
+        TextAnchor::Middle | TextAnchor::Bottom => {
+            let tp_height = |tp: &Paragraph| -> f32 {
+                if let Some(img) = super::textbox_render::textbox_para_block_image(tp) {
+                    return tp.space_before
+                        + img.display_height
+                        + img.layout_extra_height
+                        + tp.space_after;
+                }
+                hf_box_paragraph(tp, content_w, sub, ctx).height(tp)
+            };
+            let tables: f32 = tb.tables.iter().map(|(_, t)| hf_table(t).height()).sum();
+            let total_h: f32 = tb.paragraphs.iter().map(tp_height).sum::<f32>() + tables;
+            let available = (tb_height - tb.margin_top - tb.margin_bottom).max(0.0);
+            let gap = (available - total_h).max(0.0);
+            match tb.text_anchor {
+                TextAnchor::Middle => gap / 2.0,
+                TextAnchor::Bottom => gap,
+                TextAnchor::Top => 0.0,
+            }
+        }
+    };
+    let mut tb_cursor = tb_y_top - tb.margin_top - anchor_offset;
+    for (tp_idx, tp) in tb.paragraphs.iter().enumerate() {
+        for (_, table) in tb.tables.iter().filter(|(at, _)| *at == tp_idx) {
+            hf_table(table).render(
+                (content_x, content_w),
+                &mut tb_cursor,
+                content,
+                ctx,
+                gradient_specs,
+                links,
+                None,
+                Some(sub),
+            );
+        }
+        if let Some(img) = super::textbox_render::textbox_para_block_image(tp) {
+            if let Some(pdf_name) = ctx.textbox_image_names.get(&img.id) {
+                let img_x = content_x
+                    + tp.indent_left
+                    + align_offset(
+                        tp.alignment,
+                        (hf_box_text_w(tp, content_w) - img.display_width).max(0.0),
+                    );
+                let img_y = tb_cursor - tp.space_before - img.display_height;
+                super::smartart::render_image_with_clip(
+                    content,
+                    pdf_name,
+                    img_x,
+                    img_y,
+                    img.display_width,
+                    img.display_height,
+                    img.clip_geometry.as_ref(),
+                );
+            }
+            tb_cursor -=
+                tp.space_before + img.display_height + img.layout_extra_height + tp.space_after;
+            continue;
+        }
+
+        let bp = hf_box_paragraph(tp, content_w, sub, ctx);
+        if bp.lines.is_empty() {
+            tb_cursor -= bp.height(tp);
+            continue;
+        }
+        let tb_ascender = bp.ar.unwrap_or(0.75);
+        let tb_baseline = tb_cursor - tp.space_before - bp.fs * tb_ascender;
+        let tb_metrics = (
+            bp.fs * tb_ascender,
+            if bp.inline_imgs.is_empty() {
+                0.0
+            } else {
+                picture_line_bottom(&tp.runs, tp, ctx.fonts, bp.ls)
+            },
+        );
+        super::render_list_label(
+            content,
+            tp,
+            ctx.fonts,
+            content_x + tp.indent_left - tp.indent_hanging,
+            tb_baseline,
+            bp.fs,
+        );
+        render_paragraph_lines(
+            content,
+            &bp.lines,
+            &tp.alignment,
+            content_x + tp.indent_left,
+            tp.indent_left,
+            bp.text_w,
+            tb_baseline,
+            bp.line_h,
+            tb_metrics,
+            bp.lines.len(),
+            0,
+            links,
+            0.0,
+            ctx.fonts,
+            None,
+            gradient_specs,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        tb_cursor -= bp.height(tp);
+    }
+    if needs_clip {
+        content.restore_state();
+    }
+    if rotated {
+        content.restore_state();
+    }
+}
+
 /// Which header/footer variant a page shows. A section that lacks that variant
 /// inherits it from earlier sections, and shows none if no section defines it
 /// (§17.10.5) — it never falls back to the default variant.
@@ -2338,75 +2244,4 @@ fn hf_spacing(prev: Option<&Paragraph>, prev_space_after: f32, para: &Paragraph)
         prev_space_after
     };
     (after, super::helpers::effective_space_before(para, prev))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::model::StyleRefForm;
-
-    #[test]
-    fn if_over_stylerefs_takes_the_page_value() {
-        let sr = |form| {
-            IfPart::Field(FieldCode::StyleRef {
-                name: "CharPartNo".into(),
-                form,
-            })
-        };
-        let text = |t: &str| IfPart::Text(t.into());
-        // IF {STYLEREF CharPartNo \n} = 0 "{STYLEREF CharPartNo}" "Part {STYLEREF CharPartNo \n}"
-        let parts = [
-            text(" IF "),
-            sr(StyleRefForm::Label),
-            text(" = 0 \""),
-            sr(StyleRefForm::Text),
-            text("\" \"Part "),
-            sr(StyleRefForm::Label),
-            text("\""),
-        ];
-        let mut styleref_values = HashMap::new();
-        let eval = |values: &HashMap<String, String>| {
-            HfSubstitution {
-                page_num: 1,
-                total_pages: 1,
-                section_pages: 1,
-                styleref_values: values,
-                page_num_format: None,
-            }
-            .eval(&FieldCode::If(parts.to_vec()))
-        };
-        assert_eq!(eval(&styleref_values), None);
-        let key = |form| styleref_key("charpartno", form);
-        styleref_values.insert(key(StyleRefForm::Text), "Part 3".to_string());
-        styleref_values.insert(key(StyleRefForm::Label), "0".to_string());
-        assert_eq!(eval(&styleref_values).as_deref(), Some("Part 3"));
-        styleref_values.insert(key(StyleRefForm::Label), "4".to_string());
-        assert_eq!(eval(&styleref_values).as_deref(), Some("Part 4"));
-        assert_eq!(field_args("a<>\"b c\" 2"), ["a", "<>", "b c", "2"]);
-    }
-
-    #[test]
-    fn page_count_results_drop_caps_in_headers() {
-        let cased = |field_code| Run {
-            text: "Z".into(),
-            caps: true,
-            small_caps: true,
-            underline: true,
-            field_code: Some(field_code),
-            ..Default::default()
-        };
-        let runs = [
-            cased(FieldCode::Page(Some("lowerLetter"))),
-            cased(FieldCode::NumPages(Some("lowerLetter"))),
-            cased(FieldCode::SectionPages(Some("lowerLetter"))),
-        ];
-        let out = substitute_hf_runs(&runs, 1, 2, 2, &HashMap::new(), None);
-        assert_eq!(
-            out.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(),
-            ["a", "b", "b"]
-        );
-        assert!(!out[0].caps && !out[0].small_caps && out[0].underline);
-        assert!(!out[1].caps && !out[1].small_caps);
-        assert!(out[2].caps && out[2].small_caps);
-    }
 }
