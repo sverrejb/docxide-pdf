@@ -7,7 +7,7 @@
 //!
 //! Binary layout reference: [MS-EMF].
 
-use std::convert::TryInto;
+use super::wmf::{le_i16, le_i32, le_u32};
 
 const EMF_MAGIC: [u8; 4] = [0x20, 0x45, 0x4D, 0x46]; // " EMF"
 
@@ -29,16 +29,14 @@ impl EmfHeader {
 }
 
 pub(crate) fn is_emf(data: &[u8]) -> bool {
-    data.len() >= 44
-        && u32::from_le_bytes(data[0..4].try_into().unwrap()) == 1
-        && data[40..44] == EMF_MAGIC
+    data.len() >= 44 && le_u32(data, 0) == Some(1) && data[40..44] == EMF_MAGIC
 }
 
 pub(crate) fn parse_header(data: &[u8]) -> Option<EmfHeader> {
     if !is_emf(data) || data.len() < 92 {
         return None;
     }
-    let i32_at = |off: usize| i32::from_le_bytes(data[off..off + 4].try_into().unwrap());
+    let i32_at = |off: usize| le_i32(data, off).unwrap();
     let bounds = (i32_at(8), i32_at(12), i32_at(16), i32_at(20));
     // Device pixels per 0.01mm from szlDevice / szlMillimeters.
     let (px_w, px_h, mm_w, mm_h) = (i32_at(72), i32_at(76), i32_at(80), i32_at(84));
@@ -221,9 +219,8 @@ pub(crate) fn for_each_record(data: &[u8], mut f: impl FnMut(&EmfRecord) -> bool
 /// Same walk without decoding: `f(record_type, payload)`.
 fn for_each_raw_record(data: &[u8], mut f: impl FnMut(u32, &[u8]) -> bool) {
     let mut i = 0usize;
-    while i + 8 <= data.len() {
-        let rec_type = u32::from_le_bytes(data[i..i + 4].try_into().unwrap());
-        let rec_size = u32::from_le_bytes(data[i + 4..i + 8].try_into().unwrap()) as usize;
+    while let (Some(rec_type), Some(rec_size)) = (le_u32(data, i), le_u32(data, i + 4)) {
+        let rec_size = rec_size as usize;
         if rec_size < 8 || i + rec_size > data.len() {
             return;
         }
@@ -236,16 +233,8 @@ fn for_each_raw_record(data: &[u8], mut f: impl FnMut(u32, &[u8]) -> bool) {
 
 fn decode(rec_type: u32, payload: &[u8]) -> EmfRecord {
     use EmfRecord::*;
-    let i32_at = |off: usize| -> Option<i32> {
-        payload
-            .get(off..off + 4)
-            .map(|s| i32::from_le_bytes(s.try_into().unwrap()))
-    };
-    let u32_at = |off: usize| -> Option<u32> {
-        payload
-            .get(off..off + 4)
-            .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
-    };
+    let i32_at = |off: usize| le_i32(payload, off);
+    let u32_at = |off: usize| le_u32(payload, off);
     match rec_type {
         1 => Header,
         14 => Eof,
@@ -341,11 +330,7 @@ fn decode_stretchdibits(payload: &[u8]) -> Option<Vec<u8>> {
 /// EMR_BITBLT / EMR_STRETCHBLT, whose source transform and colour come first
 /// ([MS-EMF] 2.3.1.2 and 2.3.1.6).
 fn decode_dib_at(payload: &[u8], fields: usize) -> Option<Vec<u8>> {
-    let u32_at = |off: usize| -> Option<usize> {
-        payload
-            .get(off..off + 4)
-            .map(|s| u32::from_le_bytes(s.try_into().unwrap()) as usize)
-    };
+    let u32_at = |off: usize| le_u32(payload, off).map(|v| v as usize);
     let part = |off: usize, len: usize| -> Option<&[u8]> {
         let start = off.checked_sub(8)?;
         payload.get(start..start.checked_add(len)?)
@@ -362,7 +347,7 @@ fn decode_dib_at(payload: &[u8], fields: usize) -> Option<Vec<u8>> {
 /// figure count, the total point count, each figure's count and the points;
 /// points are POINTS (i16 pairs) when `short`, else POINTL.
 fn decode_poly(payload: &[u8], multi: bool, short: bool) -> Option<Vec<Vec<(i32, i32)>>> {
-    let u32_at = |o: usize| payload.get(o..o + 4).map(|s| u32::from_le_bytes(s.try_into().unwrap()) as usize);
+    let u32_at = |o: usize| le_u32(payload, o).map(|v| v as usize);
     let (counts, mut at) = if multi {
         let n = u32_at(16)?;
         let counts = (0..n).map(|k| u32_at(24 + 4 * k)).collect::<Option<Vec<_>>>()?;
@@ -371,13 +356,12 @@ fn decode_poly(payload: &[u8], multi: bool, short: bool) -> Option<Vec<Vec<(i32,
         (vec![u32_at(16)?], 20)
     };
     let size = if short { 2 } else { 4 };
-    let coord = |o: usize| -> Option<i32> {
-        let b = payload.get(o..o + size)?;
-        Some(if short {
-            i16::from_le_bytes(b.try_into().unwrap()) as i32
+    let coord = |o: usize| {
+        if short {
+            le_i16(payload, o).map(i32::from)
         } else {
-            i32::from_le_bytes(b.try_into().unwrap())
-        })
+            le_i32(payload, o)
+        }
     };
     let mut polys = Vec::with_capacity(counts.len());
     for c in counts {
@@ -392,23 +376,10 @@ fn decode_poly(payload: &[u8], multi: bool, short: bool) -> Option<Vec<Vec<(i32,
 
 fn decode_polybezier16(payload: &[u8]) -> Option<Vec<(i16, i16)>> {
     // Payload: bounds RectL (16 bytes), count u32, then `count` POINTS (2x i16 each).
-    if payload.len() < 20 {
-        return None;
-    }
-    let count = u32::from_le_bytes(payload[16..20].try_into().unwrap()) as usize;
-    let pts_start = 20;
-    let need = pts_start + count * 4;
-    if payload.len() < need {
-        return None;
-    }
-    let mut pts = Vec::with_capacity(count);
-    for k in 0..count {
-        let off = pts_start + k * 4;
-        let x = i16::from_le_bytes(payload[off..off + 2].try_into().unwrap());
-        let y = i16::from_le_bytes(payload[off + 2..off + 4].try_into().unwrap());
-        pts.push((x, y));
-    }
-    Some(pts)
+    let count = le_u32(payload, 16)? as usize;
+    (0..count)
+        .map(|k| Some((le_i16(payload, 20 + 4 * k)?, le_i16(payload, 22 + 4 * k)?)))
+        .collect()
 }
 
 /// EMF COLORREF packs color as 0x00BBGGRR.
@@ -425,12 +396,10 @@ fn decode_brush(payload: &[u8]) -> Option<EmfRecord> {
     if payload.len() < 16 {
         return None;
     }
-    let handle = u32::from_le_bytes(payload[0..4].try_into().unwrap());
-    let style = u32::from_le_bytes(payload[4..8].try_into().unwrap());
-    let color = colorref(u32::from_le_bytes(payload[8..12].try_into().unwrap()));
+    let color = colorref(le_u32(payload, 8)?);
     Some(EmfRecord::CreateBrushIndirect {
-        handle,
-        color: (style != 1).then_some(color), // BS_NULL
+        handle: le_u32(payload, 0)?,
+        color: (le_u32(payload, 4)? != 1).then_some(color), // BS_NULL
     })
 }
 
@@ -444,11 +413,10 @@ fn decode_createpen(payload: &[u8]) -> Option<EmfRecord> {
     if payload.len() < 20 {
         return None;
     }
-    let u32_at = |o: usize| u32::from_le_bytes(payload[o..o + 4].try_into().unwrap());
     Some(EmfRecord::CreatePen {
-        handle: u32_at(0),
-        width: u32_at(8) as i32,
-        color: pen_color(u32_at(4), u32_at(16)),
+        handle: le_u32(payload, 0)?,
+        width: le_u32(payload, 8)? as i32,
+        color: pen_color(le_u32(payload, 4)?, le_u32(payload, 16)?),
     })
 }
 
@@ -458,7 +426,7 @@ fn decode_font(payload: &[u8]) -> Option<EmfRecord> {
     if payload.len() < 96 {
         return None;
     }
-    let i32_at = |o: usize| i32::from_le_bytes(payload[o..o + 4].try_into().unwrap());
+    let i32_at = |o: usize| le_i32(payload, o).unwrap();
     let face: Vec<u16> = payload[32..96]
         .chunks_exact(2)
         .map(|c| u16::from_le_bytes([c[0], c[1]]))
@@ -478,11 +446,7 @@ fn decode_exttextoutw(payload: &[u8]) -> Option<EmfRecord> {
     // Bounds RectL, iGraphicsMode, exScale, eyScale (28 bytes), then EmrText:
     // Reference PointL, Chars u32, offString u32, Options u32, Rectangle RectL,
     // offDx u32. Offsets count from the record start, 8 bytes before the payload.
-    let u32_at = |o: usize| -> Option<u32> {
-        payload
-            .get(o..o + 4)
-            .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
-    };
+    let u32_at = |o: usize| le_u32(payload, o);
     let x = u32_at(28)? as i32;
     let y = u32_at(32)? as i32;
     let chars = u32_at(36)? as usize;
@@ -517,11 +481,10 @@ fn decode_extcreatepen(payload: &[u8]) -> Option<EmfRecord> {
     if payload.len() < 36 {
         return None;
     }
-    let u32_at = |o: usize| u32::from_le_bytes(payload[o..o + 4].try_into().unwrap());
     Some(EmfRecord::CreatePen {
-        handle: u32_at(0),
-        width: u32_at(24) as i32,
-        color: pen_color(u32_at(20), u32_at(32)),
+        handle: le_u32(payload, 0)?,
+        width: le_u32(payload, 24)? as i32,
+        color: pen_color(le_u32(payload, 20)?, le_u32(payload, 32)?),
     })
 }
 
