@@ -11,7 +11,9 @@ use crate::model::{
 
 use super::charts::parse_chart_from_zip;
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
-use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
+use super::textbox::{
+    parse_connector_from_wsp, parse_textbox_from_wsp, parse_vml_box_style, vml_style_prop,
+};
 use super::{
     CHART_NS, DML_NS, PIC_NS, ParseContext, REL_NS, VML_NS, W10_NS, WML_NS, WPD_NS, WPS_NS,
     angle_attr, dml, emu_attr, emu_attr_opt, emu_to_pts, f32_attr, frac_attr, parse_hex_color,
@@ -1257,66 +1259,26 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
     if !style.contains("position:absolute") {
         return None;
     }
-    let mut margin_left = 0.0_f32;
-    let mut margin_top = 0.0_f32;
-    let mut h_align = None;
-    let mut v_align = None;
-    let mut z_index: i64 = 0;
-    let mut h_relative = HRelativeFrom::Column;
-    let mut v_relative = VRelativeFrom::Paragraph;
+    let b = parse_vml_box_style(style);
+    let prop = |key| vml_style_prop(style, key);
     // Word's VML wrap distances default to 9pt at the sides, 0 above and below
     // (slovak_pedagogical's header logo: centred text stops 9pt short of it).
-    let [mut dist_left, mut dist_right, mut dist_top, mut dist_bottom] = [9.0, 9.0, 0.0, 0.0];
-    for part in style.split(';') {
-        if let Some((key, val)) = part.trim().split_once(':') {
-            let val = val.trim();
-            match key.trim() {
-                "margin-left" => margin_left = parse_pt(val).unwrap_or(0.0),
-                "margin-top" => margin_top = parse_pt(val).unwrap_or(0.0),
-                "z-index" => z_index = val.parse().unwrap_or(0),
-                "mso-wrap-distance-left" => dist_left = parse_pt(val).unwrap_or(dist_left),
-                "mso-wrap-distance-right" => dist_right = parse_pt(val).unwrap_or(dist_right),
-                "mso-wrap-distance-top" => dist_top = parse_pt(val).unwrap_or(dist_top),
-                "mso-wrap-distance-bottom" => dist_bottom = parse_pt(val).unwrap_or(dist_bottom),
-                // "absolute" (or no value) means the margin offsets place it.
-                "mso-position-horizontal" => {
-                    h_align = match val {
-                        "left" | "inside" => Some(HorizontalPosition::AlignLeft),
-                        "center" => Some(HorizontalPosition::AlignCenter),
-                        "right" | "outside" => Some(HorizontalPosition::AlignRight),
-                        _ => None,
-                    };
-                }
-                "mso-position-vertical" => {
-                    v_align = match val {
-                        "top" | "inside" => Some(VerticalPosition::AlignTop),
-                        "center" => Some(VerticalPosition::AlignCenter),
-                        "bottom" | "outside" => Some(VerticalPosition::AlignBottom),
-                        _ => None,
-                    };
-                }
-                "mso-position-horizontal-relative" => {
-                    h_relative = match val {
-                        "page" => HRelativeFrom::Page,
-                        "margin" => HRelativeFrom::Margin,
-                        _ => HRelativeFrom::Column,
-                    };
-                }
-                "mso-position-vertical-relative" => {
-                    v_relative = match val {
-                        "page" => VRelativeFrom::Page,
-                        "margin" => VRelativeFrom::Margin,
-                        "top-margin-area" => VRelativeFrom::TopMargin,
-                        "bottom-margin-area" => VRelativeFrom::BottomMargin,
-                        _ => VRelativeFrom::Paragraph,
-                    };
-                }
-                _ => {}
-            }
-        }
-    }
+    let dist = |key, default| prop(key).and_then(parse_pt).unwrap_or(default);
+    // "absolute" (or no value) means the margin offsets place it.
+    let h_align = match prop("mso-position-horizontal") {
+        Some("left" | "inside") => Some(HorizontalPosition::AlignLeft),
+        Some("center") => Some(HorizontalPosition::AlignCenter),
+        Some("right" | "outside") => Some(HorizontalPosition::AlignRight),
+        _ => None,
+    };
+    let v_align = match prop("mso-position-vertical") {
+        Some("top" | "inside") => Some(VerticalPosition::AlignTop),
+        Some("center") => Some(VerticalPosition::AlignCenter),
+        Some("bottom" | "outside") => Some(VerticalPosition::AlignBottom),
+        _ => None,
+    };
     let image = parse_object_inline_image(obj, ctx)?;
-    let (behind_doc, z_index) = vml_z_order(z_index);
+    let (behind_doc, z_index) = vml_z_order(b.z_index);
     // An explicit <w10:wrap type="square"/> means the object reflows text
     // (Word wraps centered header text between such logos); without it the
     // logo sits over/beside the text and None keeps the text full-width.
@@ -1334,18 +1296,18 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
         .unwrap_or(WrapType::None);
     Some(FloatingImage {
         image,
-        h_position: h_align.unwrap_or(HorizontalPosition::Offset(margin_left)),
-        h_relative_from: h_relative,
-        v_position: v_align.unwrap_or(VerticalPosition::Offset(margin_top)),
-        v_relative_from: v_relative,
+        h_position: h_align.unwrap_or(HorizontalPosition::Offset(b.margin_left)),
+        h_relative_from: b.h_relative,
+        v_position: v_align.unwrap_or(VerticalPosition::Offset(b.margin_top)),
+        v_relative_from: b.v_relative,
         wrap_type,
         wrap_text: WrapText::BothSides,
         wrap_polygon: None,
         behind_doc,
-        dist_top,
-        dist_bottom,
-        dist_left,
-        dist_right,
+        dist_top: dist("mso-wrap-distance-top", 0.0),
+        dist_bottom: dist("mso-wrap-distance-bottom", 0.0),
+        dist_left: dist("mso-wrap-distance-left", 9.0),
+        dist_right: dist("mso-wrap-distance-right", 9.0),
         z_index,
         anchor_seq: 0,
         anchor_at_start: false,
@@ -1391,33 +1353,11 @@ fn first_vml_shape<'a, 'i>(obj: roxmltree::Node<'a, 'i>) -> Option<roxmltree::No
 }
 
 fn object_dimensions(obj: roxmltree::Node) -> Option<(f32, f32)> {
-    if let Some(rect) = first_vml_shape(obj)
-        && let Some(style) = rect.attribute("style")
-    {
-        let mut w_pt: Option<f32> = None;
-        let mut h_pt: Option<f32> = None;
-        for part in style.split(';') {
-            if let Some((key, val)) = part.trim().split_once(':') {
-                let key = key.trim();
-                if let Some(v) = parse_pt(val) {
-                    match key {
-                        "width" => w_pt = Some(v),
-                        "height" => h_pt = Some(v),
-                        _ => {}
-                    }
-                }
-            }
-        }
-        if let (Some(w), Some(h)) = (w_pt, h_pt) {
-            return Some((w, h));
-        }
-    }
-    let dxa = twips_attr(obj, "dxaOrig");
-    let dya = twips_attr(obj, "dyaOrig");
-    if let (Some(w), Some(h)) = (dxa, dya) {
-        return Some((w, h));
-    }
-    None
+    let style = first_vml_shape(obj).and_then(|s| s.attribute("style"));
+    let pt = |key| vml_style_prop(style?, key).and_then(parse_pt);
+    pt("width")
+        .zip(pt("height"))
+        .or_else(|| twips_attr(obj, "dxaOrig").zip(twips_attr(obj, "dyaOrig")))
 }
 
 #[cfg(test)]
