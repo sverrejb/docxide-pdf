@@ -593,9 +593,16 @@ fn emf_text(x: i32, y: i32, text: &[u8], dx: &[i32]) -> Vec<u8> {
         body.extend_from_slice(&v.to_le_bytes());
     }
     body.extend_from_slice(&[0u8; 16]); // clip rectangle
-    let off_dx = if dx.is_empty() { 0 } else { off_string + string_len };
+    let off_dx = if dx.is_empty() {
+        0
+    } else {
+        off_string + string_len
+    };
     body.extend_from_slice(&(off_dx as u32).to_le_bytes());
-    let mut string: Vec<u8> = text.iter().flat_map(|&b| (b as u16).to_le_bytes()).collect();
+    let mut string: Vec<u8> = text
+        .iter()
+        .flat_map(|&b| (b as u16).to_le_bytes())
+        .collect();
     string.resize(string_len, 0);
     body.extend_from_slice(&string);
     for d in dx {

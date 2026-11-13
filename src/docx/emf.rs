@@ -263,10 +263,16 @@ fn decode(rec_type: u32, payload: &[u8]) -> EmfRecord {
             .map(PolyLineTo16)
             .unwrap_or(Skip),
         3 | 4 | 86 | 87 => decode_poly(payload, false, matches!(rec_type, 86 | 87))
-            .map(|polys| Poly { polys, close: matches!(rec_type, 3 | 86) })
+            .map(|polys| Poly {
+                polys,
+                close: matches!(rec_type, 3 | 86),
+            })
             .unwrap_or(Skip),
         7 | 8 | 90 | 91 => decode_poly(payload, true, matches!(rec_type, 90 | 91))
-            .map(|polys| Poly { polys, close: matches!(rec_type, 8 | 91) })
+            .map(|polys| Poly {
+                polys,
+                close: matches!(rec_type, 8 | 91),
+            })
             .unwrap_or(Skip),
         59 => BeginPath,
         60 => EndPath,
@@ -330,7 +336,9 @@ fn decode_poly(payload: &[u8], multi: bool, short: bool) -> Option<Vec<Vec<(i32,
     let u32_at = |o: usize| le_u32(payload, o).map(|v| v as usize);
     let (counts, mut at) = if multi {
         let n = u32_at(16)?;
-        let counts = (0..n).map(|k| u32_at(24 + 4 * k)).collect::<Option<Vec<_>>>()?;
+        let counts = (0..n)
+            .map(|k| u32_at(24 + 4 * k))
+            .collect::<Option<Vec<_>>>()?;
         (counts, 24 + 4 * n)
     } else {
         (vec![u32_at(16)?], 20)
