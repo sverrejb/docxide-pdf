@@ -260,12 +260,7 @@ fn field_changed(old: Option<f64>, new: Option<f64>) -> bool {
     }
 }
 
-fn print_change(
-    name: &str,
-    existing: Option<&Scores>,
-    new: Option<&Scores>,
-    hash_changed: bool,
-) {
+fn print_change(name: &str, existing: Option<&Scores>, new: Option<&Scores>, hash_changed: bool) {
     let empty = Scores::default();
     let old = existing.unwrap_or(&empty);
     let new = new.unwrap_or(&empty);
@@ -311,17 +306,30 @@ fn print_change(
         parts.push(format!("UaFail:{}→{}", fmt(old.ua_fail), fmt(new.ua_fail)));
     }
     if deficit_changed(old.a11y_missing, new.a11y_missing) {
-        parts.push(format!("Missing:{}→{}", fmt(old.a11y_missing), fmt(new.a11y_missing)));
+        parts.push(format!(
+            "Missing:{}→{}",
+            fmt(old.a11y_missing),
+            fmt(new.a11y_missing)
+        ));
     }
     if deficit_changed(old.ua_deficit, new.ua_deficit) {
-        parts.push(format!("UA:{}→{}", fmt(old.ua_deficit), fmt(new.ua_deficit)));
+        parts.push(format!(
+            "UA:{}→{}",
+            fmt(old.ua_deficit),
+            fmt(new.ua_deficit)
+        ));
     }
     for (label, o, n) in [
         ("A11ySt", old.a11y_struct, new.a11y_struct),
         ("A11yTx", old.a11y_text, new.a11y_text),
     ] {
         if field_changed(o, n) {
-            parts.push(format!("{label}:{}→{}{}", fmt_score(o), fmt_score(n), fmt_delta(o, n)));
+            parts.push(format!(
+                "{label}:{}→{}{}",
+                fmt_score(o),
+                fmt_score(n),
+                fmt_delta(o, n)
+            ));
         }
     }
     if hash_changed {
@@ -362,10 +370,7 @@ fn snapshot_accepted_cases(root: &Path, accepted_names: &[String]) {
             if !case_path.is_dir() {
                 continue;
             }
-            let case_name = case_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let case_name = case_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             let key = format!("{group_name}/{case_name}");
             if !accepted_names.contains(&key) {
                 continue;

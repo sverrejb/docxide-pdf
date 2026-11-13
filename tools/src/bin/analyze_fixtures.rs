@@ -128,8 +128,7 @@ fn analyze_docx(path: &Path) -> Option<FixtureAnalysis> {
     let anchored_images = count_pattern(&doc_xml, "wp:anchor");
     let floating_tables = count_pattern(&doc_xml, "tblpPr");
     let shapes_vml = count_pattern(&doc_xml, "v:shape") + count_pattern(&doc_xml, "v:rect");
-    let ole_objects =
-        count_pattern(&doc_xml, "o:OLEObject") + count_pattern(&doc_xml, "w:object");
+    let ole_objects = count_pattern(&doc_xml, "o:OLEObject") + count_pattern(&doc_xml, "w:object");
     let math = count_pattern(&doc_xml, "m:oMath");
     let sdt_content = count_pattern(&doc_xml, "w:sdtContent");
     let alternate_content = count_pattern(&doc_xml, "mc:AlternateContent");
@@ -231,7 +230,10 @@ fn audit_fixtures(fixtures_dir: &Path) {
         ("w:vanish (hidden text)", &["w:vanish"]),
         ("w:spacing (char spacing)", &["w:spacing"]),
         ("w:kern", &["w:kern"]),
-        ("w:emboss/imprint/shadow", &["w:emboss", "w:imprint", "w:shadow"]),
+        (
+            "w:emboss/imprint/shadow",
+            &["w:emboss", "w:imprint", "w:shadow"],
+        ),
         // Paragraph properties
         ("w:ind w:right (right indent)", &["w:right=\""]),
         ("w:mirrorIndents", &["w:mirrorIndents"]),
@@ -276,8 +278,12 @@ fn audit_fixtures(fixtures_dir: &Path) {
         for entry in &entries {
             let fixture_name = entry.file_name().to_string_lossy().to_string();
             let docx_path = entry.path().join("input.docx");
-            let Ok(file) = fs::File::open(&docx_path) else { continue };
-            let Ok(mut archive) = ZipArchive::new(file) else { continue };
+            let Ok(file) = fs::File::open(&docx_path) else {
+                continue;
+            };
+            let Ok(mut archive) = ZipArchive::new(file) else {
+                continue;
+            };
 
             let doc_xml = read_entry(&mut archive, "word/document.xml").unwrap_or_default();
             let style_xml = read_entry(&mut archive, "word/styles.xml").unwrap_or_default();
@@ -307,7 +313,10 @@ fn audit_fixtures(fixtures_dir: &Path) {
     // Sort by failing count descending, then total hits
     feature_stats.sort_by(|a, b| b.1.cmp(&a.1).then(b.4.cmp(&a.4)));
 
-    println!("{:<40} {:>6} {:>6} {:>6} {:>8}", "Feature", "Fail", "Pass", "Skip", "Hits");
+    println!(
+        "{:<40} {:>6} {:>6} {:>6} {:>8}",
+        "Feature", "Fail", "Pass", "Skip", "Hits"
+    );
     println!("{}", "─".repeat(72));
     for (name, failing, passing, skipped, hits) in &feature_stats {
         println!(
@@ -331,14 +340,21 @@ fn grep_fixtures(fixtures_dir: &Path, pattern: &str) {
         .unwrap_or_default()
         .to_string_lossy();
 
-    println!("{:<66} {:>6} {:>6} {:>6}  {}", "Fixture", "Jaccd", "doc", "style", "Total");
+    println!(
+        "{:<66} {:>6} {:>6} {:>6}  {}",
+        "Fixture", "Jaccd", "doc", "style", "Total"
+    );
     println!("{}", "─".repeat(100));
     let mut total_fixtures = 0;
     for entry in &entries {
         let name = entry.file_name().to_string_lossy().to_string();
         let docx_path = entry.path().join("input.docx");
-        let Ok(file) = fs::File::open(&docx_path) else { continue };
-        let Ok(mut archive) = ZipArchive::new(file) else { continue };
+        let Ok(file) = fs::File::open(&docx_path) else {
+            continue;
+        };
+        let Ok(mut archive) = ZipArchive::new(file) else {
+            continue;
+        };
 
         let doc_count = read_entry(&mut archive, "word/document.xml")
             .map(|x| count_pattern(&x, pattern))
@@ -375,11 +391,20 @@ fn main() {
     let only_failing = args.iter().any(|a| a == "--failing");
     let show_fonts = args.iter().any(|a| a == "--fonts");
     let do_audit = args.iter().any(|a| a == "--audit");
-    let grep_pattern = args.iter().position(|a| a == "--grep").and_then(|i| args.get(i + 1));
+    let grep_pattern = args
+        .iter()
+        .position(|a| a == "--grep")
+        .and_then(|i| args.get(i + 1));
     let fixtures_dir = args
         .iter()
         .skip(1)
-        .find(|a| !a.starts_with('-') && args.iter().position(|x| x == "--grep").is_none_or(|gi| args.get(gi + 1) != Some(a)))
+        .find(|a| {
+            !a.starts_with('-')
+                && args
+                    .iter()
+                    .position(|x| x == "--grep")
+                    .is_none_or(|gi| args.get(gi + 1) != Some(a))
+        })
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("tests/fixtures/scraped"));
 
@@ -427,24 +452,13 @@ fn main() {
     }
 
     if only_failing {
-        analyses.retain(|a| {
-            a.jaccard.is_none_or(|j| j < 0.20) && !a.skipped
-        });
+        analyses.retain(|a| a.jaccard.is_none_or(|j| j < 0.20) && !a.skipped);
     }
 
     // Print per-fixture table
     println!(
         "{:<66} {:>6} {:>6} {:>3} {:>4} {:>4} {:>4} {:>3} {:>4}  {}",
-        "Fixture",
-        "Jaccd",
-        "SSIM",
-        "Pg",
-        "TxBx",
-        "Anch",
-        "FTbl",
-        "Col",
-        "AltC",
-        "Dominant Issue"
+        "Fixture", "Jaccd", "SSIM", "Pg", "TxBx", "Anch", "FTbl", "Col", "AltC", "Dominant Issue"
     );
     println!("{}", "─".repeat(140));
     for a in &analyses {
@@ -518,10 +532,7 @@ fn main() {
         }
     }
 
-    println!(
-        "\n\nFeature Tally (across {} fixtures):",
-        counted.len()
-    );
+    println!("\n\nFeature Tally (across {} fixtures):", counted.len());
     println!("{}", "─".repeat(40));
     let mut sorted: Vec<_> = tally.into_iter().collect();
     sorted.sort_by(|a, b| b.1.cmp(&a.1));

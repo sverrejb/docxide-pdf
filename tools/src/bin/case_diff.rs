@@ -21,9 +21,12 @@ fn render_pdf(pdf: &Path, out_dir: &Path) -> Result<(), String> {
     let status = Command::new("mutool")
         .args([
             "draw",
-            "-F", "png",
-            "-r", DPI,
-            "-o", pattern.to_str().unwrap(),
+            "-F",
+            "png",
+            "-r",
+            DPI,
+            "-o",
+            pattern.to_str().unwrap(),
             pdf.to_str().unwrap(),
         ])
         .stdout(Stdio::null())
@@ -64,7 +67,10 @@ fn jaccard(a: &Path, b: &Path) -> Result<f64, String> {
     if img_b.dimensions() != (w, h) {
         return Err(format!(
             "size mismatch {}×{} vs {}×{}",
-            w, h, img_b.dimensions().0, img_b.dimensions().1
+            w,
+            h,
+            img_b.dimensions().0,
+            img_b.dimensions().1
         ));
     }
 
@@ -75,11 +81,19 @@ fn jaccard(a: &Path, b: &Path) -> Result<f64, String> {
             let [rb, gb, bb, _] = img_b.get_pixel(x, y).0;
             let ai = is_ink(ra, ga, ba);
             let bi = is_ink(rb, gb, bb);
-            if ai || bi { union += 1; }
-            if ai && bi { inter += 1; }
+            if ai || bi {
+                union += 1;
+            }
+            if ai && bi {
+                inter += 1;
+            }
         }
     }
-    Ok(if union == 0 { 1.0 } else { inter as f64 / union as f64 })
+    Ok(if union == 0 {
+        1.0
+    } else {
+        inter as f64 / union as f64
+    })
 }
 
 // ── case comparison ───────────────────────────────────────────────────────────
@@ -110,7 +124,10 @@ fn compare_case(fixture_dir: &Path, output_dir: &Path, fresh: bool) {
         print!("  Rendering reference... ");
         match render_pdf(&reference_pdf, &ref_render) {
             Ok(_) => println!("ok"),
-            Err(e) => { println!("FAILED: {e}"); return; }
+            Err(e) => {
+                println!("FAILED: {e}");
+                return;
+            }
         }
     }
 
@@ -118,7 +135,10 @@ fn compare_case(fixture_dir: &Path, output_dir: &Path, fresh: bool) {
         print!("  Rendering generated... ");
         match render_pdf(&generated_pdf, &gen_render) {
             Ok(_) => println!("ok"),
-            Err(e) => { println!("FAILED: {e}"); return; }
+            Err(e) => {
+                println!("FAILED: {e}");
+                return;
+            }
         }
     }
 
@@ -138,7 +158,11 @@ fn compare_case(fixture_dir: &Path, output_dir: &Path, fresh: bool) {
     println!("  {}", "─".repeat(35));
 
     for i in 0..n {
-        let page_name = ref_pages[i].file_stem().unwrap().to_string_lossy().to_string();
+        let page_name = ref_pages[i]
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         match jaccard(&ref_pages[i], &gen_pages[i]) {
             Ok(score) => {
                 let status = if score >= 0.40 { "PASS" } else { "FAIL" };
@@ -152,7 +176,8 @@ fn compare_case(fixture_dir: &Path, output_dir: &Path, fresh: bool) {
     if ref_pages.len() != gen_pages.len() {
         println!(
             "  WARN: page count mismatch — ref={} gen={}",
-            ref_pages.len(), gen_pages.len()
+            ref_pages.len(),
+            gen_pages.len()
         );
     }
 
@@ -217,18 +242,16 @@ fn main() {
         let mut fixture = fixtures_dir.join(case_name);
         if !fixture.exists() {
             // Search subdirectories (e.g. tests/fixtures/scraped/<name>)
-            let found = fs::read_dir(&fixtures_dir)
-                .ok()
-                .and_then(|entries| {
-                    entries
-                        .filter_map(|e| e.ok())
-                        .map(|e| e.path())
-                        .filter(|p| p.is_dir())
-                        .find_map(|group| {
-                            let candidate = group.join(case_name);
-                            candidate.exists().then_some(candidate)
-                        })
-                });
+            let found = fs::read_dir(&fixtures_dir).ok().and_then(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.path())
+                    .filter(|p| p.is_dir())
+                    .find_map(|group| {
+                        let candidate = group.join(case_name);
+                        candidate.exists().then_some(candidate)
+                    })
+            });
             match found {
                 Some(f) => fixture = f,
                 None => {

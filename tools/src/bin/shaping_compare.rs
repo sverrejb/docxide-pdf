@@ -137,8 +137,13 @@ fn process_fixture(
                 continue;
             }
             let clean_name = strip_subset_prefix(&run.font_name);
-            let (rb_w, pc_w) =
-                compute_comparison_widths(&clean_name, &run.text, run.font_size, font_index, verbose);
+            let (rb_w, pc_w) = compute_comparison_widths(
+                &clean_name,
+                &run.text,
+                run.font_size,
+                font_index,
+                verbose,
+            );
             results.push(RunComparison {
                 text: run.text,
                 font_name: clean_name.to_string(),
@@ -271,8 +276,7 @@ fn extract_cid_widths(doc: &Document, font_dict: &lopdf::Dictionary) -> HashMap<
 
     // Try simple Widths array + FirstChar for non-CID fonts
     if widths.is_empty() {
-        if let (Ok(first_char), Ok(w_obj)) =
-            (font_dict.get(b"FirstChar"), font_dict.get(b"Widths"))
+        if let (Ok(first_char), Ok(w_obj)) = (font_dict.get(b"FirstChar"), font_dict.get(b"Widths"))
         {
             let first_char = resolve_object(doc, first_char);
             let w_obj = resolve_object(doc, w_obj);
@@ -354,16 +358,13 @@ fn extract_to_unicode(doc: &Document, font_dict: &lopdf::Dictionary) -> HashMap<
     let tu_obj = resolve_object(doc, tu_obj);
 
     let cmap_data = match tu_obj {
-        Object::Reference(id) => doc
-            .get_object(*id)
-            .ok()
-            .and_then(|o| {
-                if let Object::Stream(ref stream) = *o {
-                    stream.decompressed_content().ok()
-                } else {
-                    None
-                }
-            }),
+        Object::Reference(id) => doc.get_object(*id).ok().and_then(|o| {
+            if let Object::Stream(ref stream) = *o {
+                stream.decompressed_content().ok()
+            } else {
+                None
+            }
+        }),
         Object::Stream(stream) => stream.decompressed_content().ok(),
         _ => None,
     };
@@ -408,9 +409,7 @@ fn parse_cmap(text: &str, map: &mut HashMap<u16, String>) {
                         if parts[2].starts_with('[') {
                             // Array of individual mappings
                             let joined = parts[2..].join(" ");
-                            let inner = joined
-                                .trim_start_matches('[')
-                                .trim_end_matches(']');
+                            let inner = joined.trim_start_matches('[').trim_end_matches(']');
                             let tokens: Vec<&str> = inner.split_whitespace().collect();
                             for (i, tok) in tokens.iter().enumerate() {
                                 if let Some(dst) = decode_unicode_hex(tok) {
@@ -465,9 +464,7 @@ fn extract_text_runs(
     page_id: ObjectId,
     fonts: &HashMap<Vec<u8>, PdfFont>,
 ) -> Result<Vec<TextRun>, String> {
-    let page = doc
-        .get_object(page_id)
-        .map_err(|e| format!("page: {e}"))?;
+    let page = doc.get_object(page_id).map_err(|e| format!("page: {e}"))?;
     let page_dict = page.as_dict().map_err(|e| format!("dict: {e}"))?;
 
     let content_data = get_page_content(doc, page_dict)?;
@@ -506,7 +503,8 @@ fn extract_text_runs(
                     continue;
                 }
 
-                let (text, width) = decode_text_op(&op.operator, &op.operands, font, effective_size);
+                let (text, width) =
+                    decode_text_op(&op.operator, &op.operands, font, effective_size);
                 if !text.is_empty() {
                     let font_name = font
                         .map(|f| f.base_font.clone())
@@ -538,9 +536,9 @@ fn get_page_content(doc: &Document, page_dict: &lopdf::Dictionary) -> Result<Vec
         Object::Reference(id) => {
             let obj = doc.get_object(*id).map_err(|e| format!("ref: {e}"))?;
             match obj {
-                Object::Stream(s) => {
-                    s.decompressed_content().map_err(|e| format!("decompress: {e}"))
-                }
+                Object::Stream(s) => s
+                    .decompressed_content()
+                    .map_err(|e| format!("decompress: {e}")),
                 _ => Err("Contents not a stream".to_string()),
             }
         }
@@ -634,7 +632,11 @@ fn decode_glyph_string(bytes: &[u8], font: Option<&PdfFont>, font_size: f32) -> 
         for &b in bytes {
             let ch = b as char;
             text.push(ch);
-            let gw = font.glyph_widths.get(&(b as u16)).copied().unwrap_or(default_w);
+            let gw = font
+                .glyph_widths
+                .get(&(b as u16))
+                .copied()
+                .unwrap_or(default_w);
             width += gw / 1000.0 * font_size;
         }
     }
@@ -835,7 +837,10 @@ fn find_font_in_index<'a>(
     for key in &keys_to_try {
         if let Some(entries) = font_index.get(key.as_str()) {
             // Try exact style match first
-            if let Some(e) = entries.iter().find(|e| e.2 == want_bold && e.3 == want_italic) {
+            if let Some(e) = entries
+                .iter()
+                .find(|e| e.2 == want_bold && e.3 == want_italic)
+            {
                 return Some(e);
             }
             // Fall back to regular
@@ -861,8 +866,14 @@ fn compute_comparison_widths(
     };
 
     if verbose {
-        eprintln!("  Font match: '{}' → {} (idx={}, bold={}, italic={})",
-            font_name, entry.0.display(), entry.1, entry.2, entry.3);
+        eprintln!(
+            "  Font match: '{}' → {} (idx={}, bold={}, italic={})",
+            font_name,
+            entry.0.display(),
+            entry.1,
+            entry.2,
+            entry.3
+        );
     }
 
     let Ok(file) = std::fs::File::open(&entry.0) else {
@@ -912,10 +923,7 @@ fn per_char_width(text: &str, font_data: &[u8], face_index: u32, font_size: f32)
 // ---------------------------------------------------------------------------
 
 fn print_fixture_report(fixture: &Path, runs: &[RunComparison]) {
-    let name = fixture
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy();
+    let name = fixture.file_name().unwrap_or_default().to_string_lossy();
     println!("\n=== {} ({} runs) ===", name, runs.len());
     println!(
         "  {:<30} {:<20} {:>5} {:>8} {:>8} {:>8} {:>8} {:>8}",
@@ -991,10 +999,7 @@ fn print_aggregate(runs: &[RunComparison]) {
         .iter()
         .filter(|r| r.rustybuzz_width.is_some() && r.per_char_width.is_some())
         .collect();
-    let no_font: usize = runs
-        .iter()
-        .filter(|r| r.rustybuzz_width.is_none())
-        .count();
+    let no_font: usize = runs.iter().filter(|r| r.rustybuzz_width.is_none()).count();
 
     let reliable: Vec<&RunComparison> = with_both
         .iter()
@@ -1069,9 +1074,7 @@ fn print_aggregate(runs: &[RunComparison]) {
     let mean_rb_pch: f32 = rb_per_ch.iter().sum::<f32>() / rb_per_ch.len() as f32;
     let mean_pc_pch: f32 = pc_per_ch.iter().sum::<f32>() / pc_per_ch.len() as f32;
 
-    println!(
-        "\nReliable runs only (per-char width within ±20% of PDF width):"
-    );
+    println!("\nReliable runs only (per-char width within ±20% of PDF width):");
     println!(
         "rustybuzz closer: {rb_closer}/{} ({:.1}%)",
         reliable.len(),
@@ -1079,7 +1082,9 @@ fn print_aggregate(runs: &[RunComparison]) {
     );
     println!("Mean absolute delta:       rustybuzz {mean_rb:.3}pt, per-char {mean_pc:.3}pt");
     println!("Median absolute delta:     rustybuzz {median_rb:.3}pt, per-char {median_pc:.3}pt");
-    println!("Mean per-character delta:   rustybuzz {mean_rb_pch:.4}pt/ch, per-char {mean_pc_pch:.4}pt/ch");
+    println!(
+        "Mean per-character delta:   rustybuzz {mean_rb_pch:.4}pt/ch, per-char {mean_pc_pch:.4}pt/ch"
+    );
 
     // Per-font breakdown
     struct FontStat {
@@ -1127,7 +1132,13 @@ fn print_aggregate(runs: &[RunComparison]) {
         };
         println!(
             "  {:<25} {:>6} {:>8.3} {:>8.3} {:>10.4} {:>10.4} {:>6.1}%",
-            font_short, s.count, s.mean_rb, s.mean_pc, s.mean_rb_pch, s.mean_pc_pch, s.rb_closer_pct
+            font_short,
+            s.count,
+            s.mean_rb,
+            s.mean_pc,
+            s.mean_rb_pch,
+            s.mean_pc_pch,
+            s.rb_closer_pct
         );
     }
 

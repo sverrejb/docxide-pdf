@@ -91,7 +91,15 @@ pub fn show_image_clickable(
         }
         if app.show_annotations {
             let case_name = &app.cases[app.current_case].name;
-            draw_annotation_markers(ui, rect, tex_size, &app.annotations.annotations, case_name, page, source);
+            draw_annotation_markers(
+                ui,
+                rect,
+                tex_size,
+                &app.annotations.annotations,
+                case_name,
+                page,
+                source,
+            );
         }
         if resp.clicked() {
             if let Some(pos) = resp.interact_pointer_pos() {
@@ -125,7 +133,16 @@ pub fn show_single(
     let available = ui.available_size();
     let click = egui::ScrollArea::both()
         .show(ui, |ui| {
-            show_image_clickable(app, ctx, ui, path, available.x, available.y - 20.0, source, page)
+            show_image_clickable(
+                app,
+                ctx,
+                ui,
+                path,
+                available.x,
+                available.y - 20.0,
+                source,
+                page,
+            )
         })
         .inner;
     if let Some(click) = click {
@@ -158,7 +175,14 @@ pub fn show_side_by_side(
                 ui.label(egui::RichText::new(&ref_age).weak());
             });
             ref_click = show_image_clickable(
-                app, ctx, ui, ref_path, half_w, max_h, ImageSource::Reference, page,
+                app,
+                ctx,
+                ui,
+                ref_path,
+                half_w,
+                max_h,
+                ImageSource::Reference,
+                page,
             );
         });
 
@@ -170,7 +194,14 @@ pub fn show_side_by_side(
                 ui.label(egui::RichText::new(&gen_age).weak());
             });
             gen_click = show_image_clickable(
-                app, ctx, ui, gen_path, half_w, max_h, ImageSource::Generated, page,
+                app,
+                ctx,
+                ui,
+                gen_path,
+                half_w,
+                max_h,
+                ImageSource::Generated,
+                page,
             );
         });
     });
@@ -345,21 +376,29 @@ pub fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page:
             .show(ui, |ui| {
                 let size = fit_size(&tex, available.x, available.y - 20.0);
                 let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-                ui.painter().image(
-                    tex.id(),
-                    rect,
-                    FULL_UV,
-                    egui::Color32::WHITE,
-                );
+                ui.painter()
+                    .image(tex.id(), rect, FULL_UV, egui::Color32::WHITE);
                 if show_grid {
                     draw_grid_overlay(ui.ctx(), rect, grid_spacing);
                 }
                 if show_annotations {
                     draw_annotation_markers(
-                        ui, rect, tex_size, &annotations_snapshot, &case_name, page, ImageSource::Reference,
+                        ui,
+                        rect,
+                        tex_size,
+                        &annotations_snapshot,
+                        &case_name,
+                        page,
+                        ImageSource::Reference,
                     );
                     draw_annotation_markers(
-                        ui, rect, tex_size, &annotations_snapshot, &case_name, page, ImageSource::Generated,
+                        ui,
+                        rect,
+                        tex_size,
+                        &annotations_snapshot,
+                        &case_name,
+                        page,
+                        ImageSource::Generated,
                     );
                 }
                 if resp.clicked() {
@@ -374,8 +413,7 @@ pub fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page:
             })
             .inner;
         if let Some(click) = click {
-            app.pending_annotation =
-                Some(pending_from_click(&click, page, ImageSource::Generated));
+            app.pending_annotation = Some(pending_from_click(&click, page, ImageSource::Generated));
         }
     } else {
         ui.label("Could not load reference and/or generated images");
@@ -405,7 +443,14 @@ pub fn show_compare(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page:
                 ui.label(egui::RichText::new(&ref_age).weak());
             });
             ref_click = show_image_clickable(
-                app, ctx, ui, &ref_path, third_w, max_h, ImageSource::Reference, page,
+                app,
+                ctx,
+                ui,
+                &ref_path,
+                third_w,
+                max_h,
+                ImageSource::Reference,
+                page,
             );
         });
 
@@ -417,7 +462,14 @@ pub fn show_compare(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page:
                 ui.label(egui::RichText::new(&gen_age).weak());
             });
             gen_click = show_image_clickable(
-                app, ctx, ui, &gen_path, third_w, max_h, ImageSource::Generated, page,
+                app,
+                ctx,
+                ui,
+                &gen_path,
+                third_w,
+                max_h,
+                ImageSource::Generated,
+                page,
             );
         });
 
@@ -461,12 +513,8 @@ pub fn show_image_static(
     if let Some(tex) = app.load_texture(ctx, path) {
         let size = fit_size(&tex, max_w, max_h);
         let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-        ui.painter().image(
-            tex.id(),
-            rect,
-            FULL_UV,
-            egui::Color32::WHITE,
-        );
+        ui.painter()
+            .image(tex.id(), rect, FULL_UV, egui::Color32::WHITE);
         if app.show_grid {
             draw_grid_overlay(ctx, rect, app.grid_spacing);
         }
@@ -509,12 +557,8 @@ pub fn show_delta(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: u
             .show(ui, |ui| {
                 let size = fit_size(&tex, available.x, available.y - 20.0);
                 let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-                ui.painter().image(
-                    tex.id(),
-                    rect,
-                    FULL_UV,
-                    egui::Color32::WHITE,
-                );
+                ui.painter()
+                    .image(tex.id(), rect, FULL_UV, egui::Color32::WHITE);
                 if show_grid {
                     draw_grid_overlay(ui.ctx(), rect, grid_spacing);
                 }
@@ -548,8 +592,7 @@ pub fn show_delta(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: u
             })
             .inner;
         if let Some(click) = click {
-            app.pending_annotation =
-                Some(pending_from_click(&click, page, ImageSource::Generated));
+            app.pending_annotation = Some(pending_from_click(&click, page, ImageSource::Generated));
         }
     } else {
         ui.label("Could not load acknowledged and/or generated images");
@@ -566,11 +609,27 @@ pub fn central(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
         }
         ViewMode::Reference => {
             let path = app.page_path("reference", page);
-            show_single(app, ctx, ui, &path, "Reference", ImageSource::Reference, page);
+            show_single(
+                app,
+                ctx,
+                ui,
+                &path,
+                "Reference",
+                ImageSource::Reference,
+                page,
+            );
         }
         ViewMode::Generated => {
             let path = app.page_path("generated", page);
-            show_single(app, ctx, ui, &path, "Generated", ImageSource::Generated, page);
+            show_single(
+                app,
+                ctx,
+                ui,
+                &path,
+                "Generated",
+                ImageSource::Generated,
+                page,
+            );
         }
         ViewMode::Overlay => {
             show_overlay(app, ctx, ui, page);

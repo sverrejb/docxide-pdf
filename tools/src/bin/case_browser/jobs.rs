@@ -45,7 +45,10 @@ impl Job {
     /// Kill the job and everything it started. Fixes run as their own process
     /// group, so a negative pid reaches the cargo test Claude may be inside.
     pub fn stop(mut self) {
-        let _ = Command::new("kill").arg("--").arg(format!("-{}", self.child.id())).status();
+        let _ = Command::new("kill")
+            .arg("--")
+            .arg(format!("-{}", self.child.id()))
+            .status();
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
@@ -57,12 +60,23 @@ pub fn regen(root: &Path, case: &CaseInfo) -> std::io::Result<Job> {
     // Force a fresh conversion — ensure_generated_pdf otherwise skips on mtime.
     let _ = std::fs::remove_file(case.dir.join("generated.pdf"));
     let child = Command::new("cargo")
-        .args(["test", "--test", "suite", "--", "--nocapture", "visual_comparison"])
+        .args([
+            "test",
+            "--test",
+            "suite",
+            "--",
+            "--nocapture",
+            "visual_comparison",
+        ])
         .env("DOCXIDE_CASE", name)
         .env("DOCXIDE_GROUP", group)
         .current_dir(root)
         .spawn()?;
-    Ok(Job { kind: JobKind::Regen, child, started: Instant::now() })
+    Ok(Job {
+        kind: JobKind::Regen,
+        child,
+        started: Instant::now(),
+    })
 }
 
 pub fn fix_log_path(output_dir: &Path, ann_id: u64) -> PathBuf {
@@ -144,5 +158,9 @@ pub fn fix(root: &Path, log: &Path, case: &CaseInfo, ann: &Annotation) -> std::i
         .stdout(Stdio::from(log.try_clone()?))
         .stderr(Stdio::from(log))
         .spawn()?;
-    Ok(Job { kind: JobKind::Fix(ann.id), child, started: Instant::now() })
+    Ok(Job {
+        kind: JobKind::Fix(ann.id),
+        child,
+        started: Instant::now(),
+    })
 }

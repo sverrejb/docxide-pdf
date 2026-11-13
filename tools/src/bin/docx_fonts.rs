@@ -144,17 +144,19 @@ fn print_styles(archive: &mut ZipArchive<fs::File>) {
     {
         let mut info = StyleInfo::default();
 
-        if let Some(rpr) = defaults.descendants().find(|n| {
-            n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "rPr"
-        }) {
+        if let Some(rpr) = defaults
+            .descendants()
+            .find(|n| n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "rPr")
+        {
             parse_rpr_into(&rpr, &mut info);
         }
 
         let mut spacing_after: Option<u32> = None;
         let mut line_spacing: Option<String> = None;
-        if let Some(ppr) = defaults.descendants().find(|n| {
-            n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "pPr"
-        }) {
+        if let Some(ppr) = defaults
+            .descendants()
+            .find(|n| n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "pPr")
+        {
             for child in ppr.children() {
                 if child.tag_name().name() == "spacing" {
                     if let Some(v) = wml(&child, "after").and_then(|s| s.parse::<u32>().ok()) {
@@ -199,9 +201,10 @@ fn print_styles(archive: &mut ZipArchive<fs::File>) {
         "Caption",
     ];
 
-    for style_node in doc.descendants().filter(|n| {
-        n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "style"
-    }) {
+    for style_node in doc
+        .descendants()
+        .filter(|n| n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "style")
+    {
         let style_name = style_node
             .children()
             .find(|n| n.tag_name().name() == "name")
@@ -212,11 +215,15 @@ fn print_styles(archive: &mut ZipArchive<fs::File>) {
             continue;
         }
 
-        let mut info = StyleInfo { name: style_name.to_string(), ..Default::default() };
+        let mut info = StyleInfo {
+            name: style_name.to_string(),
+            ..Default::default()
+        };
 
-        if let Some(rpr) = style_node.children().find(|n| {
-            n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "rPr"
-        }) {
+        if let Some(rpr) = style_node
+            .children()
+            .find(|n| n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "rPr")
+        {
             parse_rpr_into(&rpr, &mut info);
         }
 
@@ -224,9 +231,16 @@ fn print_styles(archive: &mut ZipArchive<fs::File>) {
             .into_iter()
             .flatten()
             .collect();
-        let mods = if modifiers.is_empty() { String::new() } else { format!(" ({})", modifiers.join(", ")) };
+        let mods = if modifiers.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", modifiers.join(", "))
+        };
 
-        let size_str = info.size_pt().map(|p| format!("{p}pt")).unwrap_or_else(|| "inherited".to_string());
+        let size_str = info
+            .size_pt()
+            .map(|p| format!("{p}pt"))
+            .unwrap_or_else(|| "inherited".to_string());
 
         println!(
             "  {:<20}  {:<28}  {}{}",
@@ -255,14 +269,15 @@ fn print_run_fonts(archive: &mut ZipArchive<fs::File>) {
     let mut run_count = 0usize;
     let mut no_rpr = 0usize;
 
-    for run in doc.descendants().filter(|n| {
-        n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "r"
-    }) {
+    for run in doc
+        .descendants()
+        .filter(|n| n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "r")
+    {
         run_count += 1;
 
-        let rpr = run.children().find(|n| {
-            n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "rPr"
-        });
+        let rpr = run
+            .children()
+            .find(|n| n.tag_name().namespace() == Some(WML) && n.tag_name().name() == "rPr");
 
         let Some(rpr) = rpr else {
             no_rpr += 1;
@@ -277,7 +292,10 @@ fn print_run_fonts(archive: &mut ZipArchive<fs::File>) {
         parse_rpr_into(&rpr, &mut info);
 
         let font = info.font_display();
-        let size = info.size_pt().map(|p| format!("{p}pt")).unwrap_or_else(|| "inherited".to_string());
+        let size = info
+            .size_pt()
+            .map(|p| format!("{p}pt"))
+            .unwrap_or_else(|| "inherited".to_string());
         let key = format!("{font} {size}");
         combos.entry(key).and_modify(|c| *c += 1).or_insert(1);
     }

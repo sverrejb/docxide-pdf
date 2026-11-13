@@ -94,7 +94,11 @@ pub fn screen_to_pdf_pts(click: &ImageClick) -> (f32, f32) {
 
 /// Build a pending annotation from an image click, converting screen coords to
 /// PDF points. Shared by every view that lets you click to drop a note.
-pub fn pending_from_click(click: &ImageClick, page: usize, source: ImageSource) -> PendingAnnotation {
+pub fn pending_from_click(
+    click: &ImageClick,
+    page: usize,
+    source: ImageSource,
+) -> PendingAnnotation {
     let (x_pt, y_pt) = screen_to_pdf_pts(click);
     PendingAnnotation {
         page,

@@ -22,7 +22,12 @@ pub fn score_color(value: f64, threshold: f64) -> egui::Color32 {
 /// `\u{25B6}` has an emoji presentation and is absent from egui's monochrome
 /// text font, so it showed as a tofu box while the down triangle `\u{25BC}`
 /// rendered fine. A painted polygon sidesteps font glyph coverage entirely.
-pub fn paint_disclosure(painter: &egui::Painter, center: egui::Pos2, collapsed: bool, color: egui::Color32) {
+pub fn paint_disclosure(
+    painter: &egui::Painter,
+    center: egui::Pos2,
+    collapsed: bool,
+    color: egui::Color32,
+) {
     let r = 4.0;
     let points = if collapsed {
         vec![
@@ -37,7 +42,11 @@ pub fn paint_disclosure(painter: &egui::Painter, center: egui::Pos2, collapsed: 
             egui::pos2(center.x, center.y + r * 0.8),
         ]
     };
-    painter.add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
+    painter.add(egui::Shape::convex_polygon(
+        points,
+        color,
+        egui::Stroke::NONE,
+    ));
 }
 
 pub fn handle_keys(app: &mut App, ctx: &egui::Context) {
@@ -160,13 +169,29 @@ pub fn case_list(app: &mut App, ctx: &egui::Context) {
             let pad = if color.is_some() { "     " } else { "" };
             let prefix = if hash_changed { "\u{26A0} " } else { "" };
             let label = if let Some(b) = app.baselines.get(&key) {
-                let j = b.jaccard.map(|v| format!("{:.0}", v * 100.0)).unwrap_or_else(|| "-".into());
-                let s = b.ssim.map(|v| format!("{:.0}", v * 100.0)).unwrap_or_else(|| "-".into());
-                format!("{}{} ({}p) {}/{}{}", prefix, display_name, c.page_count, j, s, pad)
+                let j = b
+                    .jaccard
+                    .map(|v| format!("{:.0}", v * 100.0))
+                    .unwrap_or_else(|| "-".into());
+                let s = b
+                    .ssim
+                    .map(|v| format!("{:.0}", v * 100.0))
+                    .unwrap_or_else(|| "-".into());
+                format!(
+                    "{}{} ({}p) {}/{}{}",
+                    prefix, display_name, c.page_count, j, s, pad
+                )
             } else {
                 format!("{}{} ({}p){}", prefix, display_name, c.page_count, pad)
             };
-            CaseLabel { group, label, index: i, color, hash_changed, has_annotations }
+            CaseLabel {
+                group,
+                label,
+                index: i,
+                color,
+                hash_changed,
+                has_annotations,
+            }
         })
         .collect();
 
@@ -246,9 +271,8 @@ pub fn case_list(app: &mut App, ctx: &egui::Context) {
                     let collapsed = app.collapsed_groups.contains(group_name) && !any_filter;
                     // Leading spaces reserve room for the painted disclosure triangle.
                     let header = format!("   {} ({})", group_name, filtered.len());
-                    let header_resp = ui.selectable_label(false,
-                        egui::RichText::new(&header).strong()
-                    );
+                    let header_resp =
+                        ui.selectable_label(false, egui::RichText::new(&header).strong());
                     let tri_center =
                         egui::pos2(header_resp.rect.left() + 7.0, header_resp.rect.center().y);
                     paint_disclosure(
@@ -275,7 +299,8 @@ pub fn case_list(app: &mut App, ctx: &egui::Context) {
                             };
                             let resp = ui.selectable_label(selected, label_text);
                             if let Some(c) = cl.color {
-                                let center = egui::pos2(resp.rect.right() - 6.0, resp.rect.center().y);
+                                let center =
+                                    egui::pos2(resp.rect.right() - 6.0, resp.rect.center().y);
                                 ui.painter().circle_filled(center, 4.0, c);
                             }
                             if resp.clicked() {
@@ -345,24 +370,15 @@ pub fn top_bar(app: &mut App, ctx: &egui::Context) {
             if let Some(b) = app.baselines.get(&key) {
                 ui.separator();
                 if let Some(j) = b.jaccard {
-                    ui.colored_label(
-                        score_color(j, 0.20),
-                        format!("Jaccard: {:.1}%", j * 100.0),
-                    );
+                    ui.colored_label(score_color(j, 0.20), format!("Jaccard: {:.1}%", j * 100.0));
                 }
                 if let Some(s) = b.ssim {
-                    ui.colored_label(
-                        score_color(s, 0.75),
-                        format!("SSIM: {:.1}%", s * 100.0),
-                    );
+                    ui.colored_label(score_color(s, 0.75), format!("SSIM: {:.1}%", s * 100.0));
                 }
             }
             if app.changed_cases.contains(&key) {
                 ui.separator();
-                ui.colored_label(
-                    egui::Color32::from_rgb(220, 40, 40),
-                    "Visual change",
-                );
+                ui.colored_label(egui::Color32::from_rgb(220, 40, 40), "Visual change");
                 if ui.button("Acknowledge").clicked() {
                     acknowledge_current = true;
                 }
@@ -398,8 +414,7 @@ pub fn top_bar(app: &mut App, ctx: &egui::Context) {
             // Write updated visual_hashes.json
             let tests_dir = app.output_dir.parent().unwrap_or(&app.output_dir);
             let path = tests_dir.join("visual_hashes.json");
-            let sorted: std::collections::BTreeMap<_, _> =
-                app.visual_hashes.iter().collect();
+            let sorted: std::collections::BTreeMap<_, _> = app.visual_hashes.iter().collect();
             if let Ok(json) = serde_json::to_string_pretty(&sorted) {
                 let _ = std::fs::write(path, json + "\n");
             }
@@ -416,12 +431,8 @@ pub fn bottom_bar(app: &mut App, ctx: &egui::Context) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let case = &app.cases[app.current_case];
             ui.label(
-                egui::RichText::new(format!(
-                    "Page {}/{}",
-                    app.current_page + 1,
-                    case.page_count
-                ))
-                .size(18.0),
+                egui::RichText::new(format!("Page {}/{}", app.current_page + 1, case.page_count))
+                    .size(18.0),
             );
         });
     });
@@ -573,12 +584,9 @@ pub fn add_note_window(app: &mut App, ctx: &egui::Context) {
                 ));
                 let resp = ui.text_edit_singleline(&mut pending.text_buf);
                 resp.request_focus();
-                let cmd_enter = ui.input(|i| {
-                    i.key_pressed(egui::Key::Enter) && i.modifiers.command
-                });
-                if cmd_enter
-                    || (resp.lost_focus()
-                        && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                let cmd_enter =
+                    ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.command);
+                if cmd_enter || (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                 {
                     commit_annotation = true;
                 }

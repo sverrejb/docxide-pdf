@@ -13,12 +13,12 @@
 //! the numbers cannot drift. Not tests/common/mod.rs: its convert() links the whole library,
 //! which had this binary rebuilt after every src/ change.
 //! Accessibility scores are those of tests/suite/accessibility.rs, null without veraPDF and pdfinfo.
-#[path = "../../../tests/common/metrics.rs"]
-#[allow(dead_code)]
-mod metrics;
 #[path = "../../../tests/common/a11y.rs"]
 #[allow(dead_code)]
 mod a11y;
+#[path = "../../../tests/common/metrics.rs"]
+#[allow(dead_code)]
+mod metrics;
 #[path = "../../../tests/common/text_boundary.rs"]
 #[allow(dead_code)]
 mod text_boundary;
@@ -29,7 +29,12 @@ use std::path::{Path, PathBuf};
 /// A PNG dir is named after its PDF, so for the harness's own output dirs the
 /// analysis cache is the very file tests/suite/accessibility.rs writes and either side
 /// reuses the other's work.
-fn a11y_metrics(ref_pdf: &Path, other_pdf: &Path, ref_dir: &Path, other_dir: &Path) -> Option<serde_json::Value> {
+fn a11y_metrics(
+    ref_pdf: &Path,
+    other_pdf: &Path,
+    ref_dir: &Path,
+    other_dir: &Path,
+) -> Option<serde_json::Value> {
     let r = a11y::analyze_cached(ref_pdf, &a11y::cache_path(ref_dir)).ok()?;
     let g = a11y::analyze_cached(other_pdf, &a11y::cache_path(other_dir)).ok()?;
     let s = a11y::scores(&r, &g);

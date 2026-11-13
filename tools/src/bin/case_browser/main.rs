@@ -184,16 +184,24 @@ impl App {
             match kind {
                 JobKind::Regen => self.refresh(),
                 JobKind::Fix(id) => {
-                    let wt_output = jobs::worktree_path(&self.project_root(), id).join("tests/output");
+                    let wt_output =
+                        jobs::worktree_path(&self.project_root(), id).join("tests/output");
                     let marked = load_annotations(&wt_output)
                         .annotations
                         .iter()
                         .any(|a| a.id == id && a.fixed);
-                    if marked && let Some(a) = self.annotations.annotations.iter_mut().find(|a| a.id == id) {
+                    if marked
+                        && let Some(a) =
+                            self.annotations.annotations.iter_mut().find(|a| a.id == id)
+                    {
                         a.fixed = true;
                         self.save_annotations();
                     }
-                    let outcome = if succeeded { FixOutcome::Done } else { FixOutcome::Failed };
+                    let outcome = if succeeded {
+                        FixOutcome::Done
+                    } else {
+                        FixOutcome::Failed
+                    };
                     self.fix_results.insert(id, outcome);
                 }
             }

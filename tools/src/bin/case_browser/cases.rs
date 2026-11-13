@@ -167,7 +167,10 @@ pub fn snapshot_acknowledged(case_dir: &Path) {
     }
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
+        if path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("png"))
+        {
             let dest = ack_dir.join(path.file_name().unwrap());
             let _ = std::fs::copy(&path, &dest);
         }
