@@ -34,7 +34,7 @@ fn wpd_child_text<'a>(parent: Option<roxmltree::Node<'a, 'a>>, name: &str) -> Op
 /// effectExtent top+bottom and top. distT/distB only space a floating
 /// picture's wrap: Word lays an inline one out without them (a 9pt-dist
 /// banner sits 150.25pt down in Word's export, 9pt higher than with them).
-fn inline_extra_height(container: roxmltree::Node) -> (f32, f32) {
+pub(super) fn inline_extra_height(container: roxmltree::Node) -> (f32, f32) {
     let ee = wpd(container, "effectExtent");
     let ee_t = ee.map(|n| emu_attr(n, "t")).unwrap_or(0.0);
     let ee_b = ee.map(|n| emu_attr(n, "b")).unwrap_or(0.0);

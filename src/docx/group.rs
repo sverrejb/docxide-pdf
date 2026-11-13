@@ -210,8 +210,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
         // Inline canvases occupy a block in the text flow: reserve the full
         // extent with an invisible TopAndBottom textbox, then place the
         // children relative to the same paragraph without wrapping.
-        let effect_height = super::wpd(container, "effectExtent")
-            .map_or(0.0, |e| emu_attr(e, "t") + emu_attr(e, "b"));
+        let effect_height = super::images::inline_extra_height(container).0;
         out.push(RunDrawingResult::TextBox(Textbox {
             width_pt: display_w,
             height_pt: display_h + effect_height.max(0.0),
