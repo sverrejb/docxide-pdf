@@ -180,45 +180,30 @@ pub(super) fn render_comment_pane(
         content.fill_even_odd_and_stroke();
         content.restore_state();
 
-        let pdf_name_map: HashMap<&str, &FontEntry> = seen_fonts
-            .values()
-            .map(|e| (e.pdf_name.as_str(), e))
-            .collect();
+        let show = |content: &mut Content, entry: &FontEntry, x: f32, y: f32, text: &str| {
+            content.begin_text();
+            fill_rgb(content, TEXT_RGB);
+            content.set_font(Name(entry.pdf_name.as_bytes()), fs);
+            content.set_text_matrix([1.0, 0.0, 0.0, 1.0, x, y]);
+            content.show(Str(&entry.encode(text)));
+            content.end_text();
+        };
         let mut text_y = top - first_baseline;
         for (is_first, line_text) in lines {
             if *is_first {
                 let label = format_label_from_text(line_text);
                 let label_only = &line_text[..label.len()];
                 let body_part = &line_text[label.len()..];
-                let label_bytes = label_entry.encode(label_only);
-                content.begin_text();
-                fill_rgb(content, TEXT_RGB);
-                content.set_font(Name(label_entry.pdf_name.as_bytes()), fs);
-                content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x, text_y]);
-                content.show(Str(&label_bytes));
-                content.end_text();
+                show(content, label_entry, text_x, text_y, label_only);
                 if !body_part.is_empty() {
                     let label_w = label_entry.word_width(label_only, fs, false);
-                    let body_bytes = body_entry.encode(body_part);
-                    content.begin_text();
-                    fill_rgb(content, TEXT_RGB);
-                    content.set_font(Name(body_entry.pdf_name.as_bytes()), fs);
-                    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x + label_w, text_y]);
-                    content.show(Str(&body_bytes));
-                    content.end_text();
+                    show(content, body_entry, text_x + label_w, text_y, body_part);
                 }
             } else {
-                let body_bytes = body_entry.encode(line_text);
-                content.begin_text();
-                fill_rgb(content, TEXT_RGB);
-                content.set_font(Name(body_entry.pdf_name.as_bytes()), fs);
-                content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x, text_y]);
-                content.show(Str(&body_bytes));
-                content.end_text();
+                show(content, body_entry, text_x, text_y, line_text);
             }
             text_y -= line_h;
         }
-        let _ = pdf_name_map;
     }
 
     content.save_state();
