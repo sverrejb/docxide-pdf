@@ -29,9 +29,11 @@ pub(super) fn by_pdf_name(fonts: &HashMap<String, FontEntry>) -> HashMap<&str, &
     fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect()
 }
 
-/// Every paragraph: body, table cells, headers and footers, notes, and the
-/// paragraphs of their textboxes at any depth.
-fn collect_all_paras(doc: &Document) -> Vec<&Paragraph> {
+type ParaSets<'a> = (Vec<&'a Paragraph>, Vec<&'a Paragraph>, Vec<&'a Paragraph>);
+
+/// Every paragraph, as (body and table cells, headers and footers, notes),
+/// with the paragraphs of their textboxes at any depth.
+fn collect_all_paras(doc: &Document) -> ParaSets<'_> {
     let hf_paras = doc.sections.iter().flat_map(|s| {
         [
             &s.properties.header_default,
@@ -54,7 +56,8 @@ fn collect_all_paras(doc: &Document) -> Vec<&Paragraph> {
         .chain(doc.endnotes.values().flat_map(|n| n.paragraphs.iter()))
         .flat_map(|p| collect_paras(p));
 
-    doc.sections
+    let body_paras: Vec<&Paragraph> = doc
+        .sections
         .iter()
         .flat_map(|s| s.blocks.iter())
         .flat_map(|block| -> Vec<&Paragraph> {
@@ -69,14 +72,16 @@ fn collect_all_paras(doc: &Document) -> Vec<&Paragraph> {
                     .collect(),
             }
         })
-        .chain(hf_paras)
-        .chain(note_paras)
-        .collect()
+        .collect();
+    (body_paras, hf_paras.collect(), note_paras.collect())
 }
 
 fn collect_used_chars(
     doc: &Document,
     all_runs: &[&Run],
+    // Body (with table cells) and note paragraphs.
+    all_paras: &[&Paragraph],
+    hf_paras: &[&Paragraph],
     math_font: bool,
 ) -> HashMap<String, HashSet<char>> {
     let mut used: HashMap<String, HashSet<char>> = HashMap::new();
@@ -158,30 +163,7 @@ fn collect_used_chars(
         }
     }
 
-    let mut all_paras: Vec<&Paragraph> = doc
-        .sections
-        .iter()
-        .flat_map(|s| s.blocks.iter())
-        .flat_map(|block| -> Vec<&Paragraph> {
-            match block {
-                Block::Paragraph(p) => collect_paras(p),
-                Block::Table(t) => t
-                    .rows
-                    .iter()
-                    .flat_map(|row| row.cells.iter())
-                    .flat_map(|cell| cell.all_paragraphs())
-                    .flat_map(|p| collect_paras(p))
-                    .collect(),
-            }
-        })
-        .collect();
-    for note in doc.footnotes.values().chain(doc.endnotes.values()) {
-        for p in &note.paragraphs {
-            all_paras.extend(collect_paras(p));
-        }
-    }
-
-    for para in &all_paras {
+    for para in all_paras {
         if !para.list_label.is_empty() {
             // With the space `encode_label` ends the label with.
             for (key, text) in label_pieces(para) {
@@ -211,7 +193,7 @@ fn collect_used_chars(
     if let Some(first_run) = all_runs.first() {
         let sa_key = font_key_buf(first_run, &mut key_buf).to_string();
         let chars = used.entry(sa_key).or_default();
-        for para in &all_paras {
+        for para in all_paras {
             for diagram in para.smartart.iter().chain(&para.floating_smartart) {
                 for shape in &diagram.shapes {
                     for sa_para in &shape.paragraphs {
@@ -245,7 +227,7 @@ fn collect_used_chars(
     // Collect characters that may appear in STYLEREF values by scanning
     // body paragraph text (paragraph styles) and run text (character styles).
     let mut styleref_chars: HashSet<char> = HashSet::new();
-    for para in &all_paras {
+    for para in all_paras {
         // `\n` values: the list number, or 0
         styleref_chars.extend(para.list_label.chars().chain(['0']));
         if para.style_id.is_some() {
@@ -260,25 +242,7 @@ fn collect_used_chars(
         }
     }
 
-    let hf_paras: Vec<&Paragraph> = doc
-        .sections
-        .iter()
-        .flat_map(|s| {
-            let p = &s.properties;
-            [
-                &p.header_default,
-                &p.header_first,
-                &p.header_even,
-                &p.footer_default,
-                &p.footer_first,
-                &p.footer_even,
-            ]
-        })
-        .filter_map(|hf| hf.as_ref())
-        .flat_map(hf_paragraphs)
-        .flat_map(collect_paras)
-        .collect();
-    for para in &hf_paras {
+    for para in hf_paras {
         for run in &para.runs {
             let Some(fc @ (FieldCode::StyleRef { .. } | FieldCode::If(_) | FieldCode::Seq { .. })) =
                 &run.field_code
@@ -304,7 +268,7 @@ fn collect_used_chars(
     // Collect characters for chart labels under the theme minor font
     {
         let mut chart_label_chars: HashSet<char> = HashSet::new();
-        for para in &all_paras {
+        for para in all_paras {
             if let Some(ref ic) = para.inline_chart {
                 chart_label_chars.extend('0'..='9');
                 chart_label_chars.insert('.');
@@ -353,7 +317,7 @@ fn collect_used_chars(
         }
     }
 
-    for para in all_paras.iter().chain(&hf_paras) {
+    for para in all_paras.iter().chain(hf_paras) {
         // A leader is drawn in the tab's own font, or a neighbour's for a tab
         // without one.
         let leaders: Vec<char> = para.tab_stops.iter().filter_map(|t| t.leader).collect();
@@ -557,10 +521,23 @@ pub(super) fn collect_and_register_fonts(
     };
     let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
     let mut font_order: Vec<String> = Vec::new();
-    let all_paras = collect_all_paras(doc);
+    let (body_paras, hf_paras, note_paras) = collect_all_paras(doc);
+    // This order fixes font_order, and so the F-numbers.
+    let all_paras: Vec<&Paragraph> = [&body_paras, &hf_paras, &note_paras]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
     let all_runs: Vec<&Run> = all_paras.iter().flat_map(|p| &p.runs).collect();
     let math_font = math_font_file(doc, &all_runs, font_index);
-    let mut used_chars_per_font = collect_used_chars(doc, &all_runs, math_font.is_some());
+    let body_and_notes: Vec<&Paragraph> = body_paras.into_iter().chain(note_paras).collect();
+    let mut used_chars_per_font = collect_used_chars(
+        doc,
+        &all_runs,
+        &body_and_notes,
+        &hf_paras,
+        math_font.is_some(),
+    );
 
     for section in &doc.sections {
         for block in &section.blocks {
