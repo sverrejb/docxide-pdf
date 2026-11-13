@@ -430,8 +430,8 @@ fn cell_content_h_for_valign(items: &[CellContentItem]) -> f32 {
     h.max(floating_extent)
 }
 
-fn cell_has_visible_content(items: &[CellContentItem]) -> bool {
-    items.iter().any(|item| match item {
+fn cell_has_visible_content<'a>(items: impl IntoIterator<Item = &'a CellContentItem>) -> bool {
+    items.into_iter().any(|item| match item {
         CellContentItem::Paragraph(p) => para_has_visible_content(p),
         CellContentItem::NestedTable { rows, .. } => rows.iter().any(|r| r.height > 0.0),
     })
@@ -1800,12 +1800,9 @@ fn render_partial_row(
             row_h,
         );
 
-        let has_content = cursor_chunks(&cell_layout.items, start, end).any(|c| match &cell_layout
-            .items[c.item]
-        {
-            CellContentItem::Paragraph(p) => para_has_visible_content(p),
-            CellContentItem::NestedTable { rows, .. } => rows.iter().any(|r| r.height > 0.0),
-        });
+        let has_content = cell_has_visible_content(
+            cursor_chunks(&cell_layout.items, start, end).map(|c| &cell_layout.items[c.item]),
+        );
 
         if has_content {
             render_cell_content(
