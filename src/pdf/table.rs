@@ -1443,45 +1443,45 @@ fn draw_cell_label(
     baseline_y: f32,
     fonts: &HashMap<String, FontEntry>,
 ) {
-    if para.label_pieces.len() > 1 {
-        if let Some(c) = para.label_color {
-            fill_rgb(content, c);
-        }
-        content
-            .begin_text()
-            .next_line(label_x + para.label_shift, baseline_y);
-        super::list_label::show_label_pieces(
-            content,
-            &para.label_pieces,
-            fonts,
-            para.label_font_size,
-        );
-        content.end_text();
-        if para.label_color.is_some() {
-            content.set_fill_gray(0.0);
-        }
-        return;
-    }
-    let Some(entry) = para
-        .label_pieces
-        .first()
-        .and_then(|(k, _)| k.as_deref())
-        .and_then(|k| fonts.get(k))
-    else {
-        return;
+    // A one-piece label shows in its own font; a mixed one piece by piece.
+    let single = if para.label_pieces.len() > 1 {
+        None
+    } else {
+        let Some(entry) = para
+            .label_pieces
+            .first()
+            .and_then(|(k, _)| k.as_deref())
+            .and_then(|k| fonts.get(k))
+        else {
+            return;
+        };
+        let bytes = super::list_label::encode_label(entry, &para.list_label)
+            .unwrap_or_else(|| entry.encode(&para.list_label));
+        Some((entry, bytes))
     };
-    let bytes = super::list_label::encode_label(entry, &para.list_label)
-        .unwrap_or_else(|| entry.encode(&para.list_label));
 
     if let Some(c) = para.label_color {
         fill_rgb(content, c);
     }
-    content
-        .begin_text()
-        .set_font(Name(entry.pdf_name.as_bytes()), para.label_font_size)
-        .next_line(label_x + para.label_shift, baseline_y)
-        .show(Str(&bytes))
-        .end_text();
+    content.begin_text();
+    match &single {
+        Some((entry, bytes)) => {
+            content
+                .set_font(Name(entry.pdf_name.as_bytes()), para.label_font_size)
+                .next_line(label_x + para.label_shift, baseline_y)
+                .show(Str(bytes));
+        }
+        None => {
+            content.next_line(label_x + para.label_shift, baseline_y);
+            super::list_label::show_label_pieces(
+                content,
+                &para.label_pieces,
+                fonts,
+                para.label_font_size,
+            );
+        }
+    }
+    content.end_text();
     if para.label_color.is_some() {
         content.set_fill_gray(0.0);
     }
