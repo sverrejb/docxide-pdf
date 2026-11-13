@@ -1000,8 +1000,6 @@ mod tests {
     /// A fixed-layout table parsed from its XML: a 2746…-twip grid of six
     /// columns and the given rows of `w:tcW` (width, type) pairs.
     fn fixed_table(tbl_w: &str, rows: &[&[(u32, &str)]]) -> Table {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
         let grid = [2746, 2770, 2869, 1409, 1410, 2744]
             .iter()
             .map(|w| format!(r#"<w:gridCol w:w="{w}"/>"#))
@@ -1021,15 +1019,7 @@ mod tests {
         let xml = format!(
             r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tblPr>{tbl_w}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>{grid}</w:tblGrid>{rows}</w:tbl><w:sectPr/></w:body></w:document>"#
         );
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        zip.start_file("word/document.xml", SimpleFileOptions::default())
-            .unwrap();
-        zip.write_all(xml.as_bytes()).unwrap();
-        let mut doc = crate::docx::parse_bytes(
-            &zip.finish().unwrap().into_inner(),
-            crate::RevisionView::Final,
-        )
-        .unwrap();
+        let mut doc = crate::docx::parse_document_xml(&xml);
         let Block::Table(table) = doc.sections[0].blocks.remove(0) else {
             panic!("table");
         };
@@ -1091,8 +1081,6 @@ mod tests {
 
     #[test]
     fn nested_autofit_preserves_each_level_of_cell_padding() {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
         let mut content = String::from(
             r#"<w:p><w:r><w:rPr><w:rFonts w:ascii="TestFont" w:hAnsi="TestFont"/><w:sz w:val="20"/></w:rPr><w:t>abc def</w:t></w:r></w:p>"#,
         );
@@ -1104,15 +1092,7 @@ mod tests {
             let xml = format!(
                 r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>{content}<w:sectPr/></w:body></w:document>"#
             );
-            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-            zip.start_file("word/document.xml", SimpleFileOptions::default())
-                .unwrap();
-            zip.write_all(xml.as_bytes()).unwrap();
-            let doc = crate::docx::parse_bytes(
-                &zip.finish().unwrap().into_inner(),
-                crate::RevisionView::Final,
-            )
-            .unwrap();
+            let doc = crate::docx::parse_document_xml(&xml);
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("table");
             };
@@ -1123,22 +1103,12 @@ mod tests {
 
     #[test]
     fn natural_width_includes_merged_cell_text() {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
         const W: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
         let xml = format!(
             r#"<w:document xmlns:w="{W}"><w:body><w:tbl><w:tblPr><w:tblW w:type="auto" w:w="0"/></w:tblPr><w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="2000"/><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="6000" w:type="dxa"/><w:gridSpan w:val="3"/></w:tcPr><w:p><w:r><w:rPr><w:rFonts w:ascii="TestFont" w:hAnsi="TestFont"/><w:sz w:val="20"/></w:rPr><w:t>{}</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:sectPr/></w:body></w:document>"#,
             "x".repeat(100)
         );
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        zip.start_file("word/document.xml", SimpleFileOptions::default())
-            .unwrap();
-        zip.write_all(xml.as_bytes()).unwrap();
-        let mut doc = crate::docx::parse_bytes(
-            &zip.finish().unwrap().into_inner(),
-            crate::RevisionView::Final,
-        )
-        .unwrap();
+        let mut doc = crate::docx::parse_document_xml(&xml);
         let Block::Table(table) = doc.sections[0].blocks.remove(0) else {
             panic!("table")
         };

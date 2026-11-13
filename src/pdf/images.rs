@@ -1143,7 +1143,7 @@ mod tests {
 
     #[test]
     fn identical_pictures_share_their_image_xobject() {
-        use std::io::{Cursor, Write};
+        use std::io::Cursor;
         let picture = |blip: &str, crop: &str| {
             format!(
                 r#"<w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="914400"/><wp:docPr id="1" name="P"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="rIdImg">{blip}</a:blip>{crop}</pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"#
@@ -1172,24 +1172,14 @@ mod tests {
         image::RgbImage::from_fn(8, 8, |x, y| image::Rgb([x as u8 * 30, y as u8 * 30, 90]))
             .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
             .unwrap();
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        for (name, bytes) in [
+        let doc = crate::docx::parse_parts(&[
             ("word/document.xml", document.into_bytes()),
             ("word/header1.xml", header.into_bytes()),
             ("word/_rels/document.xml.rels", rels("image1.png", r#"<Relationship Id="rIdHdr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>"#).into_bytes()),
             ("word/_rels/header1.xml.rels", rels("image2.png", "").into_bytes()),
             ("word/media/image1.png", png.clone()),
             ("word/media/image2.png", png),
-        ] {
-            zip.start_file(name, zip::write::SimpleFileOptions::default())
-                .unwrap();
-            zip.write_all(&bytes).unwrap();
-        }
-        let doc = crate::docx::parse_bytes(
-            &zip.finish().unwrap().into_inner(),
-            crate::RevisionView::Final,
-        )
-        .unwrap();
+        ]);
         let mut pdf = pdf_writer::Pdf::new();
         let mut next = 1;
         let images = super::embed_all_images(

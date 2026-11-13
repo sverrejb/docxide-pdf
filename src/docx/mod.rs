@@ -872,13 +872,13 @@ pub(super) fn collect_block_nodes<'a>(
 
 /// A document parsed from `(zip path, XML)` parts.
 #[cfg(test)]
-pub(crate) fn parse_parts(parts: &[(&str, &str)]) -> Document {
+pub(crate) fn parse_parts(parts: &[(&str, impl AsRef<[u8]>)]) -> Document {
     use std::io::Write;
     let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     for (name, xml) in parts {
         zip.start_file(*name, zip::write::SimpleFileOptions::default())
             .unwrap();
-        zip.write_all(xml.as_bytes()).unwrap();
+        zip.write_all(xml.as_ref()).unwrap();
     }
     parse_bytes(
         &zip.finish().unwrap().into_inner(),

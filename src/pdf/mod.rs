@@ -2011,7 +2011,6 @@ mod tests {
 
     #[test]
     fn a_break_line_that_does_not_fit_leaves_a_blank_page() {
-        use std::io::{Cursor, Write};
         let pages = |break_twips: u32| {
             let exact = |t: u32| {
                 format!(
@@ -2026,18 +2025,7 @@ mod tests {
                 r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>{lines}<w:p>{}<w:r><w:br w:type="page"/></w:r></w:p><w:p><w:r><w:t>After</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>"#,
                 exact(break_twips)
             );
-            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-            zip.start_file(
-                "word/document.xml",
-                zip::write::SimpleFileOptions::default(),
-            )
-            .unwrap();
-            zip.write_all(xml.as_bytes()).unwrap();
-            let doc = crate::docx::parse_bytes(
-                &zip.finish().unwrap().into_inner(),
-                crate::RevisionView::Final,
-            )
-            .unwrap();
+            let doc = crate::docx::parse_document_xml(&xml);
             render_pass(&doc, None, &[], &ConvertOptions::default())
                 .unwrap()
                 .1
