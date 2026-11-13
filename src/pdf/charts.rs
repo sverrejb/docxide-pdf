@@ -786,7 +786,7 @@ pub(super) fn polygon(content: &mut Content, pts: &[(f32, f32)]) {
 }
 
 /// An open path through `pts`.
-fn polyline(content: &mut Content, pts: impl IntoIterator<Item = (f32, f32)>) {
+pub(super) fn polyline(content: &mut Content, pts: impl IntoIterator<Item = (f32, f32)>) {
     let mut pts = pts.into_iter();
     if let Some((x, y)) = pts.next() {
         content.move_to(x, y);
@@ -1062,9 +1062,7 @@ fn draw_chart_series(
                 let sym = resolve_marker(series.marker, si);
                 let (color, marker_r) = marker_look(series, si, accents, sym, DEFAULT_LINE_W);
                 fill_rgb(content, color);
-                for (ci, &val) in series.values.iter().enumerate() {
-                    let lx = plot_x + (ci as f32 + 0.5) * group_w;
-                    let ly = plot_y + (val / axis_max) * plot_h;
+                for &(lx, ly) in &pts {
                     draw_marker(content, sym, lx, ly, marker_r);
                 }
             }
@@ -1097,13 +1095,7 @@ fn draw_chart_series(
 
                 set_stroke_color(content, series.color);
                 content.set_line_width(1.5);
-                for (i, &(lx, ly)) in pts.iter().enumerate() {
-                    if i == 0 {
-                        content.move_to(lx, ly);
-                    } else {
-                        content.line_to(lx, ly);
-                    }
-                }
+                polyline(content, pts.iter().copied());
                 content.stroke();
             }
         }
@@ -1404,7 +1396,6 @@ pub(super) fn render_chart(
     let depth = c.view_3d;
 
     let legend_pos = c.legend.as_ref().map(|l| l.position);
-    let has_legend = legend_pos.is_some();
     let legend_on_right = legend_pos == Some(LegendPosition::Right);
     let legend_on_bottom = legend_pos == Some(LegendPosition::Bottom);
 
@@ -1476,11 +1467,13 @@ pub(super) fn render_chart(
     } else {
         0
     };
+    let max_series_label_w = c
+        .series
+        .iter()
+        .map(|s| text_width(&s.label, font_size, label_font))
+        .fold(0.0f32, f32::max);
     let table_header_w = if table_rows > 0 {
-        c.series
-            .iter()
-            .map(|s| text_width(&s.label, font_size, label_font) + 13.5)
-            .fold(0.0f32, f32::max)
+        max_series_label_w + 13.5
     } else {
         0.0
     };
@@ -1507,18 +1500,13 @@ pub(super) fn render_chart(
     } else {
         0.0
     });
-    let legend_label_w = c
-        .series
-        .iter()
-        .map(|s| text_width(&s.label, 10.0, label_font))
-        .fold(0.0f32, f32::max);
     // A right legend ends 9.9pt from the chart's edge, its key 8pt before
     // its names (20pt for a line through the marker), and stands 15.6pt
     // clear of the plot (v2d_legend_r probe, case30's line chart). A value
     // axis along the bottom hangs half its last label past the plot.
     let line_key = matches!(c.chart_type, ChartType::Line) && depth.is_none();
     let key_w = LEGEND_KEY_W + if line_key { 12.0 } else { 0.0 };
-    let legend_right_x = x + w - LEGEND_PAD_RIGHT - legend_label_w - key_w;
+    let legend_right_x = x + w - LEGEND_PAD_RIGHT - max_series_label_w - key_w;
     let x_overhang = if is_scatter_like {
         text_width(
             &format_tick_label(x_axis_max, x_tick_step, None),
@@ -1528,8 +1516,8 @@ pub(super) fn render_chart(
     } else {
         0.0
     };
-    let margin_right = if has_legend && legend_on_right {
-        LEGEND_PAD_RIGHT + legend_label_w + key_w + 15.6 + x_overhang
+    let margin_right = if legend_on_right {
+        LEGEND_PAD_RIGHT + max_series_label_w + key_w + 15.6 + x_overhang
     } else if is_point_chart {
         (w * 0.06).max(20.0)
     } else if horizontal {
@@ -1563,13 +1551,9 @@ pub(super) fn render_chart(
     let cat_label_h = line_h * max_wrap_lines as f32 + 4.0;
     let margin_bottom = if table_rows > 0 {
         // Word, f_2d probe: the table ends 29.05pt above the chart's bottom.
-        let legend_band = if has_legend && legend_on_bottom {
-            28.6
-        } else {
-            8.0
-        };
+        let legend_band = if legend_on_bottom { 28.6 } else { 8.0 };
         legend_band + table_rows as f32 * table_row_h(font_size)
-    } else if has_legend && legend_on_bottom {
+    } else if legend_on_bottom {
         cat_label_h + 8.0 + LEGEND_BAND
     } else {
         cat_label_h + 8.0
@@ -1577,17 +1561,12 @@ pub(super) fn render_chart(
 
     let series_names_w = depth
         .is_some_and(|d| d.series_axis && depth_rows(c) > 1)
-        .then(|| {
-            c.series
-                .iter()
-                .map(|s| text_width(&s.label, font_size, label_font))
-                .fold(0.0f32, f32::max)
-        });
+        .then_some(max_series_label_w);
     // With rAngAx 0 Word's plot runs to the chart's right pad, short of the
     // series names by their width and 1.2pt (line3d against noser and
     // persp3d probes).
     let perspective = depth.is_some_and(|d| d.perspective.is_some());
-    let margin_right = if perspective && !(has_legend && legend_on_right) {
+    let margin_right = if perspective && !legend_on_right {
         CHART_PAD_RIGHT + series_names_w.map_or(0.0, |w| w + 1.2)
     } else {
         margin_right
@@ -1768,31 +1747,21 @@ pub(super) fn render_chart(
             let tw = text_width(&label, font_size, label_font);
             let frac = val / axis_max;
 
-            if !horizontal {
+            let (lx, ly) = if !horizontal {
                 let (ax, ay) = at(plot_x, plot_y + frac * plot_h, 0.0);
-                let (lx, ly) = (ax - tw - 9.0, ay - font_size * 0.3);
-                show_text(
-                    content,
-                    label_font_key,
-                    font_size,
-                    lx,
-                    ly,
-                    &label,
-                    label_font,
-                );
+                (ax - tw - 9.0, ay - font_size * 0.3)
             } else {
-                let lx = plot_x + frac * plot_w - tw / 2.0;
-                let ly = plot_y - font_size - 8.0;
-                show_text(
-                    content,
-                    label_font_key,
-                    font_size,
-                    lx,
-                    ly,
-                    &label,
-                    label_font,
-                );
-            }
+                (plot_x + frac * plot_w - tw / 2.0, plot_y - font_size - 8.0)
+            };
+            show_text(
+                content,
+                label_font_key,
+                font_size,
+                lx,
+                ly,
+                &label,
+                label_font,
+            );
         }
 
         // X-axis tick labels for scatter/bubble
@@ -2055,16 +2024,8 @@ fn render_radar(
         return;
     }
 
-    let margin_right = if has_legend && legend_on_right {
-        w * 0.22
-    } else {
-        w * 0.08
-    };
-    let margin_bottom = if has_legend && legend_on_bottom {
-        h * 0.18
-    } else {
-        h * 0.08
-    };
+    let margin_right = if legend_on_right { w * 0.22 } else { w * 0.08 };
+    let margin_bottom = if legend_on_bottom { h * 0.18 } else { h * 0.08 };
     let margin_top = h * 0.08;
     let margin_left = w * 0.08;
 
@@ -2078,6 +2039,11 @@ fn render_radar(
 
     // Angle for category i: start at top (pi/2) and go clockwise
     let cat_angle = |ci: usize| -> f32 { std::f32::consts::FRAC_PI_2 - ci as f32 * angle_step };
+    // The point `r` out along category `ci`'s spoke.
+    let at = |ci: usize, r: f32| {
+        let a = cat_angle(ci);
+        (cx + r * a.cos(), cy + r * a.sin())
+    };
 
     content.save_state();
 
@@ -2093,25 +2059,16 @@ fn render_radar(
 
     for ti in 1..=num_ticks {
         let r = radius * (ti as f32 / num_ticks as f32);
-        for ci in 0..num_categories {
-            let a = cat_angle(ci);
-            let px = cx + r * a.cos();
-            let py = cy + r * a.sin();
-            if ci == 0 {
-                content.move_to(px, py);
-            } else {
-                content.line_to(px, py);
-            }
-        }
-        content.close_path();
+        let ring: Vec<(f32, f32)> = (0..num_categories).map(|ci| at(ci, r)).collect();
+        polygon(content, &ring);
         content.stroke();
     }
 
     // Radial spokes
     for ci in 0..num_categories {
-        let a = cat_angle(ci);
         content.move_to(cx, cy);
-        content.line_to(cx + radius * a.cos(), cy + radius * a.sin());
+        let (px, py) = at(ci, radius);
+        content.line_to(px, py);
         content.stroke();
     }
 
@@ -2124,30 +2081,21 @@ fn render_radar(
             .unwrap_or(accent_colors[si % accent_colors.len()]);
         content.set_line_width(series.line_width.unwrap_or(DEFAULT_LINE_W));
         stroke_rgb(content, color);
-        for ci in 0..num_categories {
-            let val = series.values.get(ci).copied().unwrap_or(0.0);
-            let r = (val / axis_max) * radius;
-            let a = cat_angle(ci);
-            let px = cx + r * a.cos();
-            let py = cy + r * a.sin();
-            if ci == 0 {
-                content.move_to(px, py);
-            } else {
-                content.line_to(px, py);
-            }
-        }
-        content.close_path();
+        let pts: Vec<(f32, f32)> = (0..num_categories)
+            .map(|ci| {
+                let val = series.values.get(ci).copied().unwrap_or(0.0);
+                at(ci, (val / axis_max) * radius)
+            })
+            .collect();
+        polygon(content, &pts);
         content.stroke();
 
         // Markers
         let sym = resolve_marker(series.marker, si);
         let (marker_color, marker_r) = marker_look(series, si, accent_colors, sym, DEFAULT_LINE_W);
         fill_rgb(content, marker_color);
-        for ci in 0..num_categories {
-            let val = series.values.get(ci).copied().unwrap_or(0.0);
-            let r = (val / axis_max) * radius;
-            let a = cat_angle(ci);
-            draw_marker(content, sym, cx + r * a.cos(), cy + r * a.sin(), marker_r);
+        for &(px, py) in &pts {
+            draw_marker(content, sym, px, py, marker_r);
         }
     }
 

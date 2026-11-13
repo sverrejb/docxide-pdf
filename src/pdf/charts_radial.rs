@@ -12,17 +12,17 @@ use super::charts::{
 };
 use super::color::fill_rgb;
 
-struct RadialLayout {
+struct RadialLayout<'a> {
     cx: f32,
     cy: f32,
     radius: f32,
-    title_band: f32,
-    bottom_legend: LegendPlacement,
     legend_x: f32,
-    colors: Vec<[u8; 3]>,
+    colors: &'a [[u8; 3]],
     has_legend: bool,
     legend_on_right: bool,
-    labels: Vec<String>,
+    labels: &'a [String],
+    /// The series sum each slice's sweep is a share of.
+    total: f32,
 }
 
 const ARC_SEGMENTS: usize = 64;
@@ -48,12 +48,12 @@ pub(super) fn emit_arc(
     }
 }
 
-fn setup_radial_chart(
-    chart: &InlineChart,
+fn setup_radial_chart<'a>(
+    chart: &'a InlineChart,
     x: f32,
     y: f32,
     label_font: Option<&FontEntry>,
-) -> Option<RadialLayout> {
+) -> Option<RadialLayout<'a>> {
     let c = &chart.chart;
     let w = chart.display_width;
     let h = chart.display_height;
@@ -70,13 +70,13 @@ fn setup_radial_chart(
         .as_ref()
         .is_some_and(|l| l.position == LegendPosition::Right);
 
-    let labels: Vec<String> = c
+    let labels: &[String] = c
         .cat_axis
         .as_ref()
-        .map(|ax| ax.labels.clone())
+        .map(|ax| ax.labels.as_slice())
         .unwrap_or_default();
 
-    let colors = resolve_accent_colors(&c.accent_colors).to_vec();
+    let colors = resolve_accent_colors(&c.accent_colors);
 
     // Word's pie keeps 11pt from the chart's edges (a 30pt title band on
     // top) and centres in what the legend leaves: a right legend ends 9.9pt
@@ -88,7 +88,7 @@ fn setup_radial_chart(
         .fold(0.0f32, f32::max);
     let legend_x = x + w - 9.9 - max_label_w - 8.0;
     let left = x + 11.0;
-    let right = if has_legend && legend_on_right {
+    let right = if legend_on_right {
         legend_x - 15.6
     } else {
         x + w - 11.0
@@ -108,27 +108,27 @@ fn setup_radial_chart(
         cx,
         cy,
         radius,
-        title_band: title_band(c),
-        bottom_legend: LegendPlacement::bottom(x, y, w, h),
         legend_x,
         colors,
         has_legend,
         legend_on_right,
         labels,
+        total,
     })
 }
 
 fn render_radial_legend(
     content: &mut Content,
+    chart: &InlineChart,
     layout: &RadialLayout,
+    (x, y): (f32, f32),
     label_font_key: &str,
-    y: f32,
-    h: f32,
     label_font: Option<&FontEntry>,
 ) {
     if !layout.has_legend || layout.labels.is_empty() {
         return;
     }
+    let (w, h) = (chart.display_width, chart.display_height);
     let items: Vec<LegendItem> = layout
         .labels
         .iter()
@@ -144,10 +144,10 @@ fn render_radial_legend(
         // 11.9pt above the bottom when the legend runs along it.
         LegendPlacement::Right {
             x: layout.legend_x,
-            center_y: y - (h + layout.title_band) / 2.0 - 4.67,
+            center_y: y - (h + title_band(&chart.chart)) / 2.0 - 4.67,
         }
     } else {
-        layout.bottom_legend
+        LegendPlacement::bottom(x, y, w, h)
     };
     render_chart_legend(
         content,
@@ -175,7 +175,6 @@ pub(super) fn render_radial(
         return;
     };
     let c = &chart.chart;
-    let h = chart.display_height;
 
     content.save_state();
     if let Some(view) = c.view_3d.filter(|_| hole_pct.is_none()) {
@@ -193,7 +192,7 @@ pub(super) fn render_radial(
         draw_pie_2d(content, chart, &layout, hole_pct);
     }
     if label_font.is_some() {
-        render_radial_legend(content, &layout, label_font_key, y, h, label_font);
+        render_radial_legend(content, chart, &layout, (x, y), label_font_key, label_font);
     }
     content.set_fill_gray(0.0);
     content.restore_state();
@@ -211,7 +210,7 @@ fn draw_pie_2d(
 
     let mut angle = FRAC_PI_2;
     let values = &c.series[0].values;
-    let total: f32 = values.iter().sum();
+    let total = layout.total;
 
     for (i, &val) in values.iter().enumerate() {
         let sweep = (val / total) * TAU;
@@ -269,7 +268,7 @@ fn draw_pie_3d(
     let c = &chart.chart;
     let (w, h) = (chart.display_width, chart.display_height);
     let values = &c.series[0].values;
-    let total: f32 = values.iter().sum();
+    let total = layout.total;
     let (sin_x, cos_x) = (view.rot_x.to_radians().sin(), view.rot_x.to_radians().cos());
     let rim_k = 0.261 * view.height * cos_x;
     let top = y - 24.05 - title_band(c);

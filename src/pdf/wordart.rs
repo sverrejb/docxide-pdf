@@ -9,13 +9,13 @@ use crate::model::{TextFill, TextGlow, TextOutline, TextShadow, Textbox};
 
 use super::color::{fill_color_or_black, stroke_rgb};
 
-/// Apply text outline rendering state to the PDF content stream.
-/// Returns `true` if an outline mode was set (caller must call `reset_text_outline` afterward).
+/// Apply text outline rendering state to the PDF content stream; the caller
+/// calls `reset_text_outline` afterward.
 pub(super) fn apply_text_outline(
     content: &mut Content,
     outline: &TextOutline,
     text_fill: Option<&TextFill>,
-) -> bool {
+) {
     content.set_line_width(outline.width_pt);
     stroke_rgb(content, outline.color);
 
@@ -24,7 +24,6 @@ pub(super) fn apply_text_outline(
         _ => TextRenderingMode::FillStroke,
     };
     content.set_text_rendering_mode(mode);
-    true
 }
 
 pub(super) fn reset_text_outline(content: &mut Content) {
@@ -49,35 +48,50 @@ pub(super) fn find_text_glow(tb: &Textbox) -> Option<&TextGlow> {
 // Glyph outline extraction
 // ---------------------------------------------------------------------------
 
+/// A glyph outline in font units. PDF has no quadratic operator, so quadratic
+/// segments are raised to cubics as they arrive.
+#[derive(Default)]
 pub(super) struct GlyphPath {
     pub commands: Vec<GlyphCommand>,
+    /// The current point, which raising a quadratic needs.
+    prev: (f64, f64),
 }
 
 pub(super) enum GlyphCommand {
-    MoveTo(f32, f32),
-    LineTo(f32, f32),
-    QuadTo(f32, f32, f32, f32),
-    CubicTo(f32, f32, f32, f32, f32, f32),
+    MoveTo(f64, f64),
+    LineTo(f64, f64),
+    CubicTo(f64, f64, f64, f64, f64, f64),
     Close,
 }
 
-struct GlyphOutlineCollector {
-    commands: Vec<GlyphCommand>,
-}
-
-impl ttf_parser::OutlineBuilder for GlyphOutlineCollector {
+impl ttf_parser::OutlineBuilder for GlyphPath {
     fn move_to(&mut self, x: f32, y: f32) {
-        self.commands.push(GlyphCommand::MoveTo(x, y));
+        self.prev = (x as f64, y as f64);
+        self.commands.push(GlyphCommand::MoveTo(x as f64, y as f64));
     }
     fn line_to(&mut self, x: f32, y: f32) {
-        self.commands.push(GlyphCommand::LineTo(x, y));
+        self.prev = (x as f64, y as f64);
+        self.commands.push(GlyphCommand::LineTo(x as f64, y as f64));
     }
     fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
-        self.commands.push(GlyphCommand::QuadTo(x1, y1, x, y));
+        let (prev_x, prev_y) = self.prev;
+        let (qcx, qcy) = (x1 as f64, y1 as f64);
+        let (p1x, p1y) = (x as f64, y as f64);
+
+        let cp1x = prev_x + (2.0 / 3.0) * (qcx - prev_x);
+        let cp1y = prev_y + (2.0 / 3.0) * (qcy - prev_y);
+        let cp2x = p1x + (2.0 / 3.0) * (qcx - p1x);
+        let cp2y = p1y + (2.0 / 3.0) * (qcy - p1y);
+
+        self.prev = (p1x, p1y);
+        self.commands
+            .push(GlyphCommand::CubicTo(cp1x, cp1y, cp2x, cp2y, p1x, p1y));
     }
     fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
-        self.commands
-            .push(GlyphCommand::CubicTo(x1, y1, x2, y2, x, y));
+        self.prev = (x as f64, y as f64);
+        self.commands.push(GlyphCommand::CubicTo(
+            x1 as f64, y1 as f64, x2 as f64, y2 as f64, x as f64, y as f64,
+        ));
     }
     fn close(&mut self) {
         self.commands.push(GlyphCommand::Close);
@@ -89,31 +103,20 @@ pub(super) fn extract_glyph_path(face: &ttf_parser::Face, ch: char) -> Option<Gl
     // A glyph without an hmtx entry is not drawn (advances come from
     // `compute_char_advances`).
     face.glyph_hor_advance(gid)?;
-    let mut collector = GlyphOutlineCollector {
-        commands: Vec::new(),
-    };
-    face.outline_glyph(gid, &mut collector)?;
-    Some(GlyphPath {
-        commands: collector.commands,
-    })
+    let mut path = GlyphPath::default();
+    face.outline_glyph(gid, &mut path)?;
+    Some(path)
 }
 
-/// Search seen_fonts for a matching entry with the right bold/italic variant.
+/// Read the font file behind `font_key` (the face with its bold/italic
+/// suffix), else the family's first entry that has one.
 pub(super) fn load_font_data(
+    font_key: &str,
     font_name: &str,
-    bold: bool,
-    italic: bool,
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> Option<(Vec<u8>, u32)> {
-    let suffix = match (bold, italic) {
-        (true, true) => "/BI",
-        (true, false) => "/B",
-        (false, true) => "/I",
-        (false, false) => "",
-    };
-    let preferred_key = format!("{}{}", font_name, suffix);
     let entry = seen_fonts
-        .get(&preferred_key)
+        .get(font_key)
         .filter(|e| e.font_path.is_some())
         .or_else(|| {
             seen_fonts
@@ -139,9 +142,7 @@ struct WordArtTextInfo {
     text_color: Option<[u8; 3]>,
     outline: Option<TextOutline>,
     fill: Option<TextFill>,
-    bold: bool,
-    italic: bool,
-    /// The first run's key in the document's fonts, for `invisible_text`.
+    /// The first run's key in the document's fonts.
     font_key: String,
 }
 
@@ -154,8 +155,6 @@ fn collect_text_info(tb: &Textbox) -> Option<WordArtTextInfo> {
         text_color: None,
         outline: None,
         fill: None,
-        bold: false,
-        italic: false,
         font_key: String::new(),
     };
 
@@ -169,8 +168,6 @@ fn collect_text_info(tb: &Textbox) -> Option<WordArtTextInfo> {
                     info.text_color = run.color;
                     info.outline = run.text_outline.clone();
                     info.fill = run.text_fill.clone();
-                    info.bold = run.bold;
-                    info.italic = run.italic;
                     info.font_key = crate::fonts::font_key(run);
                 }
             }
@@ -223,55 +220,27 @@ fn resolve_fill_color(
 }
 
 /// Emit glyph path commands into a PDF content stream, applying a coordinate
-/// transform to each point. Handles quad-to-cubic conversion and endpoint tracking.
+/// transform to each point.
 fn emit_glyph_commands(
     glyph: &GlyphPath,
     content: &mut Content,
     transform: impl Fn(f64, f64) -> (f32, f32),
 ) {
-    let mut prev_x = 0.0_f64;
-    let mut prev_y = 0.0_f64;
-
     for cmd in &glyph.commands {
-        match cmd {
+        match *cmd {
             GlyphCommand::MoveTo(gx, gy) => {
-                let (px, py) = transform(*gx as f64, *gy as f64);
+                let (px, py) = transform(gx, gy);
                 content.move_to(px, py);
-                prev_x = *gx as f64;
-                prev_y = *gy as f64;
             }
             GlyphCommand::LineTo(gx, gy) => {
-                let (px, py) = transform(*gx as f64, *gy as f64);
+                let (px, py) = transform(gx, gy);
                 content.line_to(px, py);
-                prev_x = *gx as f64;
-                prev_y = *gy as f64;
-            }
-            GlyphCommand::QuadTo(qcx, qcy, qx, qy) => {
-                let qcx = *qcx as f64;
-                let qcy = *qcy as f64;
-                let p1x = *qx as f64;
-                let p1y = *qy as f64;
-
-                let cp1x = prev_x + (2.0 / 3.0) * (qcx - prev_x);
-                let cp1y = prev_y + (2.0 / 3.0) * (qcy - prev_y);
-                let cp2x = p1x + (2.0 / 3.0) * (qcx - p1x);
-                let cp2y = p1y + (2.0 / 3.0) * (qcy - p1y);
-
-                let (wx1, wy1) = transform(cp1x, cp1y);
-                let (wx2, wy2) = transform(cp2x, cp2y);
-                let (wx3, wy3) = transform(p1x, p1y);
-                content.cubic_to(wx1, wy1, wx2, wy2, wx3, wy3);
-
-                prev_x = p1x;
-                prev_y = p1y;
             }
             GlyphCommand::CubicTo(x1, y1, x2, y2, x3, y3) => {
-                let (wx1, wy1) = transform(*x1 as f64, *y1 as f64);
-                let (wx2, wy2) = transform(*x2 as f64, *y2 as f64);
-                let (wx3, wy3) = transform(*x3 as f64, *y3 as f64);
+                let (wx1, wy1) = transform(x1, y1);
+                let (wx2, wy2) = transform(x2, y2);
+                let (wx3, wy3) = transform(x3, y3);
                 content.cubic_to(wx1, wy1, wx2, wy2, wx3, wy3);
-                prev_x = *x3 as f64;
-                prev_y = *y3 as f64;
             }
             GlyphCommand::Close => {
                 content.close_path();
@@ -461,6 +430,38 @@ fn warp_point(
     (boundary_x, warped_y)
 }
 
+/// The text, its formatting and the font file both WordArt renderers start
+/// from; None when the box has no text or its font is not on disk.
+fn prepare(
+    tb: &Textbox,
+    seen_fonts: &HashMap<String, FontEntry>,
+) -> Option<(WordArtTextInfo, Vec<u8>, u32)> {
+    let info = collect_text_info(tb)?;
+    let (font_data, face_index) = load_font_data(&info.font_key, &info.font_name, seen_fonts)?;
+    Some((info, font_data, face_index))
+}
+
+/// Draw a text-warp preset's text as glyph outlines: through the envelope for
+/// two-boundary presets, along the path for arch and circle presets. Returns
+/// false (having drawn nothing) when the text is to be laid out flat instead.
+pub(super) fn render_wordart(
+    tb: &Textbox,
+    content: &mut Content,
+    seen_fonts: &HashMap<String, FontEntry>,
+    tb_x: f32,
+    tb_y_top: f32,
+    content_w: f32,
+) -> bool {
+    let Some((info, font_data, face_index)) = prepare(tb, seen_fonts) else {
+        return false;
+    };
+    let Some(face) = ttf_parser::Face::parse(&font_data, face_index).ok() else {
+        return false;
+    };
+    render_warped(tb, &info, &face, content, tb_x, tb_y_top, content_w)
+        || render_on_path(tb, &info, &face, content, tb_x, tb_y_top, content_w)
+}
+
 /// Render a warped textbox: extract glyph outlines, warp them through the envelope,
 /// and emit as filled PDF paths. Returns true if rendering succeeded, false to fall back to flat.
 pub(super) fn render_warped_textbox(
@@ -471,20 +472,25 @@ pub(super) fn render_warped_textbox(
     tb_y_top: f32,
     content_w: f32,
 ) -> bool {
-    let Some(warp) = &tb.text_warp else {
-        return false;
-    };
-
-    let Some(info) = collect_text_info(tb) else {
-        return false;
-    };
-
-    let Some((font_data, face_index)) =
-        load_font_data(&info.font_name, info.bold, info.italic, seen_fonts)
-    else {
+    let Some((info, font_data, face_index)) = prepare(tb, seen_fonts) else {
         return false;
     };
     let Some(face) = ttf_parser::Face::parse(&font_data, face_index).ok() else {
+        return false;
+    };
+    render_warped(tb, &info, &face, content, tb_x, tb_y_top, content_w)
+}
+
+fn render_warped(
+    tb: &Textbox,
+    info: &WordArtTextInfo,
+    face: &ttf_parser::Face,
+    content: &mut Content,
+    tb_x: f32,
+    tb_y_top: f32,
+    content_w: f32,
+) -> bool {
+    let Some(warp) = &tb.text_warp else {
         return false;
     };
 
@@ -495,7 +501,7 @@ pub(super) fn render_warped_textbox(
     let ascender = face.ascender() as f64 / units_per_em * info.font_size as f64;
     let glyph_extent = ascender - descender;
 
-    let char_advances = compute_char_advances(&face, &info.total_text, scale);
+    let char_advances = compute_char_advances(face, &info.total_text, scale);
     let total_advance: f64 = char_advances.iter().map(|(_, a)| a).sum();
 
     let text_w = total_advance.max(1.0);
@@ -546,7 +552,7 @@ pub(super) fn render_warped_textbox(
     };
 
     let emit = |content: &mut Content| {
-        emit_all_glyphs(&face, &char_advances, content, transform);
+        emit_all_glyphs(face, &char_advances, content, transform);
     };
 
     emit(content);
@@ -625,13 +631,11 @@ impl ArcLengthPath {
         self.samples.last().map(|s| s.2).unwrap_or(0.0)
     }
 
-    fn position_at(&self, s: f64) -> (f64, f64) {
+    /// The index of the sample at or past arc length `s` (clamped to the
+    /// path), with that clamped `s`; None when the path has no segment.
+    fn segment(&self, s: f64) -> Option<(usize, f64)> {
         if self.samples.len() < 2 {
-            return self
-                .samples
-                .first()
-                .map(|p| (p.0, p.1))
-                .unwrap_or((0.0, 0.0));
+            return None;
         }
         let s = s.clamp(0.0, self.total_length());
         let idx = self
@@ -639,6 +643,17 @@ impl ArcLengthPath {
             .partition_point(|p| p.2 < s)
             .min(self.samples.len() - 1)
             .max(1);
+        Some((idx, s))
+    }
+
+    fn position_at(&self, s: f64) -> (f64, f64) {
+        let Some((idx, s)) = self.segment(s) else {
+            return self
+                .samples
+                .first()
+                .map(|p| (p.0, p.1))
+                .unwrap_or((0.0, 0.0));
+        };
         let (x0, y0, s0) = self.samples[idx - 1];
         let (x1, y1, s1) = self.samples[idx];
         let ds = s1 - s0;
@@ -650,15 +665,9 @@ impl ArcLengthPath {
     }
 
     fn tangent_at(&self, s: f64) -> f64 {
-        if self.samples.len() < 2 {
+        let Some((idx, _)) = self.segment(s) else {
             return 0.0;
-        }
-        let s = s.clamp(0.0, self.total_length());
-        let idx = self
-            .samples
-            .partition_point(|p| p.2 < s)
-            .min(self.samples.len() - 1)
-            .max(1);
+        };
         let (x0, y0, _) = self.samples[idx - 1];
         let (x1, y1, _) = self.samples[idx];
         (y1 - y0).atan2(x1 - x0)
@@ -667,10 +676,11 @@ impl ArcLengthPath {
 
 /// Render text along a single path (for arch/circle presets).
 /// Returns true if rendering succeeded.
-pub(super) fn render_text_on_path(
+fn render_on_path(
     tb: &Textbox,
+    info: &WordArtTextInfo,
+    face: &ttf_parser::Face,
     content: &mut Content,
-    seen_fonts: &HashMap<String, FontEntry>,
     tb_x: f32,
     tb_y_top: f32,
     content_w: f32,
@@ -679,29 +689,10 @@ pub(super) fn render_text_on_path(
         return false;
     };
 
-    let Some(info) = collect_text_info(tb) else {
-        log::debug!("WARP: no text info");
-        return false;
-    };
-
-    let Some((font_data, face_index)) =
-        load_font_data(&info.font_name, info.bold, info.italic, seen_fonts)
-    else {
-        log::debug!(
-            "WARP: no font data for {} bold={}",
-            info.font_name,
-            info.bold
-        );
-        return false;
-    };
-    let Some(face) = ttf_parser::Face::parse(&font_data, face_index).ok() else {
-        return false;
-    };
-
     let units_per_em = face.units_per_em() as f64;
     let scale = info.font_size as f64 / units_per_em;
 
-    let char_advances = compute_char_advances(&face, &info.total_text, scale);
+    let char_advances = compute_char_advances(face, &info.total_text, scale);
     let total_advance: f64 = char_advances.iter().map(|(_, a)| a).sum();
 
     let Some(def) = geometry::text_warp_definitions::lookup_text_warp(&warp.preset) else {
@@ -731,7 +722,7 @@ pub(super) fn render_text_on_path(
     let emit_on_path = |content: &mut Content| {
         let mut cursor_s = start_s;
         for &(ch, advance) in &char_advances {
-            let Some(glyph) = extract_glyph_path(&face, ch) else {
+            let Some(glyph) = extract_glyph_path(face, ch) else {
                 cursor_s += advance;
                 continue;
             };

@@ -288,15 +288,8 @@ impl Translator<'_> {
             }
             FillPath => {
                 state.in_path = false;
-                match state.selected_brush {
-                    Some(c) => {
-                        fill_rgb(&mut self.content, c);
-                        self.fill();
-                    }
-                    None => {
-                        self.content.end_path();
-                    }
-                }
+                let rule = state.fill_rule;
+                self.fill(rule);
             }
             StrokePath => {
                 state.in_path = false;
@@ -319,38 +312,13 @@ impl Translator<'_> {
             }
             StrokeAndFillPath => {
                 state.in_path = false;
-                match (state.selected_brush, state.selected_pen) {
-                    (Some(c), Some((pc, w))) => {
-                        fill_rgb(&mut self.content, c);
-                        let rule = state.fill_rule;
-                        self.set_pen(pc, w);
-                        match rule {
-                            FillRule::Alternate => self.content.fill_even_odd_and_stroke(),
-                            FillRule::Winding => self.content.fill_nonzero_and_stroke(),
-                        };
-                    }
-                    (Some(c), None) => {
-                        fill_rgb(&mut self.content, c);
-                        self.fill();
-                    }
-                    (None, _) => self.stroke(),
-                }
+                let rule = state.fill_rule;
+                self.paint(rule);
             }
+            // GDI fills a RECTANGLE nonzero whatever the polygon fill mode says.
             Rectangle(l, t, r, b) => {
-                let paint = (state.selected_brush, state.selected_pen);
                 self.rect(*l, *t, *r - *l, *b - *t);
-                match paint {
-                    (Some(c), Some((pc, w))) => {
-                        fill_rgb(&mut self.content, c);
-                        self.set_pen(pc, w);
-                        self.content.fill_nonzero_and_stroke();
-                    }
-                    (Some(c), None) => {
-                        fill_rgb(&mut self.content, c);
-                        self.content.fill_nonzero();
-                    }
-                    (None, _) => self.stroke(),
-                }
+                self.paint(FillRule::Winding);
             }
             PatBlt { x, y, w, h, rop } => {
                 let color = match rop {
@@ -399,11 +367,37 @@ impl Translator<'_> {
             .rect(u0.min(u1), v0.min(v1), (u1 - u0).abs(), (v1 - v0).abs());
     }
 
-    fn fill(&mut self) {
-        match self.state.fill_rule {
-            FillRule::Alternate => self.content.fill_even_odd(),
-            FillRule::Winding => self.content.fill_nonzero(),
-        };
+    /// Fill the current path with the selected brush; the null brush only ends it.
+    fn fill(&mut self, rule: FillRule) {
+        match self.state.selected_brush {
+            Some(c) => {
+                fill_rgb(&mut self.content, c);
+                match rule {
+                    FillRule::Alternate => self.content.fill_even_odd(),
+                    FillRule::Winding => self.content.fill_nonzero(),
+                };
+            }
+            None => {
+                self.content.end_path();
+            }
+        }
+    }
+
+    /// Paint the current path with the selected brush and pen; with a null
+    /// brush only the pen draws.
+    fn paint(&mut self, rule: FillRule) {
+        match (self.state.selected_brush, self.state.selected_pen) {
+            (Some(c), Some((pc, w))) => {
+                fill_rgb(&mut self.content, c);
+                self.set_pen(pc, w);
+                match rule {
+                    FillRule::Alternate => self.content.fill_even_odd_and_stroke(),
+                    FillRule::Winding => self.content.fill_nonzero_and_stroke(),
+                };
+            }
+            (Some(_), None) => self.fill(rule),
+            (None, _) => self.stroke(),
+        }
     }
 
     fn set_pen(&mut self, color: [u8; 3], width: i32) {

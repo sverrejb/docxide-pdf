@@ -597,9 +597,7 @@ pub(super) fn render_single_textbox(
         .as_ref()
         .is_some_and(|w| w.preset != "textNoShape")
     {
-        if wordart::render_warped_textbox(tb, content, ctx.fonts, tb_x, tb_y_top, align_w)
-            || wordart::render_text_on_path(tb, content, ctx.fonts, tb_x, tb_y_top, align_w)
-        {
+        if wordart::render_wordart(tb, content, ctx.fonts, tb_x, tb_y_top, align_w) {
             // The outlines stay artifacts; the text reads as one P (Word:
             // Sect > P with the text).
             let p = tags.add(sect, "P");
@@ -634,11 +632,37 @@ pub(super) fn render_single_textbox(
     let anchor_offset = anchor_offset(tb, &story, content_w, natural_w, available, ctx);
 
     // For fixed-size textboxes, stop rendering content below the textbox bounds
-    let clip_bottom = if needs_clip {
-        Some(tb_y_top - tb_height)
-    } else {
-        None
+    let clip_bottom = needs_clip.then_some(tb_y_top - tb_height);
+
+    // The glow, shadow and text passes walk the same paragraphs; a pass differs
+    // only in its offset, colour override, labels, link sink and tags.
+    let mut pass = |content: &mut Content,
+                    (dx, dy): (f32, f32),
+                    color: Option<[u8; 3]>,
+                    labels: bool,
+                    links: &mut Vec<LinkAnnotation>,
+                    tag: Option<StoryTag>| {
+        render_textbox_paragraphs(
+            &story,
+            content,
+            content_x,
+            content_w,
+            align_w,
+            text_top - tb.margin_top - anchor_offset,
+            dx,
+            dy,
+            color,
+            labels,
+            links,
+            ctx,
+            clip_bottom,
+            gradient_specs,
+            tag,
+            None,
+            picture_clip,
+        );
     };
+    let mut discard_links: Vec<LinkAnnotation> = Vec::new();
 
     // Glow pass: render text as thick stroke in glow color behind everything
     if let Some(glow) = wordart::find_text_glow(tb) {
@@ -647,26 +671,7 @@ pub(super) fn render_single_textbox(
         content.set_line_width(glow.radius_pt * 2.0);
         content.set_line_join(pdf_writer::types::LineJoinStyle::RoundJoin);
         content.set_text_rendering_mode(pdf_writer::types::TextRenderingMode::Stroke);
-        let mut discard_links: Vec<LinkAnnotation> = Vec::new();
-        render_textbox_paragraphs(
-            &story,
-            content,
-            content_x,
-            content_w,
-            align_w,
-            text_top - tb.margin_top - anchor_offset,
-            0.0,
-            0.0,
-            None,
-            false,
-            &mut discard_links,
-            ctx,
-            clip_bottom,
-            gradient_specs,
-            None,
-            None,
-            picture_clip,
-        );
+        pass(content, (0.0, 0.0), None, false, &mut discard_links, None);
         content.restore_state();
     }
 
@@ -679,47 +684,25 @@ pub(super) fn render_single_textbox(
             (sg as f32 * shadow.alpha) as u8,
             (sb as f32 * shadow.alpha) as u8,
         ];
-        let mut discard_links: Vec<LinkAnnotation> = Vec::new();
-        render_textbox_paragraphs(
-            &story,
+        let offset = (shadow.offset_x, shadow.offset_y);
+        pass(
             content,
-            content_x,
-            content_w,
-            align_w,
-            text_top - tb.margin_top - anchor_offset,
-            shadow.offset_x,
-            shadow.offset_y,
+            offset,
             Some(shadow_color),
             false,
             &mut discard_links,
-            ctx,
-            clip_bottom,
-            gradient_specs,
             None,
-            None,
-            picture_clip,
         );
         content.restore_state();
     }
 
-    render_textbox_paragraphs(
-        &story,
+    pass(
         content,
-        content_x,
-        content_w,
-        align_w,
-        text_top - tb.margin_top - anchor_offset,
-        0.0,
-        0.0,
+        (0.0, 0.0),
         None,
         true,
         page_links,
-        ctx,
-        clip_bottom,
-        gradient_specs,
         Some(StoryTag { tags, page, sect }),
-        None,
-        picture_clip,
     );
 
     if needs_clip {
@@ -754,6 +737,16 @@ pub(super) struct StoryTag<'a> {
     pub(super) tags: &'a mut Tags,
     pub(super) page: usize,
     pub(super) sect: usize,
+}
+
+impl StoryTag<'_> {
+    fn reborrow(&mut self) -> StoryTag<'_> {
+        StoryTag {
+            tags: &mut *self.tags,
+            page: self.page,
+            sect: self.sect,
+        }
+    }
 }
 
 /// Shared paragraph iteration loop used by the glow, shadow, and normal text passes
@@ -794,11 +787,7 @@ pub(super) fn render_textbox_paragraphs(
             let layout = TextboxTable::layout(table, align_w, ctx, hf_sub);
             if render_labels {
                 let mut y = cursor_y - y_offset;
-                let tag = tag.as_mut().map(|t| StoryTag {
-                    tags: &mut *t.tags,
-                    page: t.page,
-                    sect: t.sect,
-                });
+                let tag = tag.as_mut().map(|t| t.reborrow());
                 layout.render(
                     (content_x + x_offset, align_w),
                     &mut y,
