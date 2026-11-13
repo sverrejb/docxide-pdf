@@ -11,8 +11,11 @@ use crate::model::{Alignment, FormCheckbox, ParagraphBorder, TextFill};
 
 use super::color::{fill_color_or_black, stroke_color_or_black};
 use super::layout::{
-    LineGrid, LinkAnnotation, LinkTagger, MixedJustify, TextLine, WordChunk, baseline_drop,
-    char_justify_gaps, glyph_fallbacks, inline_line_advance, run_line_metrics, spaces_before_each,
+    LinkAnnotation, LinkTagger, MixedJustify, TextLine, WordChunk, char_justify_gaps,
+    spaces_before_each,
+};
+use super::line_sizing::{
+    LineGrid, baseline_drop, glyph_fallbacks, inline_line_advance, run_line_metrics,
 };
 
 /// A decoration rectangle (underline, strikethrough, shading): x, y, width, height, colour.
