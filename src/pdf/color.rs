@@ -234,6 +234,14 @@ fn box_blur_3pass(buf: &mut [u8], px_w: u32, px_h: u32, box_r: usize) {
     }
 }
 
+/// Paint the XObject `name` through the matrix `m` in its own graphics state.
+fn draw_xobject(content: &mut Content, name: &str, m: [f32; 6]) {
+    content.save_state();
+    content.transform(m);
+    content.x_object(pdf_writer::Name(name.as_bytes()));
+    content.restore_state();
+}
+
 /// Draw an image drop shadow by referencing a pre-embedded shadow XObject.
 ///
 /// When `shadow_xobj_name` is provided, draws the rasterized blur-mask shadow
@@ -248,8 +256,6 @@ pub(super) fn draw_image_shadow(
     height: f32,
     shadow_xobj_name: Option<&str>,
 ) {
-    use pdf_writer::Name;
-
     if let Some(name) = shadow_xobj_name {
         let blur = shadow.blur_radius;
         // Shadow image covers (width + 2*blur) x (height + 2*blur), centered
@@ -260,10 +266,7 @@ pub(super) fn draw_image_shadow(
         let sw = width + 2.0 * blur;
         let sh = height + 2.0 * blur;
 
-        content.save_state();
-        content.transform([sw, 0.0, 0.0, sh, sx, sy]);
-        content.x_object(Name(name.as_bytes()));
-        content.restore_state();
+        draw_xobject(content, name, [sw, 0.0, 0.0, sh, sx, sy]);
         return;
     }
 
@@ -277,7 +280,7 @@ pub(super) fn draw_image_shadow(
         (a * shadow.color[2] as f32 + (1.0 - a) * 255.0) as u8,
     ];
     content.save_state();
-    fill_color_or_black(content, Some(blended));
+    fill_rgb(content, blended);
     content.rect(sx, sy, width, height);
     content.fill_nonzero();
     content.restore_state();
@@ -375,15 +378,10 @@ pub(super) fn draw_reflection(
     height: f32,
     reflection_xobj_name: Option<&str>,
 ) {
-    use pdf_writer::Name;
-
     if let Some(name) = reflection_xobj_name {
-        content.save_state();
         let refl_y = y_bottom - reflection.distance;
         // Render full flipped image — the SMask gradient handles the fade-out
-        content.transform([width, 0.0, 0.0, -height, x, refl_y]);
-        content.x_object(Name(name.as_bytes()));
-        content.restore_state();
+        draw_xobject(content, name, [width, 0.0, 0.0, -height, x, refl_y]);
     }
 }
 
@@ -398,8 +396,6 @@ pub(super) fn draw_image_glow(
     height: f32,
     glow_xobj_name: Option<&str>,
 ) {
-    use pdf_writer::Name;
-
     if let Some(name) = glow_xobj_name {
         let r = glow.radius;
         let gx = x - r;
@@ -407,9 +403,6 @@ pub(super) fn draw_image_glow(
         let gw = width + 2.0 * r;
         let gh = height + 2.0 * r;
 
-        content.save_state();
-        content.transform([gw, 0.0, 0.0, gh, gx, gy]);
-        content.x_object(Name(name.as_bytes()));
-        content.restore_state();
+        draw_xobject(content, name, [gw, 0.0, 0.0, gh, gx, gy]);
     }
 }
