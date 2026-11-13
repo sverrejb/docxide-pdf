@@ -6,6 +6,7 @@ mod color;
 mod comments;
 mod doc_fields;
 mod embedded_fonts;
+mod field_code;
 pub(crate) mod emf;
 mod group;
 mod headers_footers;
