@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::io::{Read, Seek};
 
 use super::styles::ThemeFonts;
@@ -10,12 +9,18 @@ use crate::model::{
 };
 
 use super::charts::parse_chart_from_zip;
+pub(super) use super::media::MediaParts;
+use super::media::{find_blip, find_blip_embeds, read_image_from_zip, tile_picture};
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
 use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
+use super::vml_object::compute_object_height;
+pub(super) use super::vml_object::{
+    is_vml_picture, parse_object_floating_image, parse_object_inline_image,
+};
 use super::{
-    CHART_NS, DML_NS, PIC_NS, ParseContext, REL_NS, VML_NS, W10_NS, WML_NS, WPD_NS, WPS_NS,
-    angle_attr, dml, emu_attr, emu_attr_opt, emu_to_pts, f32_attr, frac_attr, parse_hex_color,
-    parse_on_off, parse_pt, part_path, read_zip_bytes, twips_attr, twips_to_pts, wml, wpd,
+    CHART_NS, DML_NS, PIC_NS, ParseContext, REL_NS, WML_NS, WPD_NS, WPS_NS, angle_attr, dml,
+    emu_attr, emu_attr_opt, emu_to_pts, f32_attr, frac_attr, parse_hex_color, parse_on_off,
+    twips_to_pts, wml, wpd,
 };
 
 fn parse_emu_text(text: &str) -> f32 {
@@ -32,7 +37,7 @@ fn wpd_child_text<'a>(parent: Option<roxmltree::Node<'a, 'a>>, name: &str) -> Op
 /// effectExtent top+bottom and top. distT/distB only space a floating
 /// picture's wrap: Word lays an inline one out without them (a 9pt-dist
 /// banner sits 150.25pt down in Word's export, 9pt higher than with them).
-fn inline_extra_height(container: roxmltree::Node) -> (f32, f32) {
+pub(super) fn inline_extra_height(container: roxmltree::Node) -> (f32, f32) {
     let ee = wpd(container, "effectExtent");
     let ee_t = ee.map(|n| emu_attr(n, "t")).unwrap_or(0.0);
     let ee_b = ee.map(|n| emu_attr(n, "b")).unwrap_or(0.0);
@@ -113,15 +118,6 @@ pub(super) fn anchor_z_order(anchor: roxmltree::Node) -> (bool, u32) {
     )
 }
 
-/// GIF and TIFF pictures are re-encoded as PNG for the PDF writer.
-fn gif_or_tiff_to_png(data: &[u8]) -> Option<Vec<u8>> {
-    let fmt = match image::guess_format(data).ok()? {
-        f @ (image::ImageFormat::Gif | image::ImageFormat::Tiff) => f,
-        _ => return None,
-    };
-    encode_png(image::load_from_memory_with_format(data, fmt).ok()?)
-}
-
 /// An inline `wps` shape filled with a picture and holding no text: a picture
 /// in the line like any other, keeping its place after the pictures before
 /// it, with the shape's own properties. An `a:tile` fill is drawn into one
@@ -161,111 +157,6 @@ pub(super) fn shape_picture_fill<R: Read + Seek>(
     }
     apply_blip_props(&mut img, fill);
     Some(img)
-}
-
-/// `a:tile`: the picture repeated at `sx`/`sy` of its size (96 dpi) from the
-/// frame's top-left corner, offset by `tx`/`ty`, as a PNG of the frame. None
-/// (the picture stretched instead) past 4096 pixels a side.
-/// ponytail: `flip` and `algn` other than the top-left are ignored; Word
-/// writes a tiling pattern, which would keep the tile's size in the file.
-fn tile_picture(
-    data: &[u8],
-    tile: roxmltree::Node,
-    frame_w: f32,
-    frame_h: f32,
-) -> Option<(Vec<u8>, u32, u32)> {
-    const MAX_SIDE: f32 = 4096.0;
-    let pic = image::load_from_memory(data).ok()?.into_rgba8();
-    // Pixels per point at the tile's size, so each tile keeps its pixels.
-    let px = |axis| 96.0 / 72.0 / frac_attr(tile, axis).unwrap_or(1.0);
-    let (w, h) = (frame_w * px("sx"), frame_h * px("sy"));
-    if !(1.0..=MAX_SIDE).contains(&w) || !(1.0..=MAX_SIDE).contains(&h) {
-        return None;
-    }
-    let offset = |attr, axis, size: u32| {
-        let o = (emu_attr_opt(tile, attr).unwrap_or(0.0) * px(axis)) as i64;
-        o.rem_euclid(size as i64) - size as i64
-    };
-    let mut canvas = image::RgbaImage::new(w.ceil() as u32, h.ceil() as u32);
-    let (tw, th) = (pic.width() as usize, pic.height() as usize);
-    for y in (offset("ty", "sy", pic.height())..canvas.height() as i64).step_by(th) {
-        for x in (offset("tx", "sx", pic.width())..canvas.width() as i64).step_by(tw) {
-            image::imageops::replace(&mut canvas, &pic, x, y);
-        }
-    }
-    let (cw, ch) = canvas.dimensions();
-    Some((encode_png(image::DynamicImage::ImageRgba8(canvas))?, cw, ch))
-}
-
-fn encode_png(img: image::DynamicImage) -> Option<Vec<u8>> {
-    let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .ok()?;
-    Some(png)
-}
-
-pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat, u8)> {
-    if data.len() >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
-        return parse_jpeg_dimensions(data);
-    }
-
-    if data.len() >= 24 && data[0..4] == [0x89, 0x50, 0x4E, 0x47] {
-        let width = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
-        let height = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
-        return Some((width, height, ImageFormat::Png, 3));
-    }
-
-    if data.len() >= 26 && data[0] == b'B' && data[1] == b'M' {
-        let width = u32::from_le_bytes([data[18], data[19], data[20], data[21]]);
-        // A negative height marks a top-down DIB (common in EMF-wrapped bitmaps).
-        let height = i32::from_le_bytes([data[22], data[23], data[24], data[25]]).unsigned_abs();
-        return Some((width, height, ImageFormat::Bmp, 3));
-    }
-
-    if super::emf::is_emf(data) {
-        let (bw, bh) = super::emf::parse_header(data)?.bounds_size();
-        // Pixel dimensions don't strictly apply to vector EMFs — use the
-        // bounds-rect logical size so downstream code that expects them gets
-        // a sensible aspect ratio.
-        let pw = bw.max(1) as u32;
-        let ph = bh.max(1) as u32;
-        return Some((pw, ph, ImageFormat::Emf, 0));
-    }
-
-    if super::svg::looks_like_svg(data) {
-        let drawing = super::svg::parse(data)?;
-        let px = |v: f32| v.round().max(1.0) as u32;
-        return Some((
-            px(drawing.view_box[2]),
-            px(drawing.view_box[3]),
-            ImageFormat::Svg,
-            0,
-        ));
-    }
-
-    None
-}
-
-fn parse_jpeg_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat, u8)> {
-    let mut i = 2;
-    while i + 4 < data.len() {
-        if data[i] != 0xFF {
-            return None;
-        }
-        let marker = data[i + 1];
-        if marker == 0xD9 {
-            break;
-        }
-        let len = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
-        if matches!(marker, 0xC0..=0xC2) && i + 9 < data.len() {
-            let height = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
-            let width = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
-            let components = data[i + 9];
-            return Some((width, height, ImageFormat::Jpeg, components));
-        }
-        i += 2 + len;
-    }
-    None
 }
 
 fn find_pic_sp_pr<'a>(container: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
@@ -398,7 +289,7 @@ fn parse_image_rotation(sp_pr: Option<roxmltree::Node>) -> f32 {
 /// Parse outline stroke from `pic:spPr/a:ln` (or a picture-filled shape's).
 fn parse_pic_outline(sp_pr: Option<roxmltree::Node>, theme: &ThemeFonts) -> (Option<[u8; 3]>, f32) {
     sp_pr
-        .and_then(|s| s.children().find(|c| c.has_tag_name((DML_NS, "ln"))))
+        .and_then(|s| dml(s, "ln"))
         .and_then(|ln| super::color::parse_line_stroke(ln, theme))
         .map_or((None, 0.0), |(color, width)| (Some(color), width))
 }
@@ -530,12 +421,6 @@ fn parse_pic_effects(sp_pr: Option<roxmltree::Node>) -> PicEffects {
     fx
 }
 
-#[derive(Default)]
-pub(super) struct MediaParts {
-    parts: HashMap<String, Option<EmbeddedImage>>,
-    pictures: usize,
-}
-
 /// The first picture a drawing element's blips point to.
 pub(super) fn blip_image<R: Read + Seek>(
     node: roxmltree::Node,
@@ -560,105 +445,6 @@ fn inline_picture<R: Read + Seek>(
     (img.layout_extra_height, img.layout_extra_top) = inline_extra_height(container);
     apply_pic_props(&mut img, container, ctx.theme);
     Some(img)
-}
-
-pub(super) fn read_image_from_zip<R: Read + Seek>(
-    embed_id: &str,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    media: &mut MediaParts,
-    display_w: f32,
-    display_h: f32,
-) -> Option<EmbeddedImage> {
-    let part = media
-        .parts
-        .entry(part_path(rels.get(embed_id)?))
-        .or_insert_with_key(|path| read_media_part(zip, path))
-        .clone()?;
-    media.pictures += 1;
-    Some(EmbeddedImage {
-        id: media.pictures,
-        display_width: display_w,
-        display_height: display_h,
-        ..part
-    })
-}
-
-fn read_media_part<R: Read + Seek>(
-    zip: &mut zip::ZipArchive<R>,
-    path: &str,
-) -> Option<EmbeddedImage> {
-    let mut data = read_zip_bytes(zip, path)?;
-    if super::wmf::is_wmf(&data) {
-        data = match super::wmf::embedded_emf(&data) {
-            Some(emf) => emf,
-            None => super::wmf::wmf_to_raster(&data).or_else(|| super::wmf::wmf_to_emf(&data))?,
-        };
-    }
-    if let Some(bmp) = super::emf::emf_to_raster(&data) {
-        data = bmp;
-    } else if let Some(png) = gif_or_tiff_to_png(&data) {
-        data = png;
-    }
-    let (pw, ph, fmt, components) = image_dimensions(&data)?;
-    Some(EmbeddedImage {
-        id: 0,
-        is_ole_preview: false,
-        alt: None,
-        decorative: false,
-        data: std::sync::Arc::new(data),
-        format: fmt,
-        pixel_width: pw,
-        pixel_height: ph,
-        display_width: 0.0,
-        display_height: 0.0,
-        trimmed_width: 0.0,
-        jpeg_components: components,
-        layout_extra_height: 0.0,
-        layout_extra_top: 0.0,
-        rotation_deg: 0.0,
-        stroke_color: None,
-        stroke_width: 0.0,
-        shadow: None,
-        soft_edge: None,
-        glow: None,
-        inner_shadow: None,
-        reflection: None,
-        clip_geometry: None,
-        src_rect: None,
-        lum: None,
-        recolor: None,
-        alpha: None,
-    })
-}
-
-fn find_blip<'a>(container: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
-    container
-        .descendants()
-        .find(|n| n.has_tag_name((DML_NS, "blip")))
-}
-
-pub(super) fn find_blip_embed<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
-    find_blip(container)?.attribute((REL_NS, "embed"))
-}
-
-const ASVG_NS: &str = "http://schemas.microsoft.com/office/drawing/2016/SVG/main";
-
-/// The picture's image parts, vector first: the `asvg:svgBlip` extension (Office
-/// 2016+), then the `a:blip` raster that doubles as its fallback. Readers try
-/// them in order, so an SVG we cannot draw still leaves the PNG.
-pub(super) fn find_blip_embeds<'a>(
-    container: roxmltree::Node<'a, 'a>,
-) -> impl Iterator<Item = &'a str> {
-    let blip = find_blip(container);
-    let svg = blip
-        .and_then(|b| {
-            b.descendants()
-                .find(|n| n.has_tag_name((ASVG_NS, "svgBlip")))
-        })
-        .and_then(|n| n.attribute((REL_NS, "embed")));
-    svg.into_iter()
-        .chain(blip.and_then(|b| b.attribute((REL_NS, "embed"))))
 }
 
 pub(super) struct DrawingInfo {
@@ -720,6 +506,41 @@ pub(super) fn anchored_to_line(container: roxmltree::Node) -> bool {
     wpd(container, "positionV").and_then(|n| n.attribute("relativeFrom")) == Some("line")
 }
 
+/// `base` placed at `container`'s `wp:anchor` position with its wrapping,
+/// size `(width_pt, height_pt)` and stacking.
+pub(super) fn place_anchored(
+    container: roxmltree::Node,
+    (width_pt, height_pt): (f32, f32),
+    base: Textbox,
+) -> Textbox {
+    let (h_position, h_relative_from, v_position, v_relative_from) =
+        parse_anchor_position(container);
+    let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
+    let (behind_doc, z_index) = anchor_z_order(container);
+    let (dist_top, dist_bottom) = wrap_dist_top_bottom(container);
+    let (dist_left, dist_right) = wrap_dist_left_right(container, wrap_polygon.is_some());
+    Textbox {
+        width_pt,
+        height_pt,
+        h_position,
+        h_relative_from,
+        v_offset_pt: v_position.offset_or_zero(),
+        v_position,
+        v_relative_from,
+        wrap_type,
+        wrap_text,
+        wrap_polygon,
+        dist_top,
+        dist_bottom,
+        dist_left,
+        dist_right,
+        behind_doc,
+        z_index,
+        v_from_line: anchored_to_line(container),
+        ..base
+    }
+}
+
 pub(super) fn parse_wrap_type(
     container: roxmltree::Node,
 ) -> (WrapType, WrapText, Option<Vec<(i32, i32)>>) {
@@ -757,31 +578,15 @@ fn parse_wrap_polygon(wrap_elem: roxmltree::Node) -> Option<Vec<(i32, i32)>> {
     let poly = wrap_elem
         .children()
         .find(|c| c.has_tag_name((WPD_NS, "wrapPolygon")))?;
-    let mut vertices = Vec::new();
-    for child in poly.children() {
-        if child.tag_name().namespace() != Some(WPD_NS) {
-            continue;
-        }
-        match child.tag_name().name() {
-            "start" | "lineTo" => {
-                let x = child
-                    .attribute("x")
-                    .and_then(|v| v.parse::<i32>().ok())
-                    .unwrap_or(0);
-                let y = child
-                    .attribute("y")
-                    .and_then(|v| v.parse::<i32>().ok())
-                    .unwrap_or(0);
-                vertices.push((x, y));
-            }
-            _ => {}
-        }
-    }
-    if vertices.is_empty() {
-        None
-    } else {
-        Some(vertices)
-    }
+    let vertices: Vec<_> = poly
+        .children()
+        .filter(|c| c.has_tag_name((WPD_NS, "start")) || c.has_tag_name((WPD_NS, "lineTo")))
+        .map(|c| {
+            let coord = |a| c.attribute(a).and_then(|v| v.parse().ok()).unwrap_or(0);
+            (coord("x"), coord("y"))
+        })
+        .collect();
+    (!vertices.is_empty()).then_some(vertices)
 }
 
 pub(super) enum RunDrawingResult {
@@ -839,33 +644,12 @@ fn parse_placed_drawing<R: Read + Seek>(
 
         if is_anchor {
             if let Some(wsp) = parse_textbox_from_wsp(container, ctx) {
-                let (h_position, h_relative, v_pos, v_relative) = parse_anchor_position(container);
-                let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
-                let (behind_doc, z_index) = anchor_z_order(container);
-                let (dist_top, dist_bottom) = wrap_dist_top_bottom(container);
-                let (dist_left, dist_right) =
-                    wrap_dist_left_right(container, wrap_polygon.is_some());
-                return Some(RunDrawingResult::TextBox(Textbox {
-                    width_pt: display_w,
+                let base = Textbox {
                     width_pct_margin: pct_width_of_margin(container),
-                    height_pt: display_h,
-                    h_position,
-                    h_relative_from: h_relative,
-                    v_offset_pt: v_pos.offset_or_zero(),
-                    v_position: v_pos,
-                    v_relative_from: v_relative,
-                    wrap_type,
-                    wrap_text,
-                    wrap_polygon,
-                    dist_top,
-                    dist_bottom,
-                    dist_left,
-                    dist_right,
-                    behind_doc,
-                    z_index,
-                    v_from_line: anchored_to_line(container),
-                    ..Textbox::from(wsp)
-                }));
+                    ..wsp
+                };
+                let textbox = place_anchored(container, (display_w, display_h), base);
+                return Some(RunDrawingResult::TextBox(textbox));
             }
             if let Some(conn) = parse_connector_from_wsp(container, ctx.theme) {
                 return Some(RunDrawingResult::Connector(conn));
@@ -971,7 +755,7 @@ fn parse_placed_drawing<R: Read + Seek>(
                 height_pt: display_h,
                 wrap_type: WrapType::TopAndBottom,
                 on_line: true,
-                ..Textbox::from(wsp)
+                ..wsp
             }));
         }
 
@@ -1089,412 +873,9 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
     }
 }
 
-/// Extract an inline image from a `<w:object>` VML fallback.
-///
-/// Word's OLE static-metafile embeddings use a `<v:imagedata r:id="..."/>`
-/// child to point at a WMF/EMF/raster fallback. For WMFs whose content is one
-/// or more DIB-bearing records we can rasterize them in `wmf::wmf_to_raster`
-/// and render normally; this function finds the imagedata reference and
-/// pulls the image with the display dimensions declared on the surrounding
-/// VML shape (or on the `<w:object>` itself as a fallback).
-pub(super) fn parse_object_inline_image<R: Read + Seek>(
-    obj: roxmltree::Node,
-    ctx: &mut ParseContext<'_, R>,
-) -> Option<EmbeddedImage> {
-    let picture = vml_picture_source(obj)?;
-    let embed_id = picture.attribute((REL_NS, "id"))?;
-    let (w, h) = object_dimensions(obj)?;
-    let mut img = read_image_from_zip(embed_id, ctx.rels, ctx.zip, ctx.media, w, h)?;
-    (img.src_rect, img.lum) = vml_imagedata_props(picture);
-    Some(with_object_alt(obj, img))
-}
-
-/// The element holding a VML picture's relationship id: its `v:imagedata`, or
-/// else the frame fill of the shape itself (not of a `v:shapetype` beside it).
-fn vml_picture_source<'a, 'i>(obj: roxmltree::Node<'a, 'i>) -> Option<roxmltree::Node<'a, 'i>> {
-    obj.descendants()
-        .find(|n| n.has_tag_name((VML_NS, "imagedata")))
-        .or_else(|| {
-            first_vml_shape(obj)?
-                .children()
-                .find(|c| is_vml_frame_fill(*c))
-        })
-}
-
-/// The picture a VML shape's own frame fill stretches over its `w`×`h` box.
-pub(super) fn vml_frame_fill_image<R: Read + Seek>(
-    shape: roxmltree::Node,
-    ctx: &mut ParseContext<'_, R>,
-    w: f32,
-    h: f32,
-) -> Option<EmbeddedImage> {
-    let fill = shape.children().find(|c| is_vml_frame_fill(*c))?;
-    read_image_from_zip(fill.attribute((REL_NS, "id"))?, ctx.rels, ctx.zip, ctx.media, w, h)
-}
-
-/// A legacy VML picture: a `w:pict` whose shape shows only an image (no text
-/// box), as `v:imagedata` or as a fill stretched over the shape. Laid out like
-/// an OLE object's preview picture.
-pub(super) fn is_vml_picture(pict: roxmltree::Node) -> bool {
-    pict.children().any(|n| {
-        n.tag_name().namespace() == Some(VML_NS)
-            && matches!(n.tag_name().name(), "shape" | "rect")
-            && n.children()
-                .any(|c| c.has_tag_name((VML_NS, "imagedata")) || is_vml_frame_fill(c))
-            && !n.children().any(|c| {
-                c.has_tag_name((VML_NS, "textbox")) || c.has_tag_name((VML_NS, "textpath"))
-            })
-    })
-}
-
-/// `<v:fill type="frame" r:id="..."/>`: a picture stretched over the whole
-/// shape.
-fn is_vml_frame_fill(node: roxmltree::Node) -> bool {
-    let off = |value: Option<&str>| matches!(value, Some("f" | "false" | "0"));
-    node.has_tag_name((VML_NS, "fill"))
-        && node.attribute("type") == Some("frame")
-        && node.attribute((REL_NS, "id")).is_some()
-        && !off(node.attribute("on"))
-        && !node
-            .parent()
-            .is_some_and(|shape| off(shape.attribute("filled")))
-}
-
-/// VML fractions are plain decimals or 16.16 fixed point with an `f` suffix
-/// ("19661f" = 0.3).
-fn vml_fraction(v: &str) -> Option<f32> {
-    match v.strip_suffix('f') {
-        Some(fixed) => fixed.parse::<f32>().ok().map(|f| f / 65536.0),
-        None => v.parse().ok(),
-    }
-}
-
-/// VML stacks by z-index; a negative one is behind the text. Word's VML
-/// fallbacks write a front shape's DrawingML relativeHeight as its z-index and a
-/// behind-text one as 503316480 minus it, so the least negative behind-text
-/// z-index draws on top (57 fallback pairs in the fixtures, and Word's own
-/// rendering of vml-group-behind-order-*).
-pub(super) fn vml_z_order(z_index: i64) -> (bool, u32) {
-    let relative_height = if z_index < 0 {
-        503_316_480 + z_index
-    } else {
-        z_index
-    };
-    (
-        z_index < 0,
-        relative_height.clamp(0, u32::MAX as i64) as u32,
-    )
-}
-
-/// `v:imagedata` crop and colour adjustments in DrawingML terms. Word writes its
-/// Washout preset (`a:lum bright=70% contrast=-70%`) as gain 0.3 / blacklevel
-/// 0.35, so contrast = gain − 1 and brightness = 2 × blacklevel.
-pub(super) fn vml_imagedata_props(
-    imagedata: roxmltree::Node,
-) -> (Option<[f32; 4]>, Option<(f32, f32)>) {
-    let frac = |name| imagedata.attribute(name).and_then(vml_fraction);
-    let crop = [
-        frac("cropleft").unwrap_or(0.0),
-        frac("croptop").unwrap_or(0.0),
-        frac("cropright").unwrap_or(0.0),
-        frac("cropbottom").unwrap_or(0.0),
-    ];
-    let src_rect =
-        (crop != [0.0; 4] && crop[0] + crop[2] < 1.0 && crop[1] + crop[3] < 1.0).then_some(crop);
-    let contrast = frac("gain").map_or(0.0, |g| g - 1.0);
-    let bright = frac("blacklevel").map_or(0.0, |b| 2.0 * b);
-    let lum = (bright != 0.0 || contrast != 0.0).then_some((bright, contrast));
-    (src_rect, lum)
-}
-
-fn has_ole_object(obj: roxmltree::Node) -> bool {
-    obj.children()
-        .any(|n| n.has_tag_name(("urn:schemas-microsoft-com:office:office", "OLEObject")))
-}
-
-/// Word tags an OLE object as a Sect in its paragraph, with the VML shape's alt
-/// text or a blank one. One with alt text becomes a Figure with it; one without
-/// an artifact rather than a Figure with nothing to say (7.3-1).
-fn with_object_alt(obj: roxmltree::Node, mut img: EmbeddedImage) -> EmbeddedImage {
-    img.is_ole_preview = has_ole_object(obj);
-    img.alt = obj
-        .children()
-        .filter(|n| n.tag_name().namespace() == Some(VML_NS))
-        .find_map(|n| n.attribute("alt"))
-        .filter(|a| !a.trim().is_empty())
-        .map(str::to_string);
-    img.decorative = img.alt.is_none();
-    img
-}
-
-/// Extract a *floating* image from a `<w:object>` whose VML shape is absolutely
-/// positioned (`style="position:absolute;margin-left:..;margin-top:.."`). Word
-/// uses this for OLE-embedded logos placed at a fixed page location (e.g. a
-/// right-anchored faculty emblem). Without this they fall to the inline path and
-/// get dumped into the centered header paragraph, pushing the heading down.
-/// Returns None for inline objects (no `position:absolute`), which keep the
-/// existing inline behavior.
-pub(super) fn parse_object_floating_image<R: Read + Seek>(
-    obj: roxmltree::Node,
-    ctx: &mut ParseContext<'_, R>,
-) -> Option<FloatingImage> {
-    let shape = first_vml_shape(obj)?;
-    let style = shape.attribute("style")?;
-    if !style.contains("position:absolute") {
-        return None;
-    }
-    let mut margin_left = 0.0_f32;
-    let mut margin_top = 0.0_f32;
-    let mut h_align = None;
-    let mut v_align = None;
-    let mut z_index: i64 = 0;
-    let mut h_relative = HRelativeFrom::Column;
-    let mut v_relative = VRelativeFrom::Paragraph;
-    // Word's VML wrap distances default to 9pt at the sides, 0 above and below
-    // (slovak_pedagogical's header logo: centred text stops 9pt short of it).
-    let [mut dist_left, mut dist_right, mut dist_top, mut dist_bottom] = [9.0, 9.0, 0.0, 0.0];
-    for part in style.split(';') {
-        if let Some((key, val)) = part.trim().split_once(':') {
-            let val = val.trim();
-            match key.trim() {
-                "margin-left" => margin_left = parse_pt(val).unwrap_or(0.0),
-                "margin-top" => margin_top = parse_pt(val).unwrap_or(0.0),
-                "z-index" => z_index = val.parse().unwrap_or(0),
-                "mso-wrap-distance-left" => dist_left = parse_pt(val).unwrap_or(dist_left),
-                "mso-wrap-distance-right" => dist_right = parse_pt(val).unwrap_or(dist_right),
-                "mso-wrap-distance-top" => dist_top = parse_pt(val).unwrap_or(dist_top),
-                "mso-wrap-distance-bottom" => dist_bottom = parse_pt(val).unwrap_or(dist_bottom),
-                // "absolute" (or no value) means the margin offsets place it.
-                "mso-position-horizontal" => {
-                    h_align = match val {
-                        "left" | "inside" => Some(HorizontalPosition::AlignLeft),
-                        "center" => Some(HorizontalPosition::AlignCenter),
-                        "right" | "outside" => Some(HorizontalPosition::AlignRight),
-                        _ => None,
-                    };
-                }
-                "mso-position-vertical" => {
-                    v_align = match val {
-                        "top" | "inside" => Some(VerticalPosition::AlignTop),
-                        "center" => Some(VerticalPosition::AlignCenter),
-                        "bottom" | "outside" => Some(VerticalPosition::AlignBottom),
-                        _ => None,
-                    };
-                }
-                "mso-position-horizontal-relative" => {
-                    h_relative = match val {
-                        "page" => HRelativeFrom::Page,
-                        "margin" => HRelativeFrom::Margin,
-                        _ => HRelativeFrom::Column,
-                    };
-                }
-                "mso-position-vertical-relative" => {
-                    v_relative = match val {
-                        "page" => VRelativeFrom::Page,
-                        "margin" => VRelativeFrom::Margin,
-                        "top-margin-area" => VRelativeFrom::TopMargin,
-                        "bottom-margin-area" => VRelativeFrom::BottomMargin,
-                        _ => VRelativeFrom::Paragraph,
-                    };
-                }
-                _ => {}
-            }
-        }
-    }
-    let image = parse_object_inline_image(obj, ctx)?;
-    let (behind_doc, z_index) = vml_z_order(z_index);
-    // An explicit <w10:wrap type="square"/> means the object reflows text
-    // (Word wraps centered header text between such logos); without it the
-    // logo sits over/beside the text and None keeps the text full-width.
-    let wrap_type = shape
-        .children()
-        .find(|n| n.has_tag_name((W10_NS, "wrap")))
-        .and_then(|n| n.attribute("type"))
-        .map(|t| match t {
-            "square" => WrapType::Square,
-            "tight" => WrapType::Tight,
-            "through" => WrapType::Through,
-            "topAndBottom" => WrapType::TopAndBottom,
-            _ => WrapType::None,
-        })
-        .unwrap_or(WrapType::None);
-    Some(FloatingImage {
-        image,
-        h_position: h_align.unwrap_or(HorizontalPosition::Offset(margin_left)),
-        h_relative_from: h_relative,
-        v_position: v_align.unwrap_or(VerticalPosition::Offset(margin_top)),
-        v_relative_from: v_relative,
-        wrap_type,
-        wrap_text: WrapText::BothSides,
-        wrap_polygon: None,
-        behind_doc,
-        dist_top,
-        dist_bottom,
-        dist_left,
-        dist_right,
-        z_index,
-        anchor_seq: 0,
-        anchor_at_start: false,
-        anchor_run: 0,
-        on_line: false,
-        v_from_line: false,
-    })
-}
-
-/// Reserve space for `<w:object>` legacy OLE embeddings (we don't render the
-/// content, but the following paragraphs need to land at the right position).
-pub(super) fn compute_object_height(para_node: roxmltree::Node) -> f32 {
-    let mut max_height: f32 = 0.0;
-    for r in para_node
-        .children()
-        .filter(|n| n.has_tag_name((WML_NS, "r")))
-    {
-        for obj in r.children().filter(|n| n.has_tag_name((WML_NS, "object"))) {
-            // Absolutely-positioned objects float (see parse_object_floating_image)
-            // and must not reserve inline line height.
-            if object_is_absolute(obj) {
-                continue;
-            }
-            if let Some((_w, h)) = object_dimensions(obj) {
-                max_height = max_height.max(h);
-            }
-        }
-    }
-    max_height
-}
-
-fn object_is_absolute(obj: roxmltree::Node) -> bool {
-    first_vml_shape(obj)
-        .and_then(|s| s.attribute("style"))
-        .is_some_and(|style| style.contains("position:absolute"))
-}
-
-fn first_vml_shape<'a, 'i>(obj: roxmltree::Node<'a, 'i>) -> Option<roxmltree::Node<'a, 'i>> {
-    obj.children().find(|n| {
-        n.tag_name().namespace() == Some(VML_NS)
-            && matches!(n.tag_name().name(), "rect" | "shape" | "oval" | "roundrect")
-    })
-}
-
-fn object_dimensions(obj: roxmltree::Node) -> Option<(f32, f32)> {
-    if let Some(rect) = first_vml_shape(obj)
-        && let Some(style) = rect.attribute("style")
-    {
-        let mut w_pt: Option<f32> = None;
-        let mut h_pt: Option<f32> = None;
-        for part in style.split(';') {
-            if let Some((key, val)) = part.trim().split_once(':') {
-                let key = key.trim();
-                if let Some(v) = parse_pt(val) {
-                    match key {
-                        "width" => w_pt = Some(v),
-                        "height" => h_pt = Some(v),
-                        _ => {}
-                    }
-                }
-            }
-        }
-        if let (Some(w), Some(h)) = (w_pt, h_pt) {
-            return Some((w, h));
-        }
-    }
-    let dxa = twips_attr(obj, "dxaOrig");
-    let dya = twips_attr(obj, "dyaOrig");
-    if let (Some(w), Some(h)) = (dxa, dya) {
-        return Some((w, h));
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn vml_z_index_maps_to_word_relative_height() {
-        // Pairs Word wrote as relativeHeight + VML fallback z-index.
-        assert_eq!(vml_z_order(-251658240), (true, 251658240));
-        assert_eq!(vml_z_order(-251657216), (true, 251659264));
-        assert_eq!(vml_z_order(251659264), (false, 251659264));
-        assert_eq!(vml_z_order(0), (false, 0));
-    }
-
-    #[test]
-    fn vml_washout_maps_to_word_lum_preset() {
-        let xml = format!(
-            r#"<v:imagedata xmlns:v="{VML_NS}" gain="19661f" blacklevel="22938f" cropleft="0.25" cropbottom="6554f"/>"#
-        );
-        let doc = roxmltree::Document::parse(&xml).unwrap();
-        let (src_rect, lum) = vml_imagedata_props(doc.root_element());
-        let (bright, contrast) = lum.unwrap();
-        assert!((bright - 0.70).abs() < 0.001 && (contrast + 0.70).abs() < 0.001);
-        let r = src_rect.unwrap();
-        assert!((r[0] - 0.25).abs() < 1e-6 && (r[3] - 0.1).abs() < 1e-4 && r[1] == 0.0);
-    }
-
-    #[test]
-    fn ole_preview_requires_office_object_not_just_vml_shape() {
-        for (child, expected) in [
-            (r#"<v:shape><v:imagedata r:id="image"/></v:shape>"#, false),
-            (r#"<v:shape/><o:OLEObject Type="Embed"/>"#, true),
-            (
-                r#"<v:shape/><alias:OLEObject xmlns:alias="urn:schemas-microsoft-com:office:office"/>"#,
-                true,
-            ),
-            (
-                r#"<v:shape/><wrong:OLEObject xmlns:wrong="urn:other"/>"#,
-                false,
-            ),
-        ] {
-            let xml = format!(
-                r#"<w:object xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="{VML_NS}" xmlns:r="{REL_NS}" xmlns:o="urn:schemas-microsoft-com:office:office">{child}</w:object>"#
-            );
-            let doc = roxmltree::Document::parse(&xml).unwrap();
-            assert_eq!(has_ole_object(doc.root_element()), expected, "{child}");
-        }
-    }
-
-    #[test]
-    fn frame_fill_makes_a_vml_picture() {
-        for (shape, expected) in [
-            (r#"<v:rect><v:fill r:id="p" type="frame"/></v:rect>"#, true),
-            (r#"<v:rect><v:imagedata r:id="p"/></v:rect>"#, true),
-            (r#"<v:rect><v:fill r:id="p" type="tile"/></v:rect>"#, false),
-            (
-                r#"<v:rect><v:fill r:id="p" type="frame" on="f"/></v:rect>"#,
-                false,
-            ),
-            // Word for Mac draws no picture here either: on="t" does not override filled="f".
-            (
-                r#"<v:rect filled="f"><v:fill r:id="p" type="frame" on="t"/></v:rect>"#,
-                false,
-            ),
-            (
-                r#"<v:shape><v:fill r:id="p" type="frame"/><v:textpath string="A"/></v:shape>"#,
-                false,
-            ),
-            (
-                r#"<v:rect><v:fill r:id="p" type="frame"/><v:textbox/></v:rect>"#,
-                false,
-            ),
-        ] {
-            let xml = format!(
-                r#"<w:pict xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="{VML_NS}" xmlns:r="{REL_NS}">{shape}</w:pict>"#
-            );
-            let doc = roxmltree::Document::parse(&xml).unwrap();
-            assert_eq!(is_vml_picture(doc.root_element()), expected, "{shape}");
-        }
-    }
-
-    #[test]
-    fn picture_comes_from_the_shape_not_its_shapetype() {
-        let xml = format!(
-            r#"<w:pict xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="{VML_NS}" xmlns:r="{REL_NS}"><v:shapetype><v:fill r:id="type" type="frame"/></v:shapetype><v:rect><v:fill r:id="shape" type="frame"/></v:rect></w:pict>"#
-        );
-        let doc = roxmltree::Document::parse(&xml).unwrap();
-        let source = vml_picture_source(doc.root_element()).unwrap();
-        assert_eq!(source.attribute((REL_NS, "id")), Some("shape"));
-    }
 
     fn src_rect_of(elem: &str) -> Option<[f32; 4]> {
         let xml = format!(

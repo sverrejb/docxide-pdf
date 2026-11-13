@@ -24,8 +24,53 @@ const META_DIBBITBLT: u16 = 0x0940; // params before DIB: rasterOp(4) + ySrc(2) 
 const META_DIBSTRETCHBLT: u16 = 0x0B41; // adds srcH/srcW: 20 param bytes
 const META_STRETCHDIB: u16 = 0x0F43; // adds colorUsage: 22 param bytes
 
+/// Little-endian reads of `b` at byte offset `o`; `None` past the end.
+pub(super) fn le_u32(b: &[u8], o: usize) -> Option<u32> {
+    Some(u32::from_le_bytes(b.get(o..o + 4)?.try_into().ok()?))
+}
+
+pub(super) fn le_i32(b: &[u8], o: usize) -> Option<i32> {
+    Some(i32::from_le_bytes(b.get(o..o + 4)?.try_into().ok()?))
+}
+
+pub(super) fn le_u16(b: &[u8], o: usize) -> Option<u16> {
+    Some(u16::from_le_bytes(b.get(o..o + 2)?.try_into().ok()?))
+}
+
+pub(super) fn le_i16(b: &[u8], o: usize) -> Option<i16> {
+    Some(i16::from_le_bytes(b.get(o..o + 2)?.try_into().ok()?))
+}
+
 pub(super) fn is_wmf(data: &[u8]) -> bool {
     data.len() >= 4 && (data[..4] == PLACEABLE_MAGIC || data[..4] == STANDARD_MAGIC)
+}
+
+/// The metafile's records as `(function, parameters)`, after the headers;
+/// `None` for data without a WMF header. A malformed record yields `None`
+/// and ends the walk.
+fn wmf_records(data: &[u8]) -> Option<impl Iterator<Item = Option<(u16, &[u8])>>> {
+    let mut i = if data.starts_with(&PLACEABLE_MAGIC) {
+        22 + 18 // placeable header + standard WMF header
+    } else if data.starts_with(&STANDARD_MAGIC) {
+        18
+    } else {
+        return None;
+    };
+    Some(std::iter::from_fn(move || {
+        let (size_words, func) = (le_u32(data, i)? as usize, le_u16(data, i + 4)?);
+        let end = size_words
+            .checked_mul(2)
+            .filter(|&size_bytes| size_bytes >= 6)
+            .and_then(|size_bytes| i.checked_add(size_bytes))
+            .filter(|&end| end <= data.len());
+        let Some(end) = end else {
+            i = data.len();
+            return Some(None);
+        };
+        let params = &data[i + 6..end];
+        i = end;
+        Some(Some((func, params)))
+    }))
 }
 
 /// One DIB-blit record: a Device-Independent Bitmap and the destination
@@ -42,80 +87,49 @@ struct DibBlit<'a> {
 /// destination rectangle. Returns `None` if the stream is malformed; an empty
 /// vec means no DIB records (a true vector WMF we don't handle).
 fn collect_dib_blits(data: &[u8]) -> Option<Vec<DibBlit<'_>>> {
-    let header_skip = if data.starts_with(&PLACEABLE_MAGIC) {
-        22 + 18 // placeable header + standard WMF header
-    } else if data.starts_with(&STANDARD_MAGIC) {
-        18
-    } else {
-        return None;
-    };
-
     let mut blits = Vec::new();
-    let mut i = header_skip;
-    while i + 6 <= data.len() {
-        let size_words = u32::from_le_bytes(data[i..i + 4].try_into().ok()?) as usize;
-        let func = u16::from_le_bytes(data[i + 4..i + 6].try_into().ok()?);
-        let size_bytes = size_words.checked_mul(2)?;
-        if size_bytes < 6 || i.checked_add(size_bytes)? > data.len() {
-            return None;
-        }
-
+    for record in wmf_records(data)? {
+        let (func, record) = record?;
         // The record's no-bitmap form (size = (function >> 8) + 3 words) is a
         // pattern fill, not a picture.
-        if size_words == (func >> 8) as usize + 3 {
-            i += size_bytes;
+        if record.len() == 2 * (func >> 8) as usize {
             continue;
         }
         let params_before_dib = match func {
             META_DIBBITBLT => 16,
             META_DIBSTRETCHBLT => 20,
             META_STRETCHDIB => 22,
-            _ => {
-                i += size_bytes;
-                continue;
-            }
+            _ => continue,
         };
-
-        let dib_start = i + 6 + params_before_dib;
-        let dib_end = i + size_bytes;
-        if dib_start >= dib_end {
+        if params_before_dib >= record.len() {
             return None;
         }
-        let params = &data[i + 6..dib_start];
+        let (params, dib) = record.split_at(params_before_dib);
         // INT16 dest rect offsets within the param block differ per record.
-        let i16_at =
-            |off: usize| -> i32 { i16::from_le_bytes([params[off], params[off + 1]]) as i32 };
+        let i16_at = |off: usize| le_i16(params, off).map(i32::from);
         let (h, w, y, x) = match func {
             // DIBBITBLT: RasterOp(4), YSrc, XSrc, Height, Width, YDest, XDest
-            META_DIBBITBLT => (i16_at(8), i16_at(10), i16_at(12), i16_at(14)),
+            META_DIBBITBLT => (i16_at(8)?, i16_at(10)?, i16_at(12)?, i16_at(14)?),
             // DIBSTRETCHBLT: RasterOp(4), SrcH, SrcW, YSrc, XSrc, DestH, DestW, YDest, XDest
-            META_DIBSTRETCHBLT => (i16_at(12), i16_at(14), i16_at(16), i16_at(18)),
+            META_DIBSTRETCHBLT => (i16_at(12)?, i16_at(14)?, i16_at(16)?, i16_at(18)?),
             // STRETCHDIB: RasterOp(4), Usage, SrcH, SrcW, YSrc, XSrc, DestH, DestW, YDest, XDest
-            _ => (i16_at(14), i16_at(16), i16_at(18), i16_at(20)),
+            _ => (i16_at(14)?, i16_at(16)?, i16_at(18)?, i16_at(20)?),
         };
-        let dib = &data[dib_start..dib_end];
         // A brush-sized DIB stretched over the frame paints a solid box where
         // Word draws the metafile's vector content.
         if dib_pixel_count(dib).is_some_and(|n| n <= 64) {
-            i += size_bytes;
             continue;
         }
         blits.push(DibBlit { dib, x, y, w, h });
-        i += size_bytes;
     }
     Some(blits)
 }
 
 fn dib_pixel_count(dib: &[u8]) -> Option<u64> {
-    let header = u32::from_le_bytes(dib.get(0..4)?.try_into().ok()?);
-    let (w, h) = if header == 12 {
-        let w = u16::from_le_bytes(dib.get(4..6)?.try_into().ok()?) as i64;
-        let h = u16::from_le_bytes(dib.get(6..8)?.try_into().ok()?) as i64;
-        (w, h)
+    let (w, h) = if le_u32(dib, 0)? == 12 {
+        (le_u16(dib, 4)? as i64, le_u16(dib, 6)? as i64)
     } else {
-        let w = i32::from_le_bytes(dib.get(4..8)?.try_into().ok()?) as i64;
-        let h = i32::from_le_bytes(dib.get(8..12)?.try_into().ok()?) as i64;
-        (w, h)
+        (le_i32(dib, 4)? as i64, le_i32(dib, 8)? as i64)
     };
     Some(w.unsigned_abs() * h.unsigned_abs())
 }
@@ -130,34 +144,19 @@ const WMFC_HEADER: usize = 34;
 /// The EMF that Word stores alongside a WMF's own records, split over
 /// "WMFC" comment escapes. When present it is the full-fidelity picture.
 pub(super) fn embedded_emf(data: &[u8]) -> Option<Vec<u8>> {
-    let mut i = if data.starts_with(&PLACEABLE_MAGIC) {
-        40
-    } else {
-        18
-    };
     let mut emf = Vec::new();
     let mut total = 0usize;
-    while i + 6 <= data.len() {
-        let size_bytes =
-            (u32::from_le_bytes(data[i..i + 4].try_into().ok()?) as usize).checked_mul(2)?;
-        let func = u16::from_le_bytes(data[i + 4..i + 6].try_into().ok()?);
-        if size_bytes < 6 || i + size_bytes > data.len() {
-            break;
-        }
-        let rec = &data[i + 6..i + size_bytes];
+    for (func, rec) in wmf_records(data)?.map_while(|r| r) {
         if func == META_ESCAPE
             && rec.len() >= 4 + WMFC_HEADER
-            && u16::from_le_bytes([rec[0], rec[1]]) == MFCOMMENT
+            && le_u16(rec, 0) == Some(MFCOMMENT)
             && &rec[4..8] == b"WMFC"
         {
-            let u32_at =
-                |o: usize| u32::from_le_bytes(rec[4 + o..8 + o].try_into().unwrap()) as usize;
-            let chunk = u32_at(22);
-            total = u32_at(30);
+            let chunk = le_u32(rec, 4 + 22)? as usize;
+            total = le_u32(rec, 4 + 30)? as usize;
             let start = 4 + WMFC_HEADER;
             emf.extend_from_slice(rec.get(start..start + chunk)?);
         }
-        i += size_bytes;
     }
     (total > 0 && emf.len() == total && super::emf::is_emf(&emf)).then_some(emf)
 }
@@ -236,11 +235,11 @@ fn dib_to_bmp(dib: &[u8]) -> Option<Vec<u8>> {
     if dib.len() < 20 {
         return None;
     }
-    let bih_size = u32::from_le_bytes(dib[0..4].try_into().ok()?) as usize;
+    let bih_size = le_u32(dib, 0)? as usize;
     if bih_size < 12 || bih_size > dib.len() {
         return None;
     }
-    let bpp = u16::from_le_bytes(dib[14..16].try_into().ok()?) as usize;
+    let bpp = le_u16(dib, 14)? as usize;
     let palette_bytes = if bpp <= 8 { (1usize << bpp) * 4 } else { 0 };
     let info_len = bih_size + palette_bytes;
     if info_len > dib.len() {
@@ -280,6 +279,7 @@ mod tests {
         emf[0..4].copy_from_slice(&1u32.to_le_bytes());
         emf[40..44].copy_from_slice(b" EMF");
         let mut wmf = vec![0u8; 18];
+        wmf[..4].copy_from_slice(&STANDARD_MAGIC);
         for chunk in [&emf[..50], &emf[50..]] {
             let mut rec = vec![0x0F, 0x00, 0, 0];
             rec.extend_from_slice(b"WMFC");
@@ -318,9 +318,9 @@ mod tests {
 
         let bmp = dib_to_bmp(&dib).expect("converts");
         assert_eq!(&bmp[..2], b"BM");
-        let pixel_off = u32::from_le_bytes(bmp[10..14].try_into().unwrap());
+        let pixel_off = le_u32(&bmp, 10).unwrap();
         assert_eq!(pixel_off as usize, 14 + 40); // no palette at 24-bpp
-        let file_size = u32::from_le_bytes(bmp[2..6].try_into().unwrap());
+        let file_size = le_u32(&bmp, 2).unwrap();
         assert_eq!(file_size as usize, bmp.len());
     }
 }
@@ -330,21 +330,17 @@ mod tests {
 /// `META_POLYPOLYGON`s, which Word rasterises. Returns `None` when no record
 /// paints. ponytail: arcs and bitmaps in vector WMFs stay undrawn.
 pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
-    let i16_at = |o: usize| i16::from_le_bytes(data[o..o + 2].try_into().unwrap()) as i32;
-    let (skip, bbox, units_per_inch) = if data.starts_with(&PLACEABLE_MAGIC) {
+    let i16_at = |o: usize| le_i16(data, o).map(i32::from);
+    let records = wmf_records(data)?;
+    let (bbox, units_per_inch) = if data.starts_with(&PLACEABLE_MAGIC) {
         if data.len() < 40 {
             return None;
         }
-        let upi = u16::from_le_bytes(data[14..16].try_into().unwrap()) as i32;
-        (
-            40,
-            Some((i16_at(6), i16_at(8), i16_at(10), i16_at(12))),
-            upi.max(1),
-        )
-    } else if data.starts_with(&STANDARD_MAGIC) {
-        (18, None, 96)
+        let upi = le_u16(data, 14)? as i32;
+        let bbox = (i16_at(6)?, i16_at(8)?, i16_at(10)?, i16_at(12)?);
+        (Some(bbox), upi.max(1))
     } else {
-        return None;
+        (None, 96)
     };
 
     let mut recs: Vec<Vec<u8>> = Vec::new();
@@ -374,23 +370,10 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
     // META_SETROP2 R2_NOP (11) draws nothing: bulgarian_farmland's emblem
     // first lays its silhouette under R2_NOP, then the real figure.
     let mut rop2_nop = false;
-    let mut i = skip;
-    while i + 6 <= data.len() {
-        let size_bytes =
-            (u32::from_le_bytes(data[i..i + 4].try_into().ok()?) as usize).checked_mul(2)?;
-        let func = u16::from_le_bytes(data[i + 4..i + 6].try_into().ok()?);
-        if size_bytes < 6 || i + size_bytes > data.len() {
-            return None;
-        }
-        let p = &data[i + 6..i + size_bytes];
-        let pi = |k: usize| -> Option<i32> {
-            p.get(2 * k..2 * k + 2)
-                .map(|s| i16::from_le_bytes(s.try_into().unwrap()) as i32)
-        };
-        let pu32 = |o: usize| -> Option<u32> {
-            p.get(o..o + 4)
-                .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
-        };
+    for record in records {
+        let (func, p) = record?;
+        let pi = |k: usize| le_i16(p, 2 * k).map(i32::from);
+        let pu32 = |o: usize| le_u32(p, o);
         let path = |recs: &mut Vec<Vec<u8>>, polys: &[&[(i32, i32)]], close: bool| {
             recs.push(rec(59, &[]));
             for pts in polys {
@@ -501,8 +484,7 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
                 let text = p.get(at..at + n)?;
                 let dx_at = at + n + (n & 1);
                 let dx: Vec<i32> = (0..n)
-                    .map_while(|k| p.get(dx_at + 2 * k..dx_at + 2 * k + 2))
-                    .map(|s| i16::from_le_bytes(s.try_into().unwrap()) as i32)
+                    .map_while(|k| le_i16(p, dx_at + 2 * k).map(i32::from))
                     .collect();
                 recs.push(emf_text(x, y, text, if dx.len() == n { &dx } else { &[] }));
                 painted = true;
@@ -517,7 +499,6 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
             }
             _ => {}
         }
-        i += size_bytes;
     }
     if !painted {
         return None;
@@ -585,7 +566,7 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
 /// escapement, orientation and weight, eight flag bytes, an ANSI face name).
 fn emf_font(handle: u32, logfont: &[u8]) -> Option<Vec<u8>> {
     let words = (0..5)
-        .map(|k| logfont.get(2 * k..2 * k + 2).map(|s| i16::from_le_bytes(s.try_into().unwrap()) as i32))
+        .map(|k| le_i16(logfont, 2 * k).map(i32::from))
         .collect::<Option<Vec<i32>>>()?;
     let mut body = handle.to_le_bytes().to_vec();
     for w in words {
@@ -616,9 +597,16 @@ fn emf_text(x: i32, y: i32, text: &[u8], dx: &[i32]) -> Vec<u8> {
         body.extend_from_slice(&v.to_le_bytes());
     }
     body.extend_from_slice(&[0u8; 16]); // clip rectangle
-    let off_dx = if dx.is_empty() { 0 } else { off_string + string_len };
+    let off_dx = if dx.is_empty() {
+        0
+    } else {
+        off_string + string_len
+    };
     body.extend_from_slice(&(off_dx as u32).to_le_bytes());
-    let mut string: Vec<u8> = text.iter().flat_map(|&b| (b as u16).to_le_bytes()).collect();
+    let mut string: Vec<u8> = text
+        .iter()
+        .flat_map(|&b| (b as u16).to_le_bytes())
+        .collect();
     string.resize(string_len, 0);
     body.extend_from_slice(&string);
     for d in dx {

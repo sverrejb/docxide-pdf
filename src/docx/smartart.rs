@@ -4,7 +4,8 @@ use std::io::{Read, Seek};
 use crate::model::{EmbeddedImage, SmartArtDiagram, SmartArtShape};
 
 use super::color::{parse_line_stroke, parse_solid_fill, resolve_dml_color};
-use super::images::{find_blip_embed, read_image_from_zip};
+use super::group::dml_pair;
+use super::media::{find_blip_embed, read_image_from_zip};
 use super::styles::ThemeFonts;
 use super::textbox::parse_shape_geometry;
 use super::{
@@ -129,13 +130,8 @@ fn parse_dsp_shape<R: Read + Seek>(
     let theme = ctx.theme;
     let sp_pr = dsp(sp, "spPr")?;
     let xfrm = dml(sp_pr, "xfrm")?;
-    let off = dml(xfrm, "off")?;
-    let ext = dml(xfrm, "ext")?;
-
-    let x = emu_attr(off, "x");
-    let y = emu_attr(off, "y");
-    let w = emu_attr(ext, "cx");
-    let h = emu_attr(ext, "cy");
+    let (x, y) = dml_pair(xfrm, "off", "x", "y")?;
+    let (w, h) = dml_pair(xfrm, "ext", "cx", "cy")?;
     // rot is in 60,000ths of a degree
     let rotation_deg = xfrm
         .attribute("rot")
@@ -182,14 +178,9 @@ fn parse_dsp_shape<R: Read + Seek>(
 
     // dsp:txXfrm provides a separate rectangle for text placement
     let text_rect = dsp(sp, "txXfrm").and_then(|tx| {
-        let tx_off = dml(tx, "off")?;
-        let tx_ext = dml(tx, "ext")?;
-        Some((
-            emu_attr(tx_off, "x"),
-            emu_attr(tx_off, "y"),
-            emu_attr(tx_ext, "cx"),
-            emu_attr(tx_ext, "cy"),
-        ))
+        let (x, y) = dml_pair(tx, "off", "x", "y")?;
+        let (w, h) = dml_pair(tx, "ext", "cx", "cy")?;
+        Some((x, y, w, h))
     });
 
     let has_text = paragraphs
@@ -219,6 +210,7 @@ fn parse_dsp_shape<R: Read + Seek>(
 
 use crate::model::{SmartArtPara, SmartArtRun, SmartArtTextAlign, SmartArtTextAnchor};
 
+#[derive(Default)]
 struct DspTextProps {
     paragraphs: Vec<SmartArtPara>,
     /// (top, right, bottom, left) insets in pts
@@ -228,11 +220,7 @@ struct DspTextProps {
 
 fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> DspTextProps {
     let Some(body) = dsp(sp, "txBody") else {
-        return DspTextProps {
-            paragraphs: Vec::new(),
-            insets: (0.0, 0.0, 0.0, 0.0),
-            anchor: SmartArtTextAnchor::Top,
-        };
+        return DspTextProps::default();
     };
     let body_pr = dml(body, "bodyPr");
     let insets = body_pr

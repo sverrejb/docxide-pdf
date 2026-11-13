@@ -98,8 +98,9 @@ fn decode_quoted_printable(input: &str) -> String {
                     }
                     continue;
                 }
-                if let (Some(h), Some(l)) = (hex_val(hi), hex_val(lo)) {
-                    out.push(h << 4 | l);
+                let hex = |b: u8| (b as char).to_digit(16);
+                if let (Some(h), Some(l)) = (hex(hi), hex(lo)) {
+                    out.push((h << 4 | l) as u8);
                     i += 3;
                     continue;
                 }
@@ -112,15 +113,6 @@ fn decode_quoted_printable(input: &str) -> String {
         }
     }
     String::from_utf8_lossy(&out).into_owned()
-}
-
-fn hex_val(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        _ => None,
-    }
 }
 
 fn fix_xhtml_void_tags(html: &str) -> String {
@@ -290,9 +282,6 @@ fn extract_css(doc: &roxmltree::Document) -> HashMap<String, CssProperties> {
     let mut map = HashMap::new();
     for node in doc.descendants() {
         if node.tag_name().name() == "style" {
-            if let Some(text) = node.text() {
-                parse_css_block(text, &mut map);
-            }
             for child in node.children() {
                 if child.is_text()
                     && let Some(t) = child.text()
@@ -541,15 +530,10 @@ fn collect_runs(node: roxmltree::Node, ctx: &RunContext, runs: &mut Vec<Run>) {
 }
 
 fn collect_text(node: roxmltree::Node) -> String {
-    let mut out = String::new();
-    for child in node.children() {
-        if child.is_text() {
-            out.push_str(child.text().unwrap_or(""));
-        } else if child.is_element() {
-            out.push_str(&collect_text(child));
-        }
-    }
-    out
+    node.descendants()
+        .filter(|n| n.is_text())
+        .filter_map(|n| n.text())
+        .collect()
 }
 
 /// HTML whitespace collapsing over a block's runs: a space after a space (also
@@ -594,15 +578,9 @@ fn collapse_whitespace(s: &str) -> String {
 }
 
 fn find_element<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    for child in node.children() {
-        if child.is_element() && child.tag_name().name() == name {
-            return Some(child);
-        }
-        if let Some(found) = find_element(child, name) {
-            return Some(found);
-        }
-    }
-    None
+    node.descendants()
+        .skip(1)
+        .find(|n| n.is_element() && n.tag_name().name() == name)
 }
 
 fn is_table_cell(n: &roxmltree::Node) -> bool {
@@ -707,17 +685,17 @@ fn convert_table(
                 _ => CellVAlign::Top,
             };
 
-            let mut cell_paras = Vec::new();
-            for child in td.children() {
-                if child.is_element()
-                    && matches!(
-                        child.tag_name().name(),
-                        "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
-                    )
-                {
-                    cell_paras.push(convert_paragraph(child, css));
-                }
-            }
+            let mut cell_paras: Vec<Paragraph> = td
+                .children()
+                .filter(|c| {
+                    c.is_element()
+                        && matches!(
+                            c.tag_name().name(),
+                            "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+                        )
+                })
+                .map(|c| convert_paragraph(c, css))
+                .collect();
             if cell_paras.is_empty() {
                 let text = collect_text(*td);
                 let text = collapse_whitespace(&text);

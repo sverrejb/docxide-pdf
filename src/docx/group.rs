@@ -15,13 +15,12 @@ use crate::model::{
 
 use super::images::{
     RunDrawingResult, anchor_z_order, anchored_to_line, extent_dimensions, parse_anchor_position,
-    parse_wrap_type, read_image_from_zip, vml_imagedata_props, vml_z_order, wrap_dist_left_right,
-    wrap_dist_top_bottom,
+    parse_wrap_type, place_anchored,
 };
-use super::textbox::{
-    find_sp_pr, parse_connector_shape_node, parse_vml_box_style, parse_vml_line, parse_wsp_shape,
-    vml_style_prop,
-};
+use super::media::read_image_from_zip;
+use super::textbox::{find_sp_pr, is_connector_wsp, parse_connector_shape_node, parse_wsp_shape};
+use super::vml_object::{vml_frame_fill_image, vml_imagedata_props, vml_z_order};
+use super::vml_shape::{parse_vml_box_style, parse_vml_line, vml_style_prop};
 use super::{
     PIC_NS, ParseContext, REL_NS, VML_NS, WPC_NS, WPG_NS, WPS_NS, dml, emu_attr, parse_pt,
 };
@@ -70,16 +69,22 @@ struct Xfrm {
     flip_v: bool,
 }
 
+/// The EMU attributes `a` and `b` of `parent`'s DrawingML child `name`, in points.
+pub(super) fn dml_pair(
+    parent: roxmltree::Node,
+    name: &str,
+    a: &str,
+    b: &str,
+) -> Option<(f32, f32)> {
+    dml(parent, name).map(|n| (emu_attr(n, a), emu_attr(n, b)))
+}
+
 fn read_xfrm(sp_pr: roxmltree::Node) -> Option<Xfrm> {
     let xfrm = dml(sp_pr, "xfrm")?;
-    let off = dml(xfrm, "off").map(|o| (emu_attr(o, "x"), emu_attr(o, "y")))?;
-    let ext = dml(xfrm, "ext").map(|e| (emu_attr(e, "cx"), emu_attr(e, "cy")))?;
-    let ch_off = dml(xfrm, "chOff")
-        .map(|o| (emu_attr(o, "x"), emu_attr(o, "y")))
-        .unwrap_or((0.0, 0.0));
-    let ch_ext = dml(xfrm, "chExt")
-        .map(|e| (emu_attr(e, "cx"), emu_attr(e, "cy")))
-        .unwrap_or(ext);
+    let off = dml_pair(xfrm, "off", "x", "y")?;
+    let ext = dml_pair(xfrm, "ext", "cx", "cy")?;
+    let ch_off = dml_pair(xfrm, "chOff", "x", "y").unwrap_or((0.0, 0.0));
+    let ch_ext = dml_pair(xfrm, "chExt", "cx", "cy").unwrap_or(ext);
     Some(Xfrm {
         off,
         ext,
@@ -123,6 +128,7 @@ fn compose(parent: GroupTransform, xfrm: &Xfrm) -> GroupTransform {
     }
 }
 
+#[derive(Default)]
 struct BaseAnchor {
     x: f32,
     /// An aligned group's alignment and width; its shapes then count `x`
@@ -184,15 +190,8 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
         }
     } else {
         BaseAnchor {
-            x: 0.0,
-            h_align: None,
-            y: 0.0,
-            h_rel: HRelativeFrom::Column,
-            v_rel: VRelativeFrom::Paragraph,
-            behind_doc: false,
-            z_index: 0,
             on_line: true,
-            v_from_line: false,
+            ..Default::default()
         }
     };
 
@@ -217,8 +216,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
         // Inline canvases occupy a block in the text flow: reserve the full
         // extent with an invisible TopAndBottom textbox, then place the
         // children relative to the same paragraph without wrapping.
-        let effect_height = super::wpd(container, "effectExtent")
-            .map_or(0.0, |e| emu_attr(e, "t") + emu_attr(e, "b"));
+        let effect_height = super::images::inline_extra_height(container).0;
         out.push(RunDrawingResult::TextBox(Textbox {
             width_pt: display_w,
             height_pt: display_h + effect_height.max(0.0),
@@ -227,36 +225,15 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             on_line: true,
             ..Textbox::default()
         }));
-    } else if let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container)
-        && wrap_type != WrapType::None
-    {
-        let (dist_top, dist_bottom) = wrap_dist_top_bottom(container);
-        let (dist_left, dist_right) = wrap_dist_left_right(container, wrap_polygon.is_some());
+    } else if parse_wrap_type(container).0 != WrapType::None {
         // An anchored group wraps text as one box (its shapes are placed
         // without wrapping): an invisible box over its extent carries it.
-        let (h_position, h_relative_from, v_position, v_relative_from) =
-            parse_anchor_position(container);
-        out.push(RunDrawingResult::TextBox(Textbox {
-            width_pt: display_w,
-            height_pt: display_h,
-            h_position,
-            h_relative_from,
-            v_offset_pt: v_position.offset_or_zero(),
-            v_position,
-            v_relative_from,
-            wrap_type,
-            wrap_text,
-            wrap_polygon,
-            dist_top,
-            dist_bottom,
-            dist_left,
-            dist_right,
-            behind_doc: base.behind_doc,
-            z_index: base.z_index,
+        let base = Textbox {
             no_text_wrap: true,
-            v_from_line: base.v_from_line,
             ..Textbox::default()
-        }));
+        };
+        let textbox = place_anchored(container, (display_w, display_h), base);
+        out.push(RunDrawingResult::TextBox(textbox));
     }
     out.extend(shapes);
     Some(out)
@@ -336,11 +313,7 @@ fn emit_wsp<R: Read + Seek>(
     let (x, y) = t.apply(xfrm.off.0, xfrm.off.1);
     let (w, h) = t.scale(xfrm.ext.0, xfrm.ext.1);
 
-    let prst = dml(sp_pr, "prstGeom").and_then(|g| g.attribute("prst"));
-    let has_txbx = wsp.children().any(|n| n.has_tag_name((WPS_NS, "txbx")));
-    let is_connector = matches!(prst, Some("line" | "straightConnector1" | "arc")) && !has_txbx;
-
-    if is_connector {
+    if is_connector_wsp(wsp, sp_pr) {
         if let Some(mut conn) = parse_connector_shape_node(wsp, ctx.theme) {
             let (mut cx, mut cy) = (x, y);
             conn.width = w;
@@ -380,7 +353,7 @@ fn emit_wsp<R: Read + Seek>(
             on_line: base.on_line,
             in_group: true,
             v_from_line: base.v_from_line,
-            ..Textbox::from(shape)
+            ..shape
         }));
     }
 }
@@ -457,15 +430,11 @@ pub(super) fn parse_vml_group<R: Read + Seek>(
     let box_style = parse_vml_box_style(style);
     let (behind_doc, z_index) = vml_z_order(box_style.z_index);
     let base = BaseAnchor {
-        x: 0.0,
-        h_align: None,
-        y: 0.0,
         h_rel: box_style.h_relative,
         v_rel: box_style.v_relative,
         behind_doc,
         z_index,
-        on_line: false,
-        v_from_line: false,
+        ..Default::default()
     };
     let mut out = Vec::new();
     walk_vml_group(group, GroupTransform::IDENTITY, &base, 0, ctx, &mut out);
@@ -543,7 +512,7 @@ fn walk_vml_group<R: Read + Seek>(
         {
             (img.src_rect, img.lum) = vml_imagedata_props(data);
             out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
-        } else if let Some(img) = super::images::vml_frame_fill_image(node, ctx, w, h) {
+        } else if let Some(img) = vml_frame_fill_image(node, ctx, w, h) {
             out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
         }
     }
