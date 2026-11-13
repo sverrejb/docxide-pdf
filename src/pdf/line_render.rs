@@ -771,6 +771,20 @@ pub(super) fn take_change_bars() -> Vec<(f32, f32)> {
     CHANGE_BARS.with(|b| std::mem::take(&mut *b.borrow_mut()))
 }
 
+/// The optional parts of `render_paragraph_lines`; most callers set one or two.
+#[derive(Default)]
+pub(super) struct RenderOpts<'a> {
+    /// Index of `lines[0]` in the whole paragraph (a slice split across pages).
+    pub first_line_index: usize,
+    pub line_geometry: Option<&'a [(f32, f32)]>,
+    pub comment_anchors: Option<&'a mut Vec<(u32, f32, f32, f32)>>,
+    pub line_numbering: Option<LineNumberArg<'a>>,
+    pub link_tags: Option<LinkTagger<'a>>,
+    /// (x, y, w, h) the inline pictures are clipped to.
+    pub picture_clip: Option<(f32, f32, f32, f32)>,
+    pub line_grid: Option<LineGrid>,
+}
+
 /// Render pre-built lines applying the paragraph alignment.
 /// `first_baseline_y` is line 0's text baseline as if it held no picture; a
 /// picture line drops its own baseline here (see `inline_image_line_extra`).
@@ -789,19 +803,21 @@ pub(super) fn render_paragraph_lines(
     // `inline_line_advance`).
     text_metrics: (f32, f32),
     total_line_count: usize,
-    first_line_index: usize,
     links: &mut Vec<LinkAnnotation>,
     first_line_hanging: f32,
     seen_fonts: &HashMap<String, FontEntry>,
-    line_geometry: Option<&[(f32, f32)]>,
     gradient_specs: &mut Vec<super::GradientSpec>,
-    mut comment_anchors: Option<&mut Vec<(u32, f32, f32, f32)>>,
-    mut line_numbering: Option<LineNumberArg<'_>>,
-    mut link_tags: Option<LinkTagger<'_>>,
-    // (x, y, w, h) the inline pictures are clipped to.
-    picture_clip: Option<(f32, f32, f32, f32)>,
-    line_grid: Option<LineGrid>,
+    opts: RenderOpts<'_>,
 ) {
+    let RenderOpts {
+        first_line_index,
+        line_geometry,
+        mut comment_anchors,
+        mut line_numbering,
+        mut link_tags,
+        picture_clip,
+        line_grid,
+    } = opts;
     let mut current_color: Option<[u8; 3]> = None;
     let mut pattern_fill_active = false;
     let mut cur_font_name = String::new();

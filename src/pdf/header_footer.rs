@@ -11,9 +11,9 @@ use super::color::stroke_border;
 use super::helpers::{align_offset, draw_horizontal_rule};
 pub(super) use super::hf_fields::{page_field_text, substitute_hf_runs, substitute_hf_runs_with};
 use super::layout::{
-    LineOpts, LinkAnnotation, TextLine, build_lines, is_text_empty, line_h_with_picture,
-    lines_height, picture_line_bottom, position_stretch, render_paragraph_lines, runs_max_image_h,
-    size_lines_by_own_runs, tallest_run_metrics,
+    LineOpts, LinkAnnotation, RenderOpts, TextLine, build_lines, is_text_empty,
+    line_h_with_picture, lines_height, picture_line_bottom, position_stretch,
+    render_paragraph_lines, runs_max_image_h, size_lines_by_own_runs, tallest_run_metrics,
 };
 use super::positioning::resolve_h_position;
 use super::table;
@@ -1762,25 +1762,23 @@ pub(super) fn render_header_footer(
                     line_h,
                     metrics,
                     lines.len(),
-                    0,
                     links,
                     text_hanging,
                     ctx.fonts,
-                    hdr_line_geom.as_deref(),
                     gradient_specs,
-                    None,
-                    None,
-                    None,
-                    None,
-                    Some(super::layout::LineGrid::new(
-                        sp.page_height,
-                        cursor_y - baseline_y,
-                        effective_ls,
-                        line_h,
-                        font_size * tallest_lhr.unwrap_or(1.2),
-                        metrics.0,
-                        para.space_after,
-                    )),
+                    RenderOpts {
+                        line_geometry: hdr_line_geom.as_deref(),
+                        line_grid: Some(super::layout::LineGrid::new(
+                            sp.page_height,
+                            cursor_y - baseline_y,
+                            effective_ls,
+                            line_h,
+                            font_size * tallest_lhr.unwrap_or(1.2),
+                            metrics.0,
+                            para.space_after,
+                        )),
+                        ..Default::default()
+                    },
                 );
 
                 let trailing_descent = if wrapped_pictures {
@@ -1899,17 +1897,11 @@ fn render_hf_frame_paragraph(
         font_size,
         (font_size * ascender_ratio, 0.0),
         lines.len(),
-        0,
         links,
         0.0,
         ctx.fonts,
-        None,
         gradient_specs,
-        None,
-        None,
-        None,
-        None,
-        None,
+        RenderOpts::default(),
     );
 }
 
@@ -2098,17 +2090,11 @@ fn render_hf_textbox(
             bp.line_h,
             tb_metrics,
             bp.lines.len(),
-            0,
             links,
             0.0,
             ctx.fonts,
-            None,
             gradient_specs,
-            None,
-            None,
-            None,
-            None,
-            None,
+            RenderOpts::default(),
         );
         tb_cursor -= bp.height(tp);
     }

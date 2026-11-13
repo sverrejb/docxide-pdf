@@ -1245,23 +1245,25 @@ pub(super) fn render_paragraph_block(
             line_h,
             para_metrics,
             total,
-            first_idx,
             &mut pb.links,
             text_hanging,
             ctx.fonts,
-            geom,
             &mut pb.gradient_specs,
-            Some(&mut pb.comment_anchors),
-            ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                counter: &mut pb.line_number_counter,
-                start,
-                count_by,
-                right_x,
-                font: ln_font.clone(),
-            }),
-            Some(LinkTagger::new(&mut pb.tags, pb.all_contents.len(), tag)),
-            None,
-            grid,
+            RenderOpts {
+                first_line_index: first_idx,
+                line_geometry: geom,
+                comment_anchors: Some(&mut pb.comment_anchors),
+                line_numbering: ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
+                    counter: &mut pb.line_number_counter,
+                    start,
+                    count_by,
+                    right_x,
+                    font: ln_font.clone(),
+                }),
+                link_tags: Some(LinkTagger::new(&mut pb.tags, pb.all_contents.len(), tag)),
+                picture_clip: None,
+                line_grid: grid,
+            },
         );
     };
     let mut planned_gaps = step_lines_below_floats(

@@ -11,8 +11,8 @@ use super::color::{fill_rgb, set_fill_alpha, stroke_rgb};
 use super::header_footer::resolve_tb_y_top;
 use super::helpers::align_offset;
 use super::layout::{
-    LineOpts, LinkAnnotation, LinkTagger, TextLine, build_lines, line_max_image_h, lines_height,
-    picture_line_bottom, render_paragraph_lines, tallest_run_metrics,
+    LineOpts, LinkAnnotation, LinkTagger, RenderOpts, TextLine, build_lines, line_max_image_h,
+    lines_height, picture_line_bottom, render_paragraph_lines, tallest_run_metrics,
 };
 use super::list_label::render_list_label;
 use super::positioning::resolve_h_position;
@@ -945,21 +945,20 @@ pub(super) fn render_textbox_paragraphs(
             tb_line_h,
             tb_metrics,
             tb_lines.len(),
-            0,
             links,
             // The first line's indent also moves centred and right-aligned text
             // (air_pollution's caption: firstLine 709 shifts it 17.6pt).
             text_hanging,
             ctx.fonts,
-            None,
             gradient_specs,
-            None,
-            None,
-            tag.as_mut()
-                .zip(para_tag)
-                .map(|(StoryTag { tags, page, .. }, p)| LinkTagger::new(tags, *page, p)),
-            picture_clip,
-            None,
+            RenderOpts {
+                link_tags: tag
+                    .as_mut()
+                    .zip(para_tag)
+                    .map(|(StoryTag { tags, page, .. }, p)| LinkTagger::new(tags, *page, p)),
+                picture_clip,
+                ..Default::default()
+            },
         );
         if para_tag.is_some() {
             Tags::end(content);

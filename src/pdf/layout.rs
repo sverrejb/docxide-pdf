@@ -11,9 +11,10 @@ use crate::model::{
 use super::RenderContext;
 use super::images::EffectXObjs;
 pub(super) use super::line_render::{
-    LineNumberArg, change_bars_len, checkbox_cell, collapse_change_bars_from, encode_text_for_pdf,
-    os2_strike, post_underline, push_clip, record_change_bar, render_paragraph_lines,
-    set_change_bar_extension, show_visual, strike_line, take_change_bars, underline_lines,
+    LineNumberArg, RenderOpts, change_bars_len, checkbox_cell, collapse_change_bars_from,
+    encode_text_for_pdf, os2_strike, post_underline, push_clip, record_change_bar,
+    render_paragraph_lines, set_change_bar_extension, show_visual, strike_line, take_change_bars,
+    underline_lines,
 };
 pub(super) use super::line_sizing::{
     LineGrid, boxed_line_ascent, descender_ratio, east_asian_leading, first_drawn_baseline,

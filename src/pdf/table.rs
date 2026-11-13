@@ -17,7 +17,9 @@ use super::color::fill_rgb;
 use super::header_footer::effective_slot_top;
 
 use super::RenderContext;
-use super::layout::{LinkAnnotation, LinkTagger, encode_text_for_pdf, render_paragraph_lines};
+use super::layout::{
+    LinkAnnotation, LinkTagger, RenderOpts, encode_text_for_pdf, render_paragraph_lines,
+};
 use super::table_columns::{
     apply_pct_width, auto_fit_columns, autofit_min_widths, cell_span_width, cell_x_offset,
     fixed_columns, min_content_widths, squeeze_to_width,
@@ -342,20 +344,21 @@ fn render_cell_content(
                     para.line_h,
                     para.picture_metrics(),
                     para.lines.len(),
-                    l0,
                     links,
                     para.text_hanging,
                     ctx.fonts,
-                    beside_float_geometry(para, text_x, text_w).as_deref(),
                     gradient_specs,
-                    Some(&mut ctx.cell_comment_anchors.borrow_mut()),
-                    None,
-                    cell_link_tagger(&mut tagger, cell_para),
-                    None,
-                    para.line_grid.map(|g| super::layout::LineGrid {
-                        page_height: ctx.page_height.get(),
-                        ..g
-                    }),
+                    RenderOpts {
+                        first_line_index: l0,
+                        line_geometry: beside_float_geometry(para, text_x, text_w).as_deref(),
+                        comment_anchors: Some(&mut ctx.cell_comment_anchors.borrow_mut()),
+                        link_tags: cell_link_tagger(&mut tagger, cell_para),
+                        line_grid: para.line_grid.map(|g| super::layout::LineGrid {
+                            page_height: ctx.page_height.get(),
+                            ..g
+                        }),
+                        ..Default::default()
+                    },
                 );
                 if picture_clip {
                     content.restore_state();

@@ -8,8 +8,8 @@ use super::RenderContext;
 use super::color::stroke_segment;
 use super::helpers::{effective_space_after, effective_space_before};
 use super::layout::{
-    LineOpts, LinkTagger, TextLine, boxed_line_ascent, build_lines, is_text_empty, lines_height,
-    os2_strike, render_paragraph_lines, size_lines_by_own_runs, tallest_run_metrics,
+    LineOpts, LinkTagger, RenderOpts, TextLine, boxed_line_ascent, build_lines, is_text_empty,
+    lines_height, os2_strike, render_paragraph_lines, size_lines_by_own_runs, tallest_run_metrics,
 };
 use super::list_label::render_list_label;
 use super::resolve_line_h;
@@ -399,17 +399,14 @@ fn render_notes_downward(
                     // Footnote lines carry no inline pictures, so no descent is needed.
                     (layout.font_size * layout.ascender_ratio, 0.0),
                     line_count,
-                    0,
                     notes.links,
                     np.hanging,
                     ctx.fonts,
-                    None,
                     gradient_specs,
-                    None,
-                    None,
-                    Some(LinkTagger::new(notes.tags, notes.page, p)),
-                    None,
-                    None,
+                    RenderOpts {
+                        link_tags: Some(LinkTagger::new(notes.tags, notes.page, p)),
+                        ..Default::default()
+                    },
                 );
                 super::tagging::Tags::end(content);
             }

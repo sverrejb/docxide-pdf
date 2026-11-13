@@ -81,7 +81,7 @@ use helpers::{
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
     CjkLayout, DualRegion, EMPTY_EFFECTS, EMPTY_INLINE_IMAGES, LineNumberArg, LineOpts,
-    LinkAnnotation, LinkTagger, PUNCT_PULL_FREE, PUNCT_SQUEEZE, TextLine, build_lines,
+    LinkAnnotation, LinkTagger, PUNCT_PULL_FREE, PUNCT_SQUEEZE, RenderOpts, TextLine, build_lines,
     build_paragraph_lines, descender_ratio, grid_baseline_offset, grid_snapped_line_h,
     inserted_picture_descent, is_text_empty, line_h_with_picture, line_max_image_h, lines_height,
     picture_line_bottom, render_paragraph_lines, run_line_metrics, size_lines_by_own_runs,
