@@ -21,6 +21,7 @@ mod settings;
 pub(crate) mod smartart;
 mod styles;
 pub(crate) mod svg;
+mod table_borders;
 mod tables;
 mod textbox;
 mod theme;
