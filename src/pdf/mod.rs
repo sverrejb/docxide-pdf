@@ -633,14 +633,10 @@ fn take_page_break_before(
 ) {
     let at_top = state.pb.is_at_page_top(sp);
     if !at_top && break_line_misses_page(para, state, ctx) {
-        state
-            .pb
-            .begin_next_page(sect_idx, sp, &mut state.effective_margin_bottom, ctx);
+        state.begin_next_page(sect_idx, sp, ctx);
     }
     if !at_top || para.page_break_before_explicit {
-        state
-            .pb
-            .begin_next_page(sect_idx, sp, &mut state.effective_margin_bottom, ctx);
+        state.begin_next_page(sect_idx, sp, ctx);
         state.current_col = 0;
     }
 }
@@ -965,14 +961,7 @@ fn place_first_line(
             state.pb.slot_top = state.effective_margin_bottom;
             return true;
         }
-        state.pb.advance_column_or_page(
-            &mut state.current_col,
-            cols.len(),
-            sect_idx,
-            sp,
-            &mut state.effective_margin_bottom,
-            ctx,
-        );
+        state.advance_column_or_page(cols.len(), sect_idx, sp, ctx);
     }
 }
 
@@ -2426,6 +2415,16 @@ fn convert_polygon_to_page_coords(
 /// Draw debug overlays for the wrap polygon and effective exclusion zone.
 /// Green = raw polygon, blue = wrap zone (polygon ± dist margins), red = top/bottom bounds.
 fn draw_debug_wrap_overlay(content: &mut Content, fz: &FloatZone) {
+    let polyline = |content: &mut Content, pts: &[(f32, f32)], close: bool| {
+        content.move_to(pts[0].0, pts[0].1);
+        for &(x, y) in &pts[1..] {
+            content.line_to(x, y);
+        }
+        if close {
+            content.close_path();
+        }
+        content.stroke();
+    };
     content.save_state();
 
     // Green: raw polygon outline
@@ -2434,12 +2433,7 @@ fn draw_debug_wrap_overlay(content: &mut Content, fz: &FloatZone) {
     {
         content.set_stroke_rgb(0.0, 0.7, 0.0);
         content.set_line_width(0.5);
-        content.move_to(pts[0].0, pts[0].1);
-        for &(x, y) in &pts[1..] {
-            content.line_to(x, y);
-        }
-        content.close_path();
-        content.stroke();
+        polyline(content, pts, true);
     }
 
     // Blue: effective wrap zone boundaries (polygon shifted by dist margins)
@@ -2458,18 +2452,10 @@ fn draw_debug_wrap_overlay(content: &mut Content, fz: &FloatZone) {
                 }
             }
             if left_pts.len() >= 2 {
-                content.move_to(left_pts[0].0, left_pts[0].1);
-                for &(x, y) in &left_pts[1..] {
-                    content.line_to(x, y);
-                }
-                content.stroke();
+                polyline(content, &left_pts, false);
             }
             if right_pts.len() >= 2 {
-                content.move_to(right_pts[0].0, right_pts[0].1);
-                for &(x, y) in &right_pts[1..] {
-                    content.line_to(x, y);
-                }
-                content.stroke();
+                polyline(content, &right_pts, false);
             }
         }
     }
@@ -2479,12 +2465,8 @@ fn draw_debug_wrap_overlay(content: &mut Content, fz: &FloatZone) {
     content.set_line_width(0.3);
     let page_left = fz.obj_left - 20.0;
     let page_right = fz.obj_right + 20.0;
-    content.move_to(page_left, fz.top_y);
-    content.line_to(page_right, fz.top_y);
-    content.stroke();
-    content.move_to(page_left, fz.bottom_y);
-    content.line_to(page_right, fz.bottom_y);
-    content.stroke();
+    polyline(content, &[(page_left, fz.top_y), (page_right, fz.top_y)], false);
+    polyline(content, &[(page_left, fz.bottom_y), (page_right, fz.bottom_y)], false);
 
     content.restore_state();
 }
@@ -3229,6 +3211,12 @@ impl PageBuilder {
         }
     }
 
+    /// The text after a full-width picture resumes below the lowest one.
+    fn lower_next_text_to(&mut self, bottom: f32) {
+        self.next_text_below_picture =
+            Some(self.next_text_below_picture.map_or(bottom, |old| old.min(bottom)));
+    }
+
     fn take_pending_first_page(&mut self, sect_idx: usize) -> bool {
         self.pending_section_first_page
             .take()
@@ -3320,6 +3308,42 @@ pub(super) struct LayoutState {
 }
 
 impl LayoutState {
+    fn advance_column_or_page(
+        &mut self,
+        col_count: usize,
+        sect_idx: usize,
+        sp: &SectionProperties,
+        ctx: &RenderContext,
+    ) {
+        self.pb.advance_column_or_page(
+            &mut self.current_col,
+            col_count,
+            sect_idx,
+            sp,
+            &mut self.effective_margin_bottom,
+            ctx,
+        );
+    }
+
+    fn begin_next_page(&mut self, sect_idx: usize, sp: &SectionProperties, ctx: &RenderContext) {
+        self.pb
+            .begin_next_page(sect_idx, sp, &mut self.effective_margin_bottom, ctx);
+    }
+
+    fn take_page_break_after(
+        &mut self,
+        para: &Paragraph,
+        sect_idx: usize,
+        sp: &SectionProperties,
+        ctx: &RenderContext,
+    ) {
+        if para.page_break_after {
+            self.begin_next_page(sect_idx, sp, ctx);
+            self.prev_space_after = 0.0;
+            self.current_col = 0;
+        }
+    }
+
     /// A throwaway copy for laying out a column region again with its
     /// columns ending at `bottom`; its output is discarded.
     fn trial(&self, bottom: f32) -> LayoutState {
@@ -3664,11 +3688,7 @@ fn empty_frame_table_bands(
         let fits = blocks[..start].iter().all(|b| {
             match b {
                 Block::Table(t) => {
-                    if t.rows
-                        .iter()
-                        .flat_map(|r| r.cells.iter())
-                        .flat_map(|c| c.all_paragraphs())
-                        .any(|q| {
+                    if t.all_paragraphs().any(|q| {
                             q.page_break_before
                                 || q.page_break_after
                                 || q.page_break_at.is_some()
@@ -3848,6 +3868,25 @@ fn float_subset(
     (sub, names, effects)
 }
 
+/// Whether a picture offset below its paragraph's top leaves no usable text
+/// strip on either side of it.
+fn offset_picture_without_strip(
+    fi: &crate::model::FloatingImage,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> bool {
+    if fi.v_relative_from != VRelativeFrom::Paragraph
+        || !matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
+    {
+        return false;
+    }
+    let x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+    (x - fi.dist_left - col_x).max(col_x + col_w - x - fi.image.display_width - fi.dist_right)
+        < MIN_EMPTY_STRIP
+}
+
 /// Whether a leading picture leaves no usable text strip on either side.
 fn leading_full_width_picture(
     fi: &crate::model::FloatingImage,
@@ -3856,16 +3895,9 @@ fn leading_full_width_picture(
     col_w: f32,
     text_width: f32,
 ) -> bool {
-    if !fi.anchor_at_start
-        || fi.v_relative_from != VRelativeFrom::Paragraph
-        || !matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
-        || !matches!(fi.wrap_type, WrapType::Square | WrapType::Tight)
-    {
-        return false;
-    }
-    let x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-    (x - fi.dist_left - col_x).max(col_x + col_w - x - fi.image.display_width - fi.dist_right)
-        < MIN_EMPTY_STRIP
+    fi.anchor_at_start
+        && matches!(fi.wrap_type, WrapType::Square | WrapType::Tight)
+        && offset_picture_without_strip(fi, sp, col_x, col_w, text_width)
 }
 
 // Full-width rectangular contour wrapping advances through candidate lines,
@@ -3982,13 +4014,7 @@ fn body_runs<'a>(doc: &'a Document) -> impl Iterator<Item = &'a Run> + 'a {
         |block| -> Box<dyn Iterator<Item = &'a Run> + 'a> {
             match block {
                 Block::Paragraph(p) => Box::new(p.runs.iter()),
-                Block::Table(t) => Box::new(
-                    t.rows
-                        .iter()
-                        .flat_map(|row| row.cells.iter())
-                        .flat_map(|cell| cell.all_paragraphs())
-                        .flat_map(|p| p.runs.iter()),
-                ),
+                Block::Table(t) => Box::new(t.all_paragraphs().flat_map(|p| p.runs.iter())),
             }
         },
     )
@@ -4070,10 +4096,21 @@ fn compute_bookmark_positions(
     }
 
     let mut bookmark_positions: HashMap<String, (usize, f32)> = HashMap::new();
-    let mut page_idx = 0usize;
     // The section each simulated page opens in, shaped like
-    // `PageBuilder::page_section_indices` for `page_number_formats`.
+    // `PageBuilder::page_section_indices` for `page_number_formats`; a
+    // bookmark's page is the last one opened.
     let mut pages = vec![(0, false, 0)];
+    // Opens the next simulated page of section `si`: its slot top and
+    // effective bottom margin.
+    let open_page =
+        |pages: &mut Vec<(usize, bool, usize)>, si: usize, sp: &SectionProperties, first: bool| {
+            pages.push((si, false, si));
+            let page = last_page_number(&doc.sections, pages.iter());
+            (
+                effective_slot_top(sp, first, page, ctx),
+                compute_effective_margin_bottom(sp, first, page, ctx),
+            )
+        };
     let first_sp = &doc.sections[0].properties;
     let mut sp = first_sp;
     let page = last_page_number(&doc.sections, &pages);
@@ -4089,11 +4126,7 @@ fn compute_bookmark_positions(
                 SectionBreakType::NextPage
                 | SectionBreakType::OddPage
                 | SectionBreakType::EvenPage => {
-                    page_idx += 1;
-                    pages.push((si, false, si));
-                    let page = last_page_number(&doc.sections, &pages);
-                    slot_top = effective_slot_top(sp, true, page, ctx);
-                    margin_bottom = compute_effective_margin_bottom(sp, true, page, ctx);
+                    (slot_top, margin_bottom) = open_page(&mut pages, si, sp, true);
                     prev_space_after = 0.0;
                 }
                 SectionBreakType::Continuous => {}
@@ -4113,15 +4146,11 @@ fn compute_bookmark_positions(
                                 ctx,
                             )
                     {
-                        page_idx += 1;
-                        pages.push((si, false, si));
-                        let page = last_page_number(&doc.sections, &pages);
-                        slot_top = effective_slot_top(sp, false, page, ctx);
-                        margin_bottom = compute_effective_margin_bottom(sp, false, page, ctx);
+                        (slot_top, margin_bottom) = open_page(&mut pages, si, sp, false);
                         prev_space_after = 0.0;
                     }
                     for bm in &para.bookmarks {
-                        bookmark_positions.insert(bm.clone(), (page_idx, slot_top));
+                        bookmark_positions.insert(bm.clone(), (pages.len() - 1, slot_top));
                     }
                     if is_empty_wrapping_frame(para) {
                         continue;
@@ -4195,11 +4224,7 @@ fn compute_bookmark_positions(
                         num_lines as f32 * line_h
                     };
                     let effective_sb = helpers::effective_space_before(para, prev_para);
-                    let next_para = match blocks.get(bi + 1) {
-                        Some(Block::Paragraph(p)) => Some(p),
-                        Some(Block::Table(t)) => first_cell_paragraph(t),
-                        None => None,
-                    };
+                    let next_para = block_para(blocks, bi + 1);
                     let effective_sa = helpers::effective_space_after(para, next_para);
                     let inter_gap = f32::max(prev_space_after, effective_sb);
                     let needed = inter_gap + content_h;
@@ -4212,11 +4237,7 @@ fn compute_bookmark_positions(
                                 ctx,
                             )
                     {
-                        page_idx += 1;
-                        pages.push((si, false, si));
-                        let page = last_page_number(&doc.sections, &pages);
-                        slot_top = effective_slot_top(sp, false, page, ctx);
-                        margin_bottom = compute_effective_margin_bottom(sp, false, page, ctx);
+                        (slot_top, margin_bottom) = open_page(&mut pages, si, sp, false);
                         slot_top -= content_h;
                     } else {
                         slot_top -= inter_gap + content_h;
@@ -4235,17 +4256,13 @@ fn compute_bookmark_positions(
                         cells.iter().map(|c| c.len().max(1)).max().unwrap_or(1) * table.rows.len();
                     let est_h = para_count as f32 * 14.0;
                     if slot_top - est_h < margin_bottom {
-                        page_idx += 1;
-                        pages.push((si, false, si));
-                        let page = last_page_number(&doc.sections, &pages);
-                        slot_top = effective_slot_top(sp, false, page, ctx);
-                        margin_bottom = compute_effective_margin_bottom(sp, false, page, ctx);
+                        (slot_top, margin_bottom) = open_page(&mut pages, si, sp, false);
                     }
                     // Captions in cells count as on the table's page (issue
                     // #146: a panel table's TOC entries had no page numbers).
                     // ponytail: a table that splits keeps its first page.
                     for bm in cells.iter().flatten().flat_map(|p| &p.bookmarks) {
-                        bookmark_positions.insert(bm.clone(), (page_idx, slot_top));
+                        bookmark_positions.insert(bm.clone(), (pages.len() - 1, slot_top));
                     }
                     slot_top -= est_h;
                     prev_space_after = 0.0;
@@ -4397,15 +4414,9 @@ fn render_paragraph_block(
     sect_idx: usize,
     block_idx: usize,
     section_blocks: &[Block],
-    floating_image_pdf_names: &HashMap<(usize, usize), String>,
-    inline_image_pdf_names: &HashMap<(usize, usize), String>,
-    image_pdf_names: &HashMap<usize, String>,
-    effect_names: &HashMap<usize, EffectXObjs>,
-    effect_floating_names: &HashMap<(usize, usize), EffectXObjs>,
-    effect_inline_names: &HashMap<(usize, usize), EffectXObjs>,
+    images: &EmbeddedImages,
     doc: &Document,
     smartart_font_key: &str,
-    smartart_image_names: &HashMap<usize, String>,
     debug_wrap: bool,
     table_connector_anchor: Option<(usize, f32)>,
 ) -> bool {
@@ -4529,23 +4540,12 @@ fn render_paragraph_block(
         if col_count > 1 {
             state.pb.slot_top -= state.prev_space_after;
         }
-        state.pb.advance_column_or_page(
-            &mut state.current_col,
-            col_count,
-            sect_idx,
-            sp,
-            &mut state.effective_margin_bottom,
-            ctx,
-        );
+        state.advance_column_or_page(col_count, sect_idx, sp, ctx);
         state.prev_space_after = 0.0;
     }
 
     let next_para = adjacent_para(block_idx + 1);
-    let prev_para = if block_idx > 0 {
-        adjacent_para(block_idx - 1)
-    } else {
-        None
-    };
+    let prev_para = block_idx.checked_sub(1).and_then(adjacent_para);
 
     // A continuous section boundary does not interrupt contextual spacing.
     // Border grouping still uses the section-local neighbours above.
@@ -4731,12 +4731,14 @@ fn render_paragraph_block(
 
     let text_empty = is_text_empty(&effective_runs);
     let has_tabs = effective_runs.iter().any(|r| r.is_tab);
-    let block_inline_images: HashMap<usize, String> = inline_image_pdf_names
+    let block_inline_images: HashMap<usize, String> = images
+        .inline_image_pdf_names
         .iter()
         .filter(|((bi, _), _)| *bi == state.global_block_idx)
         .map(|((_, ri), name)| (*ri, name.clone()))
         .collect();
-    let block_effect_inlines: HashMap<usize, images::EffectXObjs> = effect_inline_names
+    let block_effect_inlines: HashMap<usize, images::EffectXObjs> = images
+        .effect_inline_names
         .iter()
         .filter(|((bi, _), _)| *bi == state.global_block_idx)
         .map(|((_, ri), fx)| (*ri, fx.clone()))
@@ -4784,11 +4786,9 @@ fn render_paragraph_block(
         state.pb.more_float_zones.clone(),
     );
     if let Some(zone) = own_zone {
-        state.pb.float_zone = Some(zone);
         // Re-narrow para_text_x / para_text_width using the
         // new float zone (same logic as the block above).
-        let fz = state.pb.float_zone.as_ref().unwrap();
-        fz.narrow_paragraph(
+        zone.narrow_paragraph(
             first_line_top,
             col_x,
             col_w,
@@ -4798,6 +4798,7 @@ fn render_paragraph_block(
             &mut label_x,
             ctx.compat_mode < 15,
         );
+        state.pb.float_zone = Some(zone);
     }
 
     let cjk = ctx.cjk(para.auto_space_de || para.auto_space_dn, para);
@@ -4940,7 +4941,7 @@ fn render_paragraph_block(
 
     // Lines beside floats with no room on a side text may take (floating
     // tables keep their own rule).
-    let mut blocked_lines = vec![false; 0];
+    let mut blocked_lines = Vec::new();
     // Build per-line geometry and dual-region geometry
     let (mut poly_line_geom, mut poly_dual_geom): (
         Option<Vec<(f32, f32)>>,
@@ -5482,6 +5483,49 @@ fn render_paragraph_block(
     } else {
         0.0
     };
+    // Whole, split across pages or beside a float, the lines are drawn the
+    // same way; only the slice and its frame differ. `pb` is a parameter so
+    // the callers keep their own split borrows of `state`.
+    let draw = |pb: &mut PageBuilder,
+                lines: &[TextLine],
+                x: f32,
+                w: f32,
+                baseline: f32,
+                first_idx: usize,
+                geom: Option<&[(f32, f32)]>,
+                total: usize,
+                tag: usize,
+                grid: Option<layout::LineGrid>| {
+        render_paragraph_lines(
+            &mut pb.content,
+            lines,
+            &para.alignment,
+            x,
+            para.indent_left,
+            w,
+            baseline,
+            line_h,
+            para_metrics,
+            total,
+            first_idx,
+            &mut pb.links,
+            text_hanging,
+            ctx.fonts,
+            geom,
+            &mut pb.gradient_specs,
+            Some(&mut pb.comment_anchors),
+            ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
+                counter: &mut pb.line_number_counter,
+                start,
+                count_by,
+                right_x,
+                font: ln_font.clone(),
+            }),
+            Some(LinkTagger::new(&mut pb.tags, pb.all_contents.len(), tag)),
+            None,
+            grid,
+        );
+    };
     let mut planned_gaps = step_lines_below_floats(
         &mut lines,
         &state.pb,
@@ -5524,13 +5568,15 @@ fn render_paragraph_block(
         LineSpacing::AtLeast(min) => (bottom + inserted_descent).max(min),
         _ => bottom + inserted_descent + mark_line().1,
     };
+    // Modern Word swaps the inline layout axes in the nearest quarter-turn
+    // quadrant; it does not reserve the exact oblique bounding rectangle.
+    let swap_axes = ctx.compat_mode >= 15
+        && para.image.as_ref().is_some_and(|img| {
+            (img.rotation_deg.rem_euclid(360.0) + 45.0).rem_euclid(180.0) >= 90.0
+        });
     let mut content_h = if para.inline_chart.is_some() {
         picture_line_h(para.content_height)
     } else if let Some(img) = &para.image {
-        // Modern Word swaps the inline layout axes in the nearest quarter-turn
-        // quadrant; it does not reserve the exact oblique bounding rectangle.
-        let swap_axes = ctx.compat_mode >= 15
-            && (img.rotation_deg.rem_euclid(360.0) + 45.0).rem_euclid(180.0) >= 90.0;
         let image_height = if swap_axes {
             img.display_width + img.layout_extra_height
         } else {
@@ -6197,37 +6243,16 @@ fn render_paragraph_block(
                 render_list_label(content, para, ctx.fonts, label_x, label_y, font_size)
             });
 
-            render_paragraph_lines(
-                &mut state.pb.content,
+            draw(
+                &mut state.pb,
                 first_part,
-                &para.alignment,
                 para_text_x,
-                para.indent_left,
                 para_text_width,
                 baseline_y,
-                line_h,
-                para_metrics,
-                lines.len(),
                 0,
-                &mut state.pb.links,
-                text_hanging,
-                ctx.fonts,
                 poly_line_geom.as_deref(),
-                &mut state.pb.gradient_specs,
-                Some(&mut state.pb.comment_anchors),
-                ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                    counter: &mut state.pb.line_number_counter,
-                    start,
-                    count_by,
-                    right_x,
-                    font: ln_font.clone(),
-                }),
-                Some(LinkTagger::new(
-                    &mut state.pb.tags,
-                    state.pb.all_contents.len(),
-                    tag,
-                )),
-                None,
+                lines.len(),
+                tag,
                 grid,
             );
             state.pb.end_tag();
@@ -6237,8 +6262,8 @@ fn render_paragraph_block(
             // returns before the ordinary float rendering below).
             let (leading, leading_names, leading_effects) = float_subset(
                 &para.floating_images,
-                floating_image_pdf_names,
-                effect_floating_names,
+                &images.floating_image_pdf_names,
+                &images.effect_floating_names,
                 state.global_block_idx,
                 |fi| !blank_after(&para.runs, fi.anchor_run),
             );
@@ -6270,14 +6295,7 @@ fn render_paragraph_block(
 
             // The column ends below the lines that stay (its separator reaches them).
             state.pb.slot_top -= text_drop + lines_height(first_part, line_h, para_metrics);
-            state.pb.advance_column_or_page(
-                &mut state.current_col,
-                col_count,
-                sect_idx,
-                sp,
-                &mut state.effective_margin_bottom,
-                ctx,
-            );
+            state.advance_column_or_page(col_count, sect_idx, sp, ctx);
 
             let baseline_offset2 = if grid_snapped {
                 grid_baseline
@@ -6297,8 +6315,8 @@ fn render_paragraph_block(
             // the space above.
             let (trailing, trailing_names, trailing_effects) = float_subset(
                 &para.floating_images,
-                floating_image_pdf_names,
-                effect_floating_names,
+                &images.floating_image_pdf_names,
+                &images.effect_floating_names,
                 state.global_block_idx,
                 |fi| blank_after(&para.runs, fi.anchor_run),
             );
@@ -6358,14 +6376,7 @@ fn render_paragraph_block(
                 }
                 let fresh_page = at_foot || state.pb.takes_a_line(sp);
                 if fit == 0 && !fresh_page {
-                    state.pb.advance_column_or_page(
-                        &mut state.current_col,
-                        col_count,
-                        sect_idx,
-                        sp,
-                        &mut state.effective_margin_bottom,
-                        ctx,
-                    );
+                    state.advance_column_or_page(col_count, sect_idx, sp, ctx);
                     continue;
                 }
                 let chunk = &remaining[..fit.clamp(1, remaining.len())];
@@ -6467,18 +6478,8 @@ fn render_paragraph_block(
                 // while intervening empty marks may occupy the space above.
                 let trailing_images_fit = last_fragment
                     && trailing.iter().all(|fi| {
-                        fi.v_relative_from == VRelativeFrom::Paragraph
-                            && matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
-                            && fi.wrap_type.wraps_beside()
-                            && {
-                                let x = resolve_fi_x(fi, sp, rest_col_x, rest_col_w, text_width);
-                                (x - fi.dist_left - rest_col_x).max(
-                                    rest_col_x + rest_col_w
-                                        - x
-                                        - fi.image.display_width
-                                        - fi.dist_right,
-                                ) < MIN_EMPTY_STRIP
-                            }
+                        fi.wrap_type.wraps_beside()
+                            && offset_picture_without_strip(fi, sp, rest_col_x, rest_col_w, text_width)
                             && resolve_fi_y_top(fi, sp, state.pb.slot_top)
                                 - fi.image.display_height
                                 - fi.dist_bottom
@@ -6494,12 +6495,7 @@ fn render_paragraph_block(
                         );
                         state.pb.float_zone = Some(FloatZone::for_float(fi, x, top));
                         let bottom = top - fi.image.display_height - fi.dist_bottom;
-                        state.pb.next_text_below_picture = Some(
-                            state
-                                .pb
-                                .next_text_below_picture
-                                .map_or(bottom, |old| old.min(bottom)),
-                        );
+                        state.pb.lower_next_text_to(bottom);
                     }
                 }
                 // (from, to, text_x, text_w, baseline of the segment's first line)
@@ -6561,38 +6557,18 @@ fn render_paragraph_block(
                 state.pb.begin_tag(tag);
                 for &(from, to, seg_x, seg_w, seg_baseline) in segments.iter().filter(|s| s.1 > s.0)
                 {
-                    render_paragraph_lines(
-                        &mut state.pb.content,
+                    let grid = line_grid(baseline_offset2, state.pb.all_contents.len());
+                    draw(
+                        &mut state.pb,
                         &chunk[from..to],
-                        &para.alignment,
                         seg_x,
-                        para.indent_left,
                         seg_w,
                         seg_baseline,
-                        line_h,
-                        para_metrics,
-                        lines.len(),
                         start + from,
-                        &mut state.pb.links,
-                        text_hanging,
-                        ctx.fonts,
                         None,
-                        &mut state.pb.gradient_specs,
-                        Some(&mut state.pb.comment_anchors),
-                        ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                            counter: &mut state.pb.line_number_counter,
-                            start,
-                            count_by,
-                            right_x,
-                            font: ln_font.clone(),
-                        }),
-                        Some(LinkTagger::new(
-                            &mut state.pb.tags,
-                            state.pb.all_contents.len(),
-                            tag,
-                        )),
-                        None,
-                        line_grid(baseline_offset2, state.pb.all_contents.len()),
+                        lines.len(),
+                        tag,
+                        grid,
                     );
                 }
                 state.pb.end_tag();
@@ -6610,14 +6586,7 @@ fn render_paragraph_block(
                 if last_chunk {
                     break;
                 }
-                state.pb.advance_column_or_page(
-                    &mut state.current_col,
-                    col_count,
-                    sect_idx,
-                    sp,
-                    &mut state.effective_margin_bottom,
-                    ctx,
-                );
+                state.advance_column_or_page(col_count, sect_idx, sp, ctx);
             }
             state.prev_space_after = effective_space_after;
             layout::set_change_bar_extension(0.0, 0.0);
@@ -6627,13 +6596,7 @@ fn render_paragraph_block(
             }
 
             state.global_block_idx += 1;
-            if para.page_break_after {
-                state
-                    .pb
-                    .begin_next_page(sect_idx, sp, &mut state.effective_margin_bottom, ctx);
-                state.prev_space_after = 0.0;
-                state.current_col = 0;
-            }
+            state.take_page_break_after(para, sect_idx, sp, ctx);
             return true;
         }
 
@@ -6682,15 +6645,9 @@ fn render_paragraph_block(
                 sect_idx,
                 block_idx,
                 section_blocks,
-                floating_image_pdf_names,
-                inline_image_pdf_names,
-                image_pdf_names,
-                effect_names,
-                effect_floating_names,
-                effect_inline_names,
+                images,
                 doc,
                 smartart_font_key,
-                smartart_image_names,
                 debug_wrap,
                 table_connector_anchor,
             );
@@ -6866,8 +6823,8 @@ fn render_paragraph_block(
     render_floating_images(
         &render_images,
         state.global_block_idx,
-        floating_image_pdf_names,
-        effect_floating_names,
+        &images.floating_image_pdf_names,
+        &images.effect_floating_names,
         sp,
         col_x,
         col_w,
@@ -6945,12 +6902,7 @@ fn render_paragraph_block(
         zones.push(FloatZone::for_float(fi, fi_x, fi_y_top));
         if !text_empty && leading_full_width_picture(fi, sp, col_x, col_w, text_width) {
             let bottom = fi_y_top - fi.image.display_height - fi.dist_bottom;
-            state.pb.next_text_below_picture = Some(
-                state
-                    .pb
-                    .next_text_below_picture
-                    .map_or(bottom, |old| old.min(bottom)),
-            );
+            state.pb.lower_next_text_to(bottom);
         }
     }
     zones.extend(textbox_zones(
@@ -7016,7 +6968,7 @@ fn render_paragraph_block(
             y,
             ctx.fonts,
             smartart_font_key,
-            smartart_image_names,
+            &images.smartart_image_names,
         );
         state
             .pb
@@ -7050,14 +7002,14 @@ fn render_paragraph_block(
                 state.pb.slot_top,
                 ctx.fonts,
                 smartart_font_key,
-                smartart_image_names,
+                &images.smartart_image_names,
             );
         }
     } else if let Some(ref hr) = para.horizontal_rule {
         let line_bottom = state.pb.slot_top - content_h;
         draw_horizontal_rule(&mut state.pb.content, para, hr, col_x, col_w, line_bottom);
     } else if para.image.is_some() && para.content_height > 0.0 {
-        if let Some(pdf_name) = image_pdf_names.get(&state.global_block_idx) {
+        if let Some(pdf_name) = images.image_pdf_names.get(&state.global_block_idx) {
             let img = para.image.as_ref().unwrap();
             // Decorative pictures stay artifacts, as in Word's export.
             if img.decorative {
@@ -7071,8 +7023,6 @@ fn render_paragraph_block(
             // spacing (Word probe: 2.25-12pt pictures under Arial 12 at single
             // and 1.5 lines).
             let turned = img.rotation_deg.abs() > 0.01;
-            let swap_axes = ctx.compat_mode >= 15
-                && (img.rotation_deg.rem_euclid(360.0) + 45.0).rem_euclid(180.0) >= 90.0;
             let trim = if swap_axes { 0.0 } else { img.trimmed_width };
             let (box_w, box_h) = if swap_axes {
                 (img.display_height, img.display_width)
@@ -7121,7 +7071,7 @@ fn render_paragraph_block(
                     img.rotation_deg,
                 );
             }
-            let img_fx = effect_names.get(&state.global_block_idx);
+            let img_fx = images.effect_names.get(&state.global_block_idx);
             if let Some(ref shadow) = img.shadow {
                 color::draw_image_shadow(
                     &mut state.pb.content,
@@ -7258,37 +7208,16 @@ fn render_paragraph_block(
         });
 
         if !lines.is_empty() {
-            render_paragraph_lines(
-                &mut state.pb.content,
+            draw(
+                &mut state.pb,
                 &lines,
-                &para.alignment,
                 para_text_x,
-                para.indent_left,
                 para_text_width,
                 baseline_y,
-                line_h,
-                para_metrics,
-                lines.len(),
                 0,
-                &mut state.pb.links,
-                text_hanging,
-                ctx.fonts,
                 poly_line_geom.as_deref(),
-                &mut state.pb.gradient_specs,
-                Some(&mut state.pb.comment_anchors),
-                ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                    counter: &mut state.pb.line_number_counter,
-                    start,
-                    count_by,
-                    right_x,
-                    font: ln_font.clone(),
-                }),
-                Some(LinkTagger::new(
-                    &mut state.pb.tags,
-                    state.pb.all_contents.len(),
-                    tags.1,
-                )),
-                None,
+                lines.len(),
+                tags.1,
                 grid,
             );
         }
@@ -7443,22 +7372,9 @@ fn render_paragraph_block(
         &doc.style_id_to_name,
     );
 
-    if para.page_break_after {
-        state
-            .pb
-            .begin_next_page(sect_idx, sp, &mut state.effective_margin_bottom, ctx);
-        state.prev_space_after = 0.0;
-        state.current_col = 0;
-    }
+    state.take_page_break_after(para, sect_idx, sp, ctx);
     if para.column_break_after {
-        state.pb.advance_column_or_page(
-            &mut state.current_col,
-            col_count,
-            sect_idx,
-            sp,
-            &mut state.effective_margin_bottom,
-            ctx,
-        );
+        state.advance_column_or_page(col_count, sect_idx, sp, ctx);
         state.prev_space_after = 0.0;
     }
 
@@ -7531,23 +7447,7 @@ fn render_pass(
     let smartart_font_key = font_order.first().map(|s| s.as_str()).unwrap_or("");
     let t_fonts = t0.elapsed();
 
-    let EmbeddedImages {
-        image_pdf_names,
-        inline_image_pdf_names,
-        floating_image_pdf_names,
-        image_xobjects,
-        hf_image_names,
-        hf_inline_image_names,
-        hf_floating_image_names,
-        table_cell_image_names,
-        textbox_image_names,
-        smartart_image_names,
-        effect_names,
-        effect_floating_names,
-        effect_inline_names,
-        effect_hf_names,
-        effect_table_names,
-    } = embed_all_images(
+    let images = embed_all_images(
         doc,
         &mut pdf,
         &mut alloc,
@@ -7611,9 +7511,9 @@ fn render_pass(
         style_id_to_name: &doc.style_id_to_name,
         doc_line_spacing: doc.line_spacing,
         default_tab_stop: doc.default_tab_stop,
-        table_cell_image_names: &table_cell_image_names,
-        effect_table_names: &effect_table_names,
-        textbox_image_names: &textbox_image_names,
+        table_cell_image_names: &images.table_cell_image_names,
+        effect_table_names: &images.effect_table_names,
+        textbox_image_names: &images.textbox_image_names,
         chart_font_name: &doc.theme_minor_font,
         compress_punctuation: doc.compress_punctuation,
         footnote_marks: &footnote_display_order,
@@ -7709,20 +7609,14 @@ fn render_pass(
                     state.pb.flush_note_page(sect_idx - 1);
 
                     // Insert blank page for odd/even page alignment
-                    let need_odd = match sp.break_type {
-                        SectionBreakType::OddPage => true,
-                        _ if doc.even_and_odd_headers && sp.page_num_start.is_some() => {
-                            sp.page_num_start.unwrap() % 2 == 1
-                        }
-                        _ => false,
-                    };
-                    let need_even = match sp.break_type {
-                        SectionBreakType::EvenPage => true,
-                        _ if doc.even_and_odd_headers && sp.page_num_start.is_some() => {
-                            sp.page_num_start.unwrap() % 2 == 0
-                        }
-                        _ => false,
-                    };
+                    let restart_parity = sp
+                        .page_num_start
+                        .filter(|_| doc.even_and_odd_headers)
+                        .map(|start| start % 2);
+                    let need_odd =
+                        sp.break_type == SectionBreakType::OddPage || restart_parity == Some(1);
+                    let need_even =
+                        sp.break_type == SectionBreakType::EvenPage || restart_parity == Some(0);
                     if need_odd || need_even {
                         let explicit_parity_break = matches!(
                             sp.break_type,
@@ -8023,11 +7917,7 @@ fn render_pass(
                             // fits a strip there (Word examples: "C1P0", 25pt,
                             // holds a 30pt strip, not a 24pt one).
                             Some(w) => {
-                                let room = if fz.wrap_text == WrapText::BothSides {
-                                    space_left.max(space_right)
-                                } else {
-                                    side_room(fz.wrap_text, space_left, space_right)
-                                };
+                                let room = side_room(fz.wrap_text, space_left, space_right);
                                 room >= w.max(MIN_EMPTY_STRIP)
                             }
                             None => {
@@ -8109,15 +7999,9 @@ fn render_pass(
                             sect_idx,
                             block_idx,
                             &section.blocks,
-                            &floating_image_pdf_names,
-                            &inline_image_pdf_names,
-                            &image_pdf_names,
-                            &effect_names,
-                            &effect_floating_names,
-                            &effect_inline_names,
+                            &images,
                             doc,
                             smartart_font_key,
-                            &smartart_image_names,
                             debug_wrap,
                             table_connector_anchor,
                         );
@@ -8212,17 +8096,13 @@ fn render_pass(
 
                         // Update styleref tracking (footnotes are already tracked
                         // inside render_table incrementally per row).
-                        for row in &table.rows {
-                            for cell in &row.cells {
-                                for p in cell.all_paragraphs() {
-                                    update_styleref_from_para(
-                                        &mut state.pb.styleref_running,
-                                        &mut state.pb.styleref_page_first,
-                                        p,
-                                        &doc.style_id_to_name,
-                                    );
-                                }
-                            }
+                        for p in table.all_paragraphs() {
+                            update_styleref_from_para(
+                                &mut state.pb.styleref_running,
+                                &mut state.pb.styleref_page_first,
+                                p,
+                                &doc.style_id_to_name,
+                            );
                         }
                     }
                 }
@@ -8595,28 +8475,28 @@ fn render_pass(
         HashMap<usize, EffectXObjs>,
     );
     let mut hf_maps_index: HashMap<(usize, u8), HfMaps> = HashMap::new();
-    for ((s, t, pi), name) in &hf_image_names {
+    for ((s, t, pi), name) in &images.hf_image_names {
         hf_maps_index
             .entry((*s, *t))
             .or_default()
             .0
             .insert(*pi, name.clone());
     }
-    for ((s, t, pi, ri), name) in &hf_inline_image_names {
+    for ((s, t, pi, ri), name) in &images.hf_inline_image_names {
         hf_maps_index
             .entry((*s, *t))
             .or_default()
             .1
             .insert((*pi, *ri), name.clone());
     }
-    for ((s, t, pi, fi), name) in &hf_floating_image_names {
+    for ((s, t, pi, fi), name) in &images.hf_floating_image_names {
         hf_maps_index
             .entry((*s, *t))
             .or_default()
             .2
             .insert((*pi, *fi), name.clone());
     }
-    for ((s, t, pi), fx) in &effect_hf_names {
+    for ((s, t, pi), fx) in &images.effect_hf_names {
         hf_maps_index
             .entry((*s, *t))
             .or_default()
@@ -8684,10 +8564,16 @@ fn render_pass(
         let mut hf = Content::new();
         let mut has_hf = false;
 
-        let (header, hdr_type, hdr_si) = resolve_header_for_page(doc, si, is_first, page_num);
-        if let Some(header_data) = header {
+        // Header first: the content stream order is part of the output.
+        for (resolved, is_header) in [
+            (resolve_header_for_page(doc, si, is_first, page_num), true),
+            (resolve_footer_for_page(doc, si, is_first, page_num), false),
+        ] {
+            let (Some(data), hf_type, hf_si) = resolved else {
+                continue;
+            };
             let (pi_map, ii_map, fi_map, sh_para) = hf_maps_index
-                .get(&(hdr_si, hdr_type))
+                .get(&(hf_si, hf_type))
                 .unwrap_or(&empty_hf_maps);
             let pc = HfPageContext {
                 page_num,
@@ -8703,40 +8589,10 @@ fn render_pass(
             };
             render_header_footer(
                 &mut hf,
-                header_data,
+                data,
                 &ctx,
                 sp,
-                true,
-                &pc,
-                &mut state.pb.all_gradient_specs[page_idx],
-                &mut state.pb.all_links[page_idx],
-            );
-            has_hf = true;
-        }
-
-        let (footer, ftr_type, ftr_si) = resolve_footer_for_page(doc, si, is_first, page_num);
-        if let Some(footer_data) = footer {
-            let (pi_map, ii_map, fi_map, sh_para) = hf_maps_index
-                .get(&(ftr_si, ftr_type))
-                .unwrap_or(&empty_hf_maps);
-            let pc = HfPageContext {
-                page_num,
-                total_pages,
-                section_pages,
-                para_image_names: pi_map,
-                inline_image_names: ii_map,
-                floating_image_names: fi_map,
-                effect_para_names: sh_para,
-
-                styleref_values: page_styleref,
-                page_num_format: effective_page_num_format,
-            };
-            render_header_footer(
-                &mut hf,
-                footer_data,
-                &ctx,
-                sp,
-                false,
+                is_header,
                 &pc,
                 &mut state.pb.all_gradient_specs[page_idx],
                 &mut state.pb.all_links[page_idx],
@@ -8814,7 +8670,7 @@ fn render_pass(
         &state.pb.page_section_indices,
         ctx.fonts,
         &font_order,
-        &image_xobjects,
+        &images.image_xobjects,
         doc,
         &state.bookmark_positions,
         &state.heading_entries,
