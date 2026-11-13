@@ -3,9 +3,8 @@ use std::io::Read;
 use crate::geometry::{FormulaOp, PathFill};
 use crate::model::{
     ArrowEnd, AutoFit, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef,
-    CustomPathCommand, CustomPathDef, EmbeddedImage, HRelativeFrom, HorizontalPosition, ImageGlow,
-    ImageReflection, Paragraph, ShapeFill, ShapeGeometry, Table, TextAnchor, TextWarp, Textbox,
-    TextboxLink, VRelativeFrom, VerticalPosition,
+    CustomPathCommand, CustomPathDef, HRelativeFrom, HorizontalPosition, Paragraph, ShapeFill,
+    ShapeGeometry, Table, TextAnchor, Textbox, TextboxLink, VRelativeFrom, VerticalPosition,
 };
 
 use super::color::{apply_color_transforms, parse_solid_fill, resolve_dml_color};
@@ -395,68 +394,10 @@ fn parse_wordart_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
     )
 }
 
-pub(super) struct WspResult {
-    pub(super) paragraphs: Vec<Paragraph>,
-    pub(super) tables: Vec<(usize, Table)>,
-    pub(super) fill: Option<ShapeFill>,
-    pub(super) picture_fill: Option<EmbeddedImage>,
-    pub(super) shape_type: ShapeGeometry,
-    pub(super) stroke_color: Option<[u8; 3]>,
-    pub(super) stroke_width: f32,
-    pub(super) stroke_dash: &'static [f32],
-    /// Half the outline width from `w` or the style's `lnRef`, visible or not
-    /// (`a:noFill`): Word measures the body insets from the outline's inner
-    /// edge. A drawn outline with neither (Word's default 0.75pt) adds none.
-    pub(super) outline_inset: f32,
-    pub(super) text_anchor: TextAnchor,
-    pub(super) margin_top: f32,
-    pub(super) margin_left: f32,
-    pub(super) margin_bottom: f32,
-    pub(super) margin_right: f32,
-    pub(super) no_text_wrap: bool,
-    pub(super) text_warp: Option<TextWarp>,
-    pub(super) auto_fit: AutoFit,
-    pub(super) link: Option<TextboxLink>,
-    pub(super) glow: Option<ImageGlow>,
-    pub(super) reflection: Option<ImageReflection>,
-}
-
-/// The shape's own properties; size, anchoring and wrapping stay at their
-/// defaults for the caller to fill in. Word measures the body insets from the
-/// outline's inner edge, so an outline moves the text in by half its width
-/// on every side (textbox-outline-inset).
-impl From<WspResult> for Textbox {
-    fn from(wsp: WspResult) -> Textbox {
-        let ln_inset = wsp.outline_inset;
-        Textbox {
-            paragraphs: wsp.paragraphs,
-            tables: wsp.tables,
-            fill: wsp.fill,
-            picture_fill: wsp.picture_fill,
-            shape_type: wsp.shape_type,
-            stroke_color: wsp.stroke_color,
-            stroke_width: wsp.stroke_width,
-            stroke_dash: wsp.stroke_dash,
-            text_anchor: wsp.text_anchor,
-            margin_left: wsp.margin_left + ln_inset,
-            margin_right: wsp.margin_right + ln_inset,
-            margin_top: wsp.margin_top + ln_inset,
-            margin_bottom: wsp.margin_bottom + ln_inset,
-            no_text_wrap: wsp.no_text_wrap,
-            text_warp: wsp.text_warp,
-            auto_fit: wsp.auto_fit,
-            link: wsp.link,
-            glow: wsp.glow,
-            reflection: wsp.reflection,
-            ..Textbox::default()
-        }
-    }
-}
-
 pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
     anchor: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
-) -> Option<WspResult> {
+) -> Option<Textbox> {
     let wsp = anchor
         .descendants()
         .find(|n| n.has_tag_name((WPS_NS, "wsp")))?;
@@ -470,7 +411,7 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
     wsp: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
     display: (f32, f32),
-) -> Option<WspResult> {
+) -> Option<Textbox> {
     let sp_pr = find_sp_pr(wsp);
     let (glow, reflection) = super::images::parse_glow_reflection(sp_pr);
 
@@ -530,6 +471,9 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
     } else {
         (None, 0.0)
     };
+    // Half the outline width from `w` or the style's `lnRef`, visible or not
+    // (`a:noFill`); a drawn outline with neither (Word's default 0.75pt)
+    // adds none.
     // Word halves the width in whole EMUs: a 0.25pt (3175 EMU) outline insets
     // 1587 EMU, so text at a box edge stays on its pixel (inset probe, every
     // width from 0.25 to 12pt at four sub-pixel box positions).
@@ -612,7 +556,11 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         Some(img)
     });
 
-    Some(WspResult {
+    // Word measures the body insets from the outline's inner edge, so an
+    // outline moves the text in by half its width on every side
+    // (textbox-outline-inset). Size, anchoring and wrapping stay at their
+    // defaults for the caller to fill in.
+    Some(Textbox {
         paragraphs,
         tables,
         fill,
@@ -621,18 +569,18 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         stroke_color,
         stroke_width,
         stroke_dash,
-        outline_inset,
         text_anchor,
-        margin_top,
-        margin_left,
-        margin_bottom,
-        margin_right,
+        margin_top: margin_top + outline_inset,
+        margin_left: margin_left + outline_inset,
+        margin_bottom: margin_bottom + outline_inset,
+        margin_right: margin_right + outline_inset,
         no_text_wrap,
         text_warp: wa_props.text_warp,
         auto_fit: wa_props.auto_fit,
         link,
         glow,
         reflection,
+        ..Textbox::default()
     })
 }
 
@@ -1201,7 +1149,7 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                                 dist_right,
                                 behind_doc,
                                 z_index,
-                                ..Textbox::from(wsp)
+                                ..wsp
                             });
                         }
                     }

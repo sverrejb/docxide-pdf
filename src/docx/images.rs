@@ -864,7 +864,7 @@ fn parse_placed_drawing<R: Read + Seek>(
                     behind_doc,
                     z_index,
                     v_from_line: anchored_to_line(container),
-                    ..Textbox::from(wsp)
+                    ..wsp
                 }));
             }
             if let Some(conn) = parse_connector_from_wsp(container, ctx.theme) {
@@ -971,7 +971,7 @@ fn parse_placed_drawing<R: Read + Seek>(
                 height_pt: display_h,
                 wrap_type: WrapType::TopAndBottom,
                 on_line: true,
-                ..Textbox::from(wsp)
+                ..wsp
             }));
         }
 

@@ -380,7 +380,7 @@ fn emit_wsp<R: Read + Seek>(
             on_line: base.on_line,
             in_group: true,
             v_from_line: base.v_from_line,
-            ..Textbox::from(shape)
+            ..shape
         }));
     }
 }
