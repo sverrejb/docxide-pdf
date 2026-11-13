@@ -16,6 +16,7 @@ mod images;
 mod layout;
 mod line_render;
 mod line_sizing;
+mod link_tagger;
 mod list_label;
 mod objstm;
 mod positioning;

@@ -10,10 +10,8 @@ use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
 use crate::model::{Alignment, FormCheckbox, ParagraphBorder, TextFill};
 
 use super::color::{fill_color_or_black, stroke_color_or_black};
-use super::layout::{
-    LinkAnnotation, LinkTagger, MixedJustify, TextLine, WordChunk, char_justify_gaps,
-    spaces_before_each,
-};
+use super::layout::{MixedJustify, TextLine, WordChunk, char_justify_gaps, spaces_before_each};
+use super::link_tagger::{LinkAnnotation, LinkTagger};
 use super::line_sizing::{
     LineGrid, baseline_drop, glyph_fallbacks, inline_line_advance, run_line_metrics,
 };
