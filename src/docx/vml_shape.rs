@@ -7,7 +7,7 @@ use crate::model::{
     ShapeGeometry, Textbox, VRelativeFrom, VerticalPosition,
 };
 
-use super::images::{extent_dimensions, parse_anchor_position};
+use super::images::{extent_dimensions, place_anchored};
 use super::textbox::{TxbxContent, parse_textbox_from_wsp, parse_txbx_content};
 use super::vml_object::{vml_frame_fill_image, vml_z_order};
 use super::{MC_NS_TOP, OFFICE_NS, ParseContext, VML_NS, WML_NS, WPD_NS, parse_pt};
@@ -423,38 +423,13 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                         .children()
                         .filter(|n| n.has_tag_name((WPD_NS, "anchor")))
                     {
-                        let (display_w, display_h) = extent_dimensions(container);
-
                         if let Some(wsp) = parse_textbox_from_wsp(container, ctx) {
-                            let (h_position, h_relative, v_pos, v_relative) =
-                                parse_anchor_position(container);
-                            let (wrap_type, wrap_text, wrap_polygon) =
-                                super::images::parse_wrap_type(container);
-                            let (behind_doc, z_index) = super::images::anchor_z_order(container);
-                            let (dist_top, dist_bottom) =
-                                super::images::wrap_dist_top_bottom(container);
-                            let (dist_left, dist_right) = super::images::wrap_dist_left_right(
-                                container,
-                                wrap_polygon.is_some(),
-                            );
+                            let size = extent_dimensions(container);
+                            // This path keeps a line-relative box at its
+                            // paragraph's top, as it always has.
                             textboxes.push(Textbox {
-                                width_pt: display_w,
-                                height_pt: display_h,
-                                h_position,
-                                h_relative_from: h_relative,
-                                v_offset_pt: v_pos.offset_or_zero(),
-                                v_position: v_pos,
-                                v_relative_from: v_relative,
-                                wrap_type,
-                                wrap_text,
-                                wrap_polygon,
-                                dist_top,
-                                dist_bottom,
-                                dist_left,
-                                dist_right,
-                                behind_doc,
-                                z_index,
-                                ..wsp
+                                v_from_line: false,
+                                ..place_anchored(container, size, wsp)
                             });
                         }
                     }
