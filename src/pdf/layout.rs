@@ -3930,7 +3930,15 @@ mod tests {
         }
         let entry = FontEntry::stub();
         let tab = WordChunk::tab_underline(&entry, 10.0, None, Default::default(), None, 0.0, 30.0);
-        let space = WordChunk::word_space_underline(&entry, 10.0, None, Default::default(), None, 30.0, 3.0);
+        let space = WordChunk::word_space_underline(
+            &entry,
+            10.0,
+            None,
+            Default::default(),
+            None,
+            30.0,
+            3.0,
+        );
         assert_eq!(line_space_width(&[tab, space]), 3.0);
     }
 
@@ -3938,7 +3946,8 @@ mod tests {
     fn justify_counts_word_spaces_not_run_joins() {
         let entry = FontEntry::stub();
         let chunk = |text: &str, x: f32, w: f32| {
-            let mut c = WordChunk::tab_underline(&entry, 12.0, None, Default::default(), None, x, w);
+            let mut c =
+                WordChunk::tab_underline(&entry, 12.0, None, Default::default(), None, x, w);
             c.text = text.to_string();
             c
         };
@@ -3973,7 +3982,8 @@ mod tests {
     fn compress_punctuation_trims_marks_evenly_and_shifts_followers() {
         let entry = FontEntry::stub();
         let chunk = |text: &str, x: f32| {
-            let mut c = WordChunk::tab_underline(&entry, 16.0, None, Default::default(), None, x, 32.0);
+            let mut c =
+                WordChunk::tab_underline(&entry, 16.0, None, Default::default(), None, x, 32.0);
             c.text = text.to_string();
             c
         };

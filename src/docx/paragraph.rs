@@ -708,7 +708,7 @@ mod tests {
         }
     }
 
-    /// Word online probe 2026-11-13 (`tests/output/probe_lines`): every gap
+    /// Word online probe 2026-11-13 (kit named in roadmap.md): every gap
     /// below matched Word's PDF within 0.02pt.
     #[test]
     fn spacing_lines_beat_twips_unless_zero() {
@@ -752,6 +752,32 @@ mod tests {
         let before: Vec<f32> = paras.iter().map(|p| p.space_before).collect();
         assert_eq!(before, [12.0, 12.0, 6.0, 0.0, 12.0, 24.0, 50.0]);
         assert_eq!(paras[3].space_after, 12.0);
+    }
+
+    /// A header's `*Lines` count in its section's grid pitch, as the body's do.
+    #[test]
+    fn header_spacing_lines_use_the_section_grid() {
+        let document = format!(
+            r#"<w:document xmlns:w="{WML_NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body><w:p/><w:sectPr><w:headerReference w:type="default" r:id="rIdHdr"/><w:docGrid w:type="lines" w:linePitch="400"/></w:sectPr></w:body></w:document>"#
+        );
+        let header = format!(
+            r#"<w:hdr xmlns:w="{WML_NS}"><w:p><w:pPr><w:spacing w:beforeLines="50" w:before="0"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p></w:hdr>"#
+        );
+        let rels = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdHdr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>"#;
+        let parsed = crate::docx::parse_parts(&[
+            ("word/document.xml", document.as_str()),
+            ("word/header1.xml", header.as_str()),
+            ("word/_rels/document.xml.rels", rels),
+        ]);
+        let header = parsed.sections[0]
+            .properties
+            .header_default
+            .as_ref()
+            .unwrap();
+        let crate::model::Block::Paragraph(p) = &header.blocks[0] else {
+            panic!("expected a paragraph");
+        };
+        assert_eq!(p.space_before, 10.0);
     }
 
     #[test]

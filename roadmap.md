@@ -348,7 +348,7 @@ Open queue from the large-corpus and focus-fixture rounds:
 - Tab stops: decimal precision unverified; bar tabs act as left stops and draw
   no line (no `Bar` variant in `TabAlignment`).
 - Underlines (`UnderlineStyle`; dotted, dash, dashLong, dotDash, dotDotDash
-  and words follow Word, probe kit `tests/output/probe_ustyle/`): thick and
+  and words follow Word, probe kit `.worktrees/roadmap-top3/tests/output/probe_ustyle/`): thick and
   the Heavy variants draw at the single thickness. Word's thick line fits
   no rule yet: 1.25–3.0pt over Calibri/Arial/TNR/Aptos at 8–36pt, thick −
   single anywhere from 0.25 to 1.0pt (`measure_thick.py` on `thick.pdf`).
@@ -357,6 +357,11 @@ Open queue from the large-corpus and focus-fixture rounds:
   irregular (Arial 10pt sits above the baseline; `wave.pdf`). `w:u
   w:color` is ignored (no fixture's colour differs from its text). Word
   draws nothing for an unknown `w:u` value; we draw single.
+  A tab in a `words` run is still underlined (unprobed).
+- `w:beforeLines`/`w:afterLines` (Word probe kit
+  `.worktrees/roadmap-top3/tests/output/probe_lines/`) are read from the
+  paragraph and its style chain; docDefaults and table-style `w:spacing`
+  still take only the twips. Notes count a line as 12pt whatever the grid.
 - `w:textAlignment`: top is laid out and center only centres list markers;
   baseline, bottom and auto parse as auto.
 - `w:mirrorMargins`: parsed (used for odd/even filler pages and the change-bar

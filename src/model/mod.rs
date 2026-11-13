@@ -706,7 +706,7 @@ impl Paragraph {
 }
 
 /// A `w:u` style as Word online draws it (probe 2026-11-13,
-/// `tests/output/probe_ustyle`): every style uses the single line's offset
+/// kit named in roadmap.md): every style uses the single line's offset
 /// and thickness, and the dash lengths are fixed in points at every size.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum UnderlineStyle {
