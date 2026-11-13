@@ -721,8 +721,12 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     let alignment = super::runs::paragraph_alignment(p, ppr, para_style)
                         .or(style_alignment)
                         .unwrap_or(Alignment::Left);
-                    let (sp_before, sp_after, ls) =
-                        parse_paragraph_spacing(ppr, para_style, &ctx.styles.defaults);
+                    let (sp_before, sp_after, ls) = parse_paragraph_spacing(
+                        ppr,
+                        para_style,
+                        &ctx.styles.defaults,
+                        ctx.line_unit,
+                    );
                     let (space_before_auto, space_after_auto) =
                         super::autospacing(ppr, para_style, &ctx.styles.defaults);
                     let line_spacing = ls

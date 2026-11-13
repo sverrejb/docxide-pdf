@@ -29,6 +29,22 @@ pub(super) fn grid_char_delta(sect_node: roxmltree::Node) -> f32 {
         .map_or(0.0, |v| v / 4096.0)
 }
 
+/// One line of `w:spacing` `beforeLines`/`afterLines`, in points: the grid's
+/// `linePitch` under a line grid, else 12pt. Word writes the twips beside
+/// them that way (japanese_hr: 50 lines = 175tw at pitch 350; 50 lines =
+/// 120tw with a pitch but no grid type).
+pub(super) fn line_unit(sect_node: roxmltree::Node) -> f32 {
+    wml(sect_node, "docGrid")
+        .filter(|g| {
+            matches!(
+                g.attribute((WML_NS, "type")),
+                Some("lines" | "linesAndChars" | "snapToChars")
+            )
+        })
+        .and_then(|g| twips_attr(g, "linePitch"))
+        .unwrap_or(12.0)
+}
+
 /// A section's text width in points: page width less side margins and gutter.
 pub(super) fn text_width(sect_node: roxmltree::Node) -> f32 {
     let page = wml(sect_node, "pgSz")
@@ -283,6 +299,8 @@ fn resolve_hf<R: Read + Seek>(
         comments: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,
+        // ponytail: no section grid here, as for grid_char_delta.
+        line_unit: 12.0,
         text_width: 0.0,
         in_text_box: false,
     };

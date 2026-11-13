@@ -102,6 +102,8 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     /// What the current section's character grid adds to one character
     /// (`sections::grid_char_delta`), the unit of `w:ind` `*Chars` values.
     pub(in crate::docx) grid_char_delta: f32,
+    /// One line of `w:spacing` `*Lines`, in points (`sections::line_unit`).
+    pub(in crate::docx) line_unit: f32,
     /// The current section's text width (`sections::text_width`), read ahead
     /// like `grid_char_delta`; 0 where no kashida reserve applies.
     pub(in crate::docx) text_width: f32,
@@ -695,26 +697,49 @@ pub(in crate::docx) fn autospacing(
 /// (Normal (Web) paragraphs step 13.8 + 14 where their twips say 5pt).
 const AUTO_SPACING: f32 = 14.0;
 
+/// A `w:spacing` `beforeLines`/`afterLines` value, in hundredths of a line.
+pub(in crate::docx) fn spacing_lines(spacing: roxmltree::Node, attr: &str) -> Option<f32> {
+    spacing
+        .attribute((WML_NS, attr))
+        .and_then(|v| v.parse::<f32>().ok())
+}
+
+/// Paragraph spacing before and after, in points. `*Lines` (hundredths of
+/// `line_unit`) beats the twips value, direct or inherited, as the spec
+/// says; a zero is how Word cancels a style's lines under a direct twips
+/// value (it writes `beforeLines="0" before="240"`), so zero falls through.
 pub(in crate::docx) fn parse_paragraph_spacing(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,
     defaults: &StyleDefaults,
+    line_unit: f32,
 ) -> (Option<f32>, Option<f32>, Option<LineSpacing>) {
     let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
     let (before_auto, after_auto) = autospacing(ppr, para_style, defaults);
+    let lines = |attr: &str, style_lines: Option<f32>| {
+        inline_spacing
+            .and_then(|n| spacing_lines(n, attr))
+            .or(style_lines)
+            .filter(|&l| l > 0.0)
+            .map(|l| l / 100.0 * line_unit)
+    };
     let space_before = if before_auto {
         Some(AUTO_SPACING)
     } else {
-        inline_spacing
-            .and_then(|n| twips_attr(n, "before"))
-            .or_else(|| para_style.and_then(|s| s.space_before))
+        lines("beforeLines", para_style.and_then(|s| s.space_before_lines)).or_else(|| {
+            inline_spacing
+                .and_then(|n| twips_attr(n, "before"))
+                .or_else(|| para_style.and_then(|s| s.space_before))
+        })
     };
     let space_after = if after_auto {
         Some(AUTO_SPACING)
     } else {
-        inline_spacing
-            .and_then(|n| twips_attr(n, "after"))
-            .or_else(|| para_style.and_then(|s| s.space_after))
+        lines("afterLines", para_style.and_then(|s| s.space_after_lines)).or_else(|| {
+            inline_spacing
+                .and_then(|n| twips_attr(n, "after"))
+                .or_else(|| para_style.and_then(|s| s.space_after))
+        })
     };
 
     let line_spacing = inline_spacing
@@ -1128,6 +1153,7 @@ fn parse_zip<R: Read + std::io::Seek>(
         .map(|&n| sections::grid_char_delta(n))
         .collect();
     let text_widths: Vec<f32> = sect_prs.iter().map(|&n| sections::text_width(n)).collect();
+    let line_units: Vec<f32> = sect_prs.iter().map(|&n| sections::line_unit(n)).collect();
     let mut sect_idx = 0;
     let mut ctx = ParseContext {
         styles: &styles,
@@ -1140,6 +1166,7 @@ fn parse_zip<R: Read + std::io::Seek>(
         comments: comment_ranges,
         fields: Default::default(),
         grid_char_delta: grid_deltas.first().copied().unwrap_or(0.0),
+        line_unit: line_units.first().copied().unwrap_or(12.0),
         text_width: text_widths.first().copied().unwrap_or(0.0),
         in_text_box: false,
     };
@@ -1244,6 +1271,7 @@ fn parse_zip<R: Read + std::io::Seek>(
                     });
                     sect_idx += 1;
                     ctx.grid_char_delta = grid_deltas.get(sect_idx).copied().unwrap_or(0.0);
+                    ctx.line_unit = line_units.get(sect_idx).copied().unwrap_or(12.0);
                     ctx.text_width = text_widths.get(sect_idx).copied().unwrap_or(0.0);
                 }
             }

@@ -113,6 +113,8 @@ fn parse_notes<R: Read + Seek>(
         comments: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,
+        // ponytail: no section grid here, as for grid_char_delta.
+        line_unit: 12.0,
         text_width: 0.0,
         in_text_box: false,
     };
@@ -213,8 +215,12 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
                 let alignment =
                     super::runs::paragraph_alignment(p, ppr, para_style).unwrap_or(Alignment::Left);
                 let parsed = parse_runs(p, fn_ctx);
-                let (sp_before, sp_after, ls) =
-                    parse_paragraph_spacing(ppr, para_style, &fn_ctx.styles.defaults);
+                let (sp_before, sp_after, ls) = parse_paragraph_spacing(
+                    ppr,
+                    para_style,
+                    &fn_ctx.styles.defaults,
+                    fn_ctx.line_unit,
+                );
 
                 // Indents: inline w:ind overrides the style, missing attributes
                 // fall back to the (basedOn-resolved) style — same merge as body

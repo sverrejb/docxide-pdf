@@ -49,7 +49,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     let borders = borders(ppr, para_style);
     let (sp_before, sp_after, line_spacing) =
-        parse_paragraph_spacing(ppr, para_style, &ctx.styles.defaults);
+        parse_paragraph_spacing(ppr, para_style, &ctx.styles.defaults, ctx.line_unit);
     let space_before = sp_before.unwrap_or(ctx.styles.defaults.space_before);
     let space_after = sp_after.unwrap_or(ctx.styles.defaults.space_after);
 
@@ -706,6 +706,52 @@ mod tests {
             assert!((p.indent_hanging - hanging).abs() < 0.001, "{ind}");
             assert!((p.indent_first_line - first).abs() < 0.001, "{ind}");
         }
+    }
+
+    /// Word online probe 2026-11-13 (`tests/output/probe_lines`): every gap
+    /// below matched Word's PDF within 0.02pt.
+    #[test]
+    fn spacing_lines_beat_twips_unless_zero() {
+        let p = |spacing: &str, style: &str| {
+            format!(
+                r#"<w:p><w:pPr>{style}<w:spacing {spacing}/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>"#
+            )
+        };
+        let lines_style = r#"<w:pStyle w:val="Lines"/>"#;
+        let body = [
+            p(r#"w:beforeLines="100" w:before="0""#, ""),
+            p(r#"w:beforeLines="0" w:before="240""#, ""),
+            p(r#"w:beforeLines="50" w:before="600""#, ""),
+            p(r#"w:afterLines="100" w:after="0""#, ""),
+            p(r#"w:before="480""#, lines_style),
+            p(r#"w:beforeLines="0" w:before="480""#, lines_style),
+        ]
+        .concat();
+        let grid_body = p(r#"w:beforeLines="250" w:before="0""#, "");
+        let document = format!(
+            r#"<w:document xmlns:w="{WML_NS}"><w:body>{body}<w:p><w:pPr><w:sectPr><w:docGrid w:linePitch="360"/></w:sectPr></w:pPr></w:p>{grid_body}<w:sectPr><w:docGrid w:type="lines" w:linePitch="400"/></w:sectPr></w:body></w:document>"#
+        );
+        let styles = format!(
+            r#"<w:styles xmlns:w="{WML_NS}"><w:style w:type="paragraph" w:styleId="Lines"><w:name w:val="Lines"/><w:pPr><w:spacing w:beforeLines="100" w:before="0"/></w:pPr></w:style></w:styles>"#
+        );
+        let parsed = crate::docx::parse_parts(&[
+            ("word/document.xml", &document),
+            ("word/styles.xml", &styles),
+        ]);
+        let paras: Vec<_> = parsed
+            .sections
+            .iter()
+            .flat_map(|s| &s.blocks)
+            .filter_map(|b| match b {
+                crate::model::Block::Paragraph(p) if p.runs.iter().any(|r| r.text == "x") => {
+                    Some(p)
+                }
+                _ => None,
+            })
+            .collect();
+        let before: Vec<f32> = paras.iter().map(|p| p.space_before).collect();
+        assert_eq!(before, [12.0, 12.0, 6.0, 0.0, 12.0, 24.0, 50.0]);
+        assert_eq!(paras[3].space_after, 12.0);
     }
 
     #[test]

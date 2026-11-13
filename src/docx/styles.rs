@@ -93,6 +93,10 @@ pub(super) struct ParagraphStyle {
     pub(super) space_after: Option<f32>,
     pub(super) space_before_autospacing: Option<bool>,
     pub(super) space_after_autospacing: Option<bool>,
+    /// `w:beforeLines` / `w:afterLines` in hundredths of a line, resolved
+    /// against the section's line unit in `parse_paragraph_spacing`.
+    pub(super) space_before_lines: Option<f32>,
+    pub(super) space_after_lines: Option<f32>,
     pub(super) alignment: Option<Alignment>,
     /// `kashida_fraction` of the `jc` that sets `alignment`, so the two
     /// inherit together.
@@ -737,6 +741,9 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let spacing = ppr.and_then(|n| wml(n, "spacing"));
                 let space_before = spacing.and_then(|n| twips_attr(n, "before"));
                 let space_after = spacing.and_then(|n| twips_attr(n, "after"));
+                let space_before_lines =
+                    spacing.and_then(|n| super::spacing_lines(n, "beforeLines"));
+                let space_after_lines = spacing.and_then(|n| super::spacing_lines(n, "afterLines"));
                 let space_before_autospacing = spacing
                     .and_then(|n| n.attribute((WML_NS, "beforeAutospacing")).map(parse_on_off));
                 let space_after_autospacing = spacing
@@ -810,6 +817,8 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         space_after,
                         space_before_autospacing,
                         space_after_autospacing,
+                        space_before_lines,
+                        space_after_lines,
                         alignment,
                         kashida,
                         contextual_spacing,
@@ -1054,6 +1063,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     space_after,
                     space_before_autospacing,
                     space_after_autospacing,
+                    space_before_lines,
+                    space_after_lines,
                     line_spacing,
                     indent_left,
                     indent_right,
