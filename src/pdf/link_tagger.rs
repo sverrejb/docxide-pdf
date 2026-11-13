@@ -197,7 +197,12 @@ impl<'a> LinkTagger<'a> {
     /// Before drawing an inline picture (outside a text object): a Figure
     /// inside the open element, read where the picture sits in the text, or
     /// an artifact when the picture is decorative.
-    pub(super) fn begin_picture(&mut self, content: &mut Content, alt: Option<&str>, decorative: bool) {
+    pub(super) fn begin_picture(
+        &mut self,
+        content: &mut Content,
+        alt: Option<&str>,
+        decorative: bool,
+    ) {
         if decorative {
             super::tagging::Tags::end(content);
         } else {
@@ -305,7 +310,13 @@ mod tests {
             "and keeps it"
         );
         assert!(
-            lt.inline(&mut content, None, Some("fr-FR"), Some("Bonjour"), &mut |_| {}),
+            lt.inline(
+                &mut content,
+                None,
+                Some("fr-FR"),
+                Some("Bonjour"),
+                &mut |_| {}
+            ),
             "caps need their own"
         );
         assert!(

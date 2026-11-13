@@ -11,10 +11,10 @@ use crate::model::{Alignment, FormCheckbox, ParagraphBorder, TextFill};
 
 use super::color::{fill_color_or_black, stroke_color_or_black};
 use super::layout::{MixedJustify, TextLine, WordChunk, char_justify_gaps, spaces_before_each};
-use super::link_tagger::{LinkAnnotation, LinkTagger};
 use super::line_sizing::{
     LineGrid, baseline_drop, glyph_fallbacks, inline_line_advance, run_line_metrics,
 };
+use super::link_tagger::{LinkAnnotation, LinkTagger};
 
 /// A decoration rectangle (underline, strikethrough, shading): x, y, width, height, colour.
 type Decoration = (f32, f32, f32, f32, Option<[u8; 3]>);
@@ -1612,9 +1612,8 @@ pub(super) fn render_paragraph_lines(
                 let held = |e: &FontEntry, text: &str| text.chars().all(|c| e.has_char(c));
                 let run_entry = match &draw {
                     _ if sheared || chunk.text_shadow.is_some() => None,
-                    GlyphDraw::Placed(e, glyphs) => Some(*e).filter(|e| {
-                        glyphs.iter().all(|g| std::ptr::eq(g.0, *e) && held(e, g.1))
-                    }),
+                    GlyphDraw::Placed(e, glyphs) => Some(*e)
+                        .filter(|e| glyphs.iter().all(|g| std::ptr::eq(g.0, *e) && held(e, g.1))),
                     GlyphDraw::Kerned(e) => Some(*e).filter(|e| held(e, &chunk.text)),
                     GlyphDraw::Plain => primary_entry.copied().filter(|e| held(e, &chunk.text)),
                     _ => None,
@@ -1748,8 +1747,11 @@ pub(super) fn render_paragraph_lines(
                             show_kerned(content, entry, &chunk.text, boundary_space);
                         }
                         GlyphDraw::Plain => {
-                            let mut text_bytes =
-                                encode_text_for_pdf(&chunk.text, &chunk.pdf_font, &pdf_name_to_entry);
+                            let mut text_bytes = encode_text_for_pdf(
+                                &chunk.text,
+                                &chunk.pdf_font,
+                                &pdf_name_to_entry,
+                            );
                             if boundary_space {
                                 text_bytes.extend(encode_text_for_pdf(
                                     " ",
@@ -1759,7 +1761,7 @@ pub(super) fn render_paragraph_lines(
                             }
                             content.show(Str(&text_bytes));
                         }
-                }
+                    }
                 }
 
                 let thick = (chunk.font_size * 0.05).max(0.5);

@@ -15,7 +15,6 @@ pub(super) use super::line_render::{
     os2_strike, post_underline, push_clip, record_change_bar, render_paragraph_lines,
     set_change_bar_extension, show_visual, strike_line, take_change_bars, underline_lines,
 };
-pub(super) use super::link_tagger::{LinkAnnotation, LinkTagger};
 pub(super) use super::line_sizing::{
     LineGrid, boxed_line_ascent, descender_ratio, east_asian_leading, first_drawn_baseline,
     grid_baseline_offset, grid_cells, grid_snapped_line_h, inline_line_advance,
@@ -24,6 +23,7 @@ pub(super) use super::line_sizing::{
     rule_on_grid, run_line_metrics, runs_max_image_h, size_grid_lines, size_lines_by_own_runs,
     tallest_glyph_run_metrics, tallest_run_metrics, top_aligned_drop,
 };
+pub(super) use super::link_tagger::{LinkAnnotation, LinkTagger};
 
 /// Placeholders for a paragraph without inline pictures.
 pub(super) static EMPTY_INLINE_IMAGES: LazyLock<HashMap<usize, String>> =

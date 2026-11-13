@@ -1824,8 +1824,7 @@ fn render_hf_frame_paragraph(
     let text_width = sp.text_width();
     let fp = para.frame_props.as_ref().unwrap();
     let substituted_runs = substitute_hf_runs_with(&para.runs, sub);
-    let (font_size, tallest_lhr, tallest_ar) =
-        tallest_run_metrics(&substituted_runs, ctx.fonts);
+    let (font_size, tallest_lhr, tallest_ar) = tallest_run_metrics(&substituted_runs, ctx.fonts);
     let ascender_ratio = tallest_ar.unwrap_or(0.75);
     let frame_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
     let frame_ascent = super::layout::boxed_line_ascent(
@@ -1858,9 +1857,7 @@ fn render_hf_frame_paragraph(
     let frame_x = if fp.width > 0.0 {
         let (origin, area_width) = match fp.h_relative_from {
             HRelativeFrom::Page => (0.0, sp.page_width),
-            HRelativeFrom::Margin | HRelativeFrom::Column => {
-                (sp.margin_left, text_width)
-            }
+            HRelativeFrom::Margin | HRelativeFrom::Column => (sp.margin_left, text_width),
         };
         fp.h_position.place(origin, area_width, fp.width) + para.indent_left
     } else {
@@ -1882,8 +1879,8 @@ fn render_hf_frame_paragraph(
     } else {
         lines.len() as f32 * resolve_line_h(frame_ls, font_size, tallest_lhr)
     };
-    let frame_top = anchored_frame_top(fp, frame_h, sp)
-        .map_or(cursor_y, |top| sp.page_height - top);
+    let frame_top =
+        anchored_frame_top(fp, frame_h, sp).map_or(cursor_y, |top| sp.page_height - top);
     let frame_baseline = frame_top - frame_ascent;
 
     // Frame text carries no inline pictures, so no descent is needed.
@@ -1975,11 +1972,8 @@ fn render_hf_textbox(
     );
 
     let content_x = tb_x + tb.margin_left;
-    let content_w =
-        (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
-    let hf_table = |t| {
-        super::table::TextboxTable::layout(t, content_w, ctx, Some(sub))
-    };
+    let content_w = (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
+    let hf_table = |t| super::table::TextboxTable::layout(t, content_w, ctx, Some(sub));
 
     // WordArt (a header watermark) draws its glyphs as warped
     // outlines, as the body path does.
@@ -1987,9 +1981,7 @@ fn render_hf_textbox(
         .text_warp
         .as_ref()
         .is_some_and(|w| w.preset != "textNoShape")
-        && super::wordart::render_warped_textbox(
-            tb, content, ctx.fonts, tb_x, tb_y_top, content_w,
-        )
+        && super::wordart::render_warped_textbox(tb, content, ctx.fonts, tb_x, tb_y_top, content_w)
     {
         if rotated {
             content.restore_state();
@@ -2015,9 +2007,7 @@ fn render_hf_textbox(
         TextAnchor::Top => 0.0,
         TextAnchor::Middle | TextAnchor::Bottom => {
             let tp_height = |tp: &Paragraph| -> f32 {
-                if let Some(img) =
-                    super::textbox_render::textbox_para_block_image(tp)
-                {
+                if let Some(img) = super::textbox_render::textbox_para_block_image(tp) {
                     return tp.space_before
                         + img.display_height
                         + img.layout_extra_height
@@ -2025,12 +2015,9 @@ fn render_hf_textbox(
                 }
                 hf_box_paragraph(tp, content_w, sub, ctx).height(tp)
             };
-            let tables: f32 =
-                tb.tables.iter().map(|(_, t)| hf_table(t).height()).sum();
-            let total_h: f32 =
-                tb.paragraphs.iter().map(tp_height).sum::<f32>() + tables;
-            let available =
-                (tb_height - tb.margin_top - tb.margin_bottom).max(0.0);
+            let tables: f32 = tb.tables.iter().map(|(_, t)| hf_table(t).height()).sum();
+            let total_h: f32 = tb.paragraphs.iter().map(tp_height).sum::<f32>() + tables;
+            let available = (tb_height - tb.margin_top - tb.margin_bottom).max(0.0);
             let gap = (available - total_h).max(0.0);
             match tb.text_anchor {
                 TextAnchor::Middle => gap / 2.0,
@@ -2053,19 +2040,15 @@ fn render_hf_textbox(
                 Some(sub),
             );
         }
-        if let Some(img) =
-            super::textbox_render::textbox_para_block_image(tp)
-        {
+        if let Some(img) = super::textbox_render::textbox_para_block_image(tp) {
             if let Some(pdf_name) = ctx.textbox_image_names.get(&img.id) {
                 let img_x = content_x
                     + tp.indent_left
                     + align_offset(
                         tp.alignment,
-                        (hf_box_text_w(tp, content_w) - img.display_width)
-                            .max(0.0),
+                        (hf_box_text_w(tp, content_w) - img.display_width).max(0.0),
                     );
-                let img_y =
-                    tb_cursor - tp.space_before - img.display_height;
+                let img_y = tb_cursor - tp.space_before - img.display_height;
                 super::smartart::render_image_with_clip(
                     content,
                     pdf_name,
@@ -2076,10 +2059,8 @@ fn render_hf_textbox(
                     img.clip_geometry.as_ref(),
                 );
             }
-            tb_cursor -= tp.space_before
-                + img.display_height
-                + img.layout_extra_height
-                + tp.space_after;
+            tb_cursor -=
+                tp.space_before + img.display_height + img.layout_extra_height + tp.space_after;
             continue;
         }
 
@@ -2264,4 +2245,3 @@ fn hf_spacing(prev: Option<&Paragraph>, prev_space_after: f32, para: &Paragraph)
     };
     (after, super::helpers::effective_space_before(para, prev))
 }
-
