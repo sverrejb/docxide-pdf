@@ -23,6 +23,7 @@ mod styles;
 pub(crate) mod svg;
 mod tables;
 mod textbox;
+mod theme;
 mod wmf;
 mod wordart;
 mod xml;
