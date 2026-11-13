@@ -190,7 +190,7 @@ pub(super) fn compute_bookmark_positions(
                         line_h
                     };
                     let para_w = (text_width - para.indent_left - para.indent_right).max(1.0);
-                    let hanging = compute_text_hanging(para, ctx.default_tab_stop, ctx.fonts);
+                    let hanging = list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts);
                     let lines = if is_text_empty(&para.runs) {
                         vec![]
                     } else {

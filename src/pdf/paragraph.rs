@@ -414,7 +414,7 @@ pub(super) fn render_paragraph_block(
         );
     }
 
-    let text_hanging = compute_text_hanging(para, ctx.default_tab_stop, ctx.fonts);
+    let text_hanging = list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts);
 
     // Substitute footnote/endnote refs and resolve PAGEREF fields
     let has_footnote_refs = para.runs.iter().any(|r| r.footnote_id.is_some());

@@ -624,15 +624,6 @@ fn draw_change_bars(
     content.restore_state();
 }
 
-/// Compute effective first-line hanging indent for a paragraph.
-fn compute_text_hanging(
-    para: &Paragraph,
-    default_tab_stop: f32,
-    fonts: &HashMap<String, FontEntry>,
-) -> f32 {
-    list_label::text_hanging(para, default_tab_stop, fonts)
-}
-
 /// Structure type of a body paragraph. Word tags outline levels as H1–H6
 /// (deeper levels stay H6) and its Title style as Title, role-mapped to H1.
 pub(super) fn para_tag_kind(para: &Paragraph, style_name: Option<&String>) -> &'static str {
