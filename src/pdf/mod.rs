@@ -11,6 +11,7 @@ mod fonts;
 mod footnotes;
 mod glyph_grid;
 mod header_footer;
+mod hf_fields;
 mod helpers;
 mod images;
 mod layout;
