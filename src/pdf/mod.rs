@@ -23,6 +23,7 @@ mod svg;
 mod table;
 mod table_columns;
 mod table_layout;
+mod table_split;
 mod tagging;
 mod textbox_render;
 mod wordart;

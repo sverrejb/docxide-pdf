@@ -18,11 +18,13 @@ use super::table_columns::{
     fixed_columns, min_content_widths, squeeze_to_width,
 };
 use super::table_layout::{
-    CELL_START, CellContentItem, CellCursor, CellFloatingImageLayout, CellLayout,
-    CellParagraphLayout, Chunk, HfSubstitution, RowLayout, RowPiece, chunk_space_before,
-    compute_merge_spans, compute_row_layouts, continues_whole, cursor_chunks, find_cell_split,
-    item_chunk_height, keep_chain_end, para_block_height, partial_row_height, row_pieces,
-    skip_finished_row,
+    CellContentItem, CellFloatingImageLayout, CellLayout, CellParagraphLayout, HfSubstitution,
+    RowLayout, compute_row_layouts, keep_chain_end, para_block_height,
+};
+use super::table_split::{
+    CELL_START, CellCursor, Chunk, RowPiece, chunk_space_before, compute_merge_spans,
+    continues_whole, cursor_chunks, find_cell_split, item_chunk_height, partial_row_height,
+    row_pieces, skip_finished_row,
 };
 use super::tagging::{CellTagger, TableTags, Tags};
 
@@ -774,7 +776,7 @@ fn render_cell_content(
                     let drop_anchor = continues_whole(&chunk, start);
                     if chunk.l0 == 0 && chunk.from.is_empty() {
                         let gap = if let Some(offset) = floating_offset {
-                            super::table_layout::floating_anchor_gap(
+                            super::table_split::floating_anchor_gap(
                                 *space_before,
                                 *offset,
                                 floating_x_offset.is_some(),
