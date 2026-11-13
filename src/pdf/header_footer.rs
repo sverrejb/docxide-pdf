@@ -1380,7 +1380,7 @@ pub(super) fn render_header_footer(
                 // address bar with white text drew as white on white).
                 let draw_para_shading = |content: &mut Content, box_bottom: f32| {
                     let Some(color) = para.shading else { return };
-                    let (left_out, right_out) = super::side_border_outsets(bdr, false);
+                    let (left_out, right_out) = super::helpers::shading_outsets(bdr);
                     let (left, right) = (box_left - left_out, box_right + right_out);
                     let bottom = box_bottom - group.bottom.0;
                     let top = box_top + group.below_prev + if group.shade_gap { gap } else { 0.0 };

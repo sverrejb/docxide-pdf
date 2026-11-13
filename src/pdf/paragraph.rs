@@ -2611,7 +2611,7 @@ pub(super) fn render_paragraph_block(
     if let Some(shd_color) = para.shading {
         // Up to the side borders' inner edges: stopping at their space left a
         // white seam inside english_town_council's blue section bars.
-        let (shd_left_outset, shd_right_outset) = side_border_outsets(&para.borders, false);
+        let (shd_left_outset, shd_right_outset) = super::helpers::shading_outsets(&para.borders);
         let (box_left_in, box_right_in) = border_box_indents(para);
         let shd_left = col_x + box_left_in - shd_left_outset;
         let shd_right = col_x + col_w - box_right_in + shd_right_outset;
