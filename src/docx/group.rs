@@ -69,16 +69,22 @@ struct Xfrm {
     flip_v: bool,
 }
 
+/// The EMU attributes `a` and `b` of `parent`'s DrawingML child `name`, in points.
+pub(super) fn dml_pair(
+    parent: roxmltree::Node,
+    name: &str,
+    a: &str,
+    b: &str,
+) -> Option<(f32, f32)> {
+    dml(parent, name).map(|n| (emu_attr(n, a), emu_attr(n, b)))
+}
+
 fn read_xfrm(sp_pr: roxmltree::Node) -> Option<Xfrm> {
     let xfrm = dml(sp_pr, "xfrm")?;
-    let off = dml(xfrm, "off").map(|o| (emu_attr(o, "x"), emu_attr(o, "y")))?;
-    let ext = dml(xfrm, "ext").map(|e| (emu_attr(e, "cx"), emu_attr(e, "cy")))?;
-    let ch_off = dml(xfrm, "chOff")
-        .map(|o| (emu_attr(o, "x"), emu_attr(o, "y")))
-        .unwrap_or((0.0, 0.0));
-    let ch_ext = dml(xfrm, "chExt")
-        .map(|e| (emu_attr(e, "cx"), emu_attr(e, "cy")))
-        .unwrap_or(ext);
+    let off = dml_pair(xfrm, "off", "x", "y")?;
+    let ext = dml_pair(xfrm, "ext", "cx", "cy")?;
+    let ch_off = dml_pair(xfrm, "chOff", "x", "y").unwrap_or((0.0, 0.0));
+    let ch_ext = dml_pair(xfrm, "chExt", "cx", "cy").unwrap_or(ext);
     Some(Xfrm {
         off,
         ext,
