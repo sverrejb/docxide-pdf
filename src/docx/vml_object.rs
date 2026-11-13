@@ -7,7 +7,7 @@ use crate::model::{
 };
 
 use super::media::read_image_from_zip;
-use super::textbox::{parse_vml_box_style, vml_style_prop};
+use super::vml_shape::{parse_vml_box_style, vml_style_prop};
 use super::{ParseContext, REL_NS, VML_NS, W10_NS, WML_NS, parse_pt, twips_attr};
 
 /// Extract an inline image from a `<w:object>` VML fallback.

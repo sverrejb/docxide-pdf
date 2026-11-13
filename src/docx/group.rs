@@ -18,11 +18,9 @@ use super::images::{
     parse_wrap_type, place_anchored,
 };
 use super::media::read_image_from_zip;
-use super::textbox::{
-    find_sp_pr, is_connector_wsp, parse_connector_shape_node, parse_vml_box_style, parse_vml_line,
-    parse_wsp_shape, vml_style_prop,
-};
+use super::textbox::{find_sp_pr, is_connector_wsp, parse_connector_shape_node, parse_wsp_shape};
 use super::vml_object::{vml_frame_fill_image, vml_imagedata_props, vml_z_order};
+use super::vml_shape::{parse_vml_box_style, parse_vml_line, vml_style_prop};
 use super::{
     PIC_NS, ParseContext, REL_NS, VML_NS, WPC_NS, WPG_NS, WPS_NS, dml, emu_attr, parse_pt,
 };

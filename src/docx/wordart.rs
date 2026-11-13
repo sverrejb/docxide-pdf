@@ -5,7 +5,8 @@ use crate::model::{
 
 use super::color::{apply_color_transforms, parse_color_transforms, resolve_dml_color};
 use super::styles::{StylesInfo, ThemeFonts};
-use super::textbox::{parse_avlst, parse_vml_box_style, parse_vml_color, vml_style_prop};
+use super::textbox::parse_avlst;
+use super::vml_shape::{parse_vml_box_style, parse_vml_color, vml_style_prop};
 use super::{
     W14_NS, angle_attr, dml as find_dml, emu_attr_opt, find_child, frac_attr, parse_hex_color,
     parse_on_off, parse_pt, resolve_theme_color_key,

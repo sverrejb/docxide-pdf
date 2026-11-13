@@ -23,6 +23,7 @@ pub(crate) mod svg;
 mod tables;
 mod textbox;
 mod vml_object;
+mod vml_shape;
 mod wmf;
 mod wordart;
 
