@@ -219,9 +219,6 @@ between lines. Open:
   does, per line); only tables are pushed.
 
 **Bugs exposed by the external PRs (2026-10-09):**
-- **brazilian_logistics p10**: "Fonte: ALARCOM, (2019)." is laid out one
-  letter per line from y≈108 (Word: one line at y≈346); the paragraph is
-  squeezed to almost no width.
 - **covid_insomnia p5 right column**: the reference list sits one line low
   ("[10]" at 146.3pt, Word 135.3pt). Its two-column flow also regressed with
   the justified squeeze.
@@ -313,9 +310,12 @@ Open queue from the large-corpus and focus-fixture rounds:
 - **`w:ind` character units** (issue #143, `apply_indent_chars`):
   numbering-level `*Chars` are not read (`docx/numbering.rs` reads only the
   twip values); headers and footnotes use no grid delta.
-- **Paragraph borders** (issue #145): renewable_dispatch's last blue "CBIR
-  Process" heading bar is not drawn at all (white text on white); table
-  cell borders keep their own dash arrays and draw wave and thin/thick pairs
+- **Paragraph shading width**: Word fills a borderless shaded paragraph
+  1.475pt left and 1.725pt right of its text box (renewable_dispatch's body
+  bars 70.525–541.725 on a 72–540 measure). Cells do this
+  (`helpers::shading_outsets`); body and header shading still stop at the
+  text box.
+- **Paragraph borders** (issue #145): table cell borders keep their own dash arrays and draw wave and thin/thick pairs
   as one line (`pdf::table::draw_border` has no Wave or ThinThick arm).
 - **Trailing punctuation**: Word never lets a Latin mark hang past the margin
   (`overflowPunct` is not what it does). The CJK half-mark allowance
@@ -354,8 +354,10 @@ Open queue from the large-corpus and focus-fixture rounds:
 - `w:textAlignment`: top is laid out and center only centres list markers;
   baseline, bottom and auto parse as auto.
 - `w:mirrorMargins`: parsed (used for odd/even filler pages and the change-bar
-  side), never applied to the margins. Swap left/right margins (and the
-  gutter side) on even pages.
+  side), never applied to the margins. Do not just swap left/right on even
+  pages: victorian_universal_design_policy sets it, yet Word online keeps
+  its A3 section's 851tw left margin on even page 8 (text at 42.5pt).
+  Probe Word online before implementing.
 - Below compat 15 without `overrideTableStyleFontSizeAndJustification`, a
   table style's font size beats Normal's (unless it is 10pt); we always let
   Normal win.
@@ -684,7 +686,7 @@ Backlog (details in `current_focus/A11Y.md`):
   becomes possible and PAGE/NUMPAGES resolve after layout.
 - Cell and footnote paragraphs bypass `paragraph::build_paragraph`
   (`docx/tables.rs`, the hand-built branch of `parse_footnotes`): cells
-  default paragraph shading and outline level and never get `mark_revised`
+  default outline level and never get `mark_revised`
   (no change bar for a cell paragraph whose mark alone is revised;
   `paragraph.rs` sets it, `tables.rs` does not); one shared pPr resolver
   would close it. The markup view's `item_revision` and the two list-label
@@ -841,13 +843,9 @@ All are meant to keep output identical unless the entry says otherwise.
 
 - Deterministic output regressed once: scraped/door_air_cooling_unit_spec gave
   two different PDFs over three runs (2026-10-03); likely the font-index
-  cache race below.
-- The font-index cache (`fonts/cache.rs` `save_cache`) is written with a
-  plain `fs::write`, so a concurrent conversion can read it truncated and
-  fall back to Helvetica (2026-11-13: two runs of one binary differed on 12
-  fixtures until `DOCXIDE_NO_FONT_CACHE=1`). Write to a temp file and
-  rename. Every worktree's `fonts/` symlink is its own dir entry, so each
-  one rewrites the cache.
+  cache race, fixed 2026-11-13 (`save_cache` writes a temp file and
+  renames it). Every worktree's `fonts/` symlink is still its own dir
+  entry, so each one rewrites the cache.
 - Engine-comparison site: veraPDF already runs once per fixture; if runs
   grow, batch it per shard via a `page-metrics` pre-pass.
   `engine_compare.py` `pdf_creator()` truncates Quartz producers at the

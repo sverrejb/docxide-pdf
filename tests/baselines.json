@@ -9995,7 +9995,7 @@
     "a11y_text": 0.9941
   },
   "scraped/bahamas_sustainable_development_hosting": {
-    "jaccard": 0.8649,
+    "jaccard": 0.8648,
     "ssim": 0.9354,
     "text_boundary": 0.9429,
     "ua_fail": 2,
@@ -11214,8 +11214,8 @@
     "a11y_text": 0.8721
   },
   "scraped/renewable_dispatch_committee_agenda": {
-    "jaccard": 0.9249,
-    "ssim": 0.9194,
+    "jaccard": 0.9626,
+    "ssim": 0.943,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
