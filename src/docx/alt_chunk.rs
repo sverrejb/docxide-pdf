@@ -748,7 +748,7 @@ fn convert_table(
         });
     }
 
-    super::tables::settle_row_borders(&mut rows, cell_margins);
+    super::table_borders::settle_row_borders(&mut rows, cell_margins);
 
     Some(Table {
         col_widths,

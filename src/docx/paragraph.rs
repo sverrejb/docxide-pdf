@@ -4,7 +4,7 @@ use super::images::compute_drawing_info;
 use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
 use super::runs::{parse_runs, push_textbox};
 use super::styles::{ParagraphStyle, StyleDefaults, StylesInfo, half_points};
-use super::textbox::collect_textboxes_from_paragraph;
+use super::vml_shape::collect_textboxes_from_paragraph;
 use super::{
     IndentChars, ParseContext, WML_NS, apply_indent_chars, extract_indent_chars, extract_indents,
     parse_frame_props, parse_paragraph_borders, parse_paragraph_spacing, wml, wml_attr, wml_bool,
@@ -261,7 +261,8 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         indent_hanging,
         indent_first_line,
         starts_toc_field: node.descendants().any(|n| {
-            n.has_tag_name((WML_NS, "instrText")) && n.text().is_some_and(super::runs::is_toc_instr)
+            n.has_tag_name((WML_NS, "instrText"))
+                && n.text().is_some_and(super::field_code::is_toc_instr)
         }),
         num_level_tab_stop: num_tab_stop,
         no_indent_num_tab: ctx.styles.defaults.no_indent_as_num_tab,

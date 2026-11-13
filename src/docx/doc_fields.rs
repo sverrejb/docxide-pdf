@@ -5,7 +5,7 @@ use std::io::Read;
 
 use crate::model::{Block, Document, Section};
 
-use super::{ParseContext, WML_NS, is_east_asian_char, numbering, paragraph, runs, styles};
+use super::{ParseContext, WML_NS, field_code, is_east_asian_char, numbering, paragraph, styles};
 
 /// A `linesAndChars` grid adds its `charSpace` to every character a run
 /// snapped to it draws, Latin or East Asian, at any size (Word probes
@@ -122,7 +122,7 @@ struct TocSpec {
 
 impl TocSpec {
     fn parse(instr: &str) -> TocSpec {
-        let has = |s| runs::has_switch(instr, s);
+        let has = |s| field_code::has_switch(instr, s);
         let mut outline = toc_switch_arg(instr, "\\o")
             .and_then(|r| r.split_once('-'))
             .and_then(|(a, b)| Some(a.trim().parse().ok()?..=b.trim().parse().ok()?))
@@ -176,7 +176,7 @@ impl TocSpec {
 /// The argument after a TOC switch (`\o "1-3"`), if the switch is present
 /// and followed by one (not by the next switch).
 fn toc_switch_arg<'a>(instr: &'a str, switch: &'a str) -> Option<&'a str> {
-    runs::switch_args(instr, switch)
+    field_code::switch_args(instr, switch)
         .next()
         .filter(|arg| !arg.starts_with('\\'))
 }

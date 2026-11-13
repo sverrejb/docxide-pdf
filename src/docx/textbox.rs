@@ -10,9 +10,6 @@ use crate::model::{
 use super::color::{apply_color_transforms, parse_solid_fill, resolve_dml_color};
 use super::images::{extent_dimensions, parse_anchor_position};
 use super::styles::{ThemeFillStyle, ThemeFonts};
-pub(super) use super::vml_shape::{
-    collect_textboxes_from_paragraph, parse_connector_from_vml, parse_textbox_from_vml,
-};
 use super::{
     DML_NS, ParseContext, WML_NS, WPG_NS, WPS_NS, angle_attr, dml as find_dml,
     dml_children as find_dml_all, emu_attr_opt, frac_attr, wps as find_wps,

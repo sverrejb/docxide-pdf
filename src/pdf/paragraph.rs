@@ -2839,7 +2839,7 @@ pub(super) fn render_paragraph_block(
                 rect,
                 img_fx,
             );
-            smartart::render_image_with_clip(
+            shape_path::render_image_with_clip(
                 &mut state.pb.content,
                 pdf_name,
                 x,
@@ -2849,7 +2849,7 @@ pub(super) fn render_paragraph_block(
                 img.clip_geometry.as_ref(),
             );
             if let Some(sc) = img.stroke_color {
-                smartart::stroke_image_border(
+                shape_path::stroke_image_border(
                     &mut state.pb.content,
                     x,
                     y_bottom,

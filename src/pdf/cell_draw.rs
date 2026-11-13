@@ -287,7 +287,7 @@ pub(super) fn render_cell_inline_image(
         para.image_fx.as_ref(),
     );
 
-    super::smartart::render_image_with_clip(
+    super::shape_path::render_image_with_clip(
         content,
         img_name,
         img_x,
@@ -298,7 +298,7 @@ pub(super) fn render_cell_inline_image(
     );
 
     if let Some(sc) = para.image_stroke_color {
-        super::smartart::stroke_image_border(
+        super::shape_path::stroke_image_border(
             content,
             img_x,
             img_y,
@@ -414,7 +414,7 @@ pub(super) fn render_simple_textbox(
     tagger: Option<&mut CellTagger<'_>>,
     hf_sub: Option<&HfSubstitution>,
 ) {
-    use super::smartart::draw_shape_path;
+    use super::shape_path::draw_shape_path;
     use super::textbox_render::render_textbox_paragraphs;
     use crate::model::ShapeFill;
 

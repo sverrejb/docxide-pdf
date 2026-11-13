@@ -16,7 +16,7 @@ use super::layout::{
 };
 use super::list_label::render_list_label;
 use super::positioning::resolve_h_position;
-use super::smartart::draw_shape_path;
+use super::shape_path::draw_shape_path;
 use super::table::TextboxTable;
 use super::tagging::{Lists, Tags};
 use super::wordart;
@@ -452,7 +452,7 @@ pub(super) fn stroke_textbox_outline(
     if tb.shape_type.preset.as_deref() == Some("rect") && tb.shape_type.custom.is_none() {
         content.rect(x, y, width, height);
     } else {
-        super::smartart::draw_shape_stroke_path(content, x, y, width, height, &tb.shape_type);
+        super::shape_path::draw_shape_stroke_path(content, x, y, width, height, &tb.shape_type);
     }
     content.stroke();
     content.restore_state();
@@ -471,7 +471,7 @@ pub(super) fn render_picture_fill(
         .as_ref()
         .and_then(|img| ctx.textbox_image_names.get(&img.id))
     {
-        super::smartart::render_image_with_clip(content, name, x, y, w, h, Some(&tb.shape_type));
+        super::shape_path::render_image_with_clip(content, name, x, y, w, h, Some(&tb.shape_type));
     }
 }
 
@@ -563,7 +563,7 @@ pub(super) fn render_single_textbox(
     // Lay text out within the shape's text rectangle (e.g. an arrow's body,
     // not its head). For plain rectangles this is the full box, so non-shape
     // textboxes are unaffected. Body-margin insets apply within the text rect.
-    let (txt_l, txt_b, txt_w, txt_h) = super::smartart::shape_text_rect(
+    let (txt_l, txt_b, txt_w, txt_h) = super::shape_path::shape_text_rect(
         &tb.shape_type,
         tb.width_pt,
         tb_height,
@@ -866,7 +866,7 @@ pub(super) fn render_textbox_paragraphs(
                     tags.begin(content, *page, figure);
                 }
                 let clipped = super::layout::push_clip(content, picture_clip);
-                super::smartart::render_image_with_clip(
+                super::shape_path::render_image_with_clip(
                     content,
                     pdf_name,
                     img_x,
@@ -893,7 +893,7 @@ pub(super) fn render_textbox_paragraphs(
         let hf_runs: Vec<Run>;
         let runs: &[Run] = match hf_sub {
             Some(sub) => {
-                hf_runs = super::header_footer::substitute_hf_runs(&tp.runs, sub);
+                hf_runs = super::hf_fields::substitute_hf_runs(&tp.runs, sub);
                 &hf_runs
             }
             None => &tp.runs,

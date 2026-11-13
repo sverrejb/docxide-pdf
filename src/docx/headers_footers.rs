@@ -3,7 +3,7 @@ use std::io::{Read, Seek};
 
 use crate::model::{Alignment, Block, Footnote, HeaderFooter, LineSpacing, Paragraph, Run};
 
-use super::images::MediaParts;
+use super::media::MediaParts;
 use super::numbering::{ListCounters, NumberingInfo};
 use super::parse_table_node;
 use super::relationships::parse_part_relationships;

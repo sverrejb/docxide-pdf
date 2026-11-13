@@ -8,15 +8,14 @@ use crate::model::{
 };
 
 use super::RenderContext;
-use super::header_footer::substitute_hf_runs;
 use super::helpers::{effective_space_after, effective_space_before};
+use super::hf_fields::substitute_hf_runs;
 use super::layout::{
     TextLine, build_paragraph_lines, build_tabbed_line, east_asian_leading, is_text_empty,
     run_line_metrics, word_width_for_run,
 };
 use super::resolve_line_h;
-use super::table_columns::{apply_nested_pct_width, cell_span_width};
-pub(super) use super::table_columns::{apply_pct_width, auto_fit_columns, fixed_columns};
+use super::table_columns::{apply_nested_pct_width, auto_fit_columns, cell_span_width};
 
 /// Height of a paragraph's text content, matching the layout computation in
 /// `compute_row_layouts`. Empty paragraphs (no lines) still occupy one line

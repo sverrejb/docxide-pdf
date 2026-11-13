@@ -18,7 +18,8 @@ use crate::model::{
 };
 
 use super::chart_legend::{SwatchStyle, render_swatch};
-use super::charts::{polyline, resolve_accent_colors, show_text, show_text_matrix, text_width};
+use super::charts::{polyline, resolve_accent_colors, show_text, show_text_matrix};
+use super::charts_format::text_width;
 use super::charts_radial::{arc_segment_count, emit_arc};
 use super::color::{fill_rgb, stroke_rgb};
 use super::helpers::draw_circle;

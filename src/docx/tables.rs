@@ -9,7 +9,9 @@ use crate::model::{
 use super::numbering::{ListCounters, parse_list_info};
 use super::runs::parse_runs;
 use super::styles::{TableBordersDef, TableStyleDef, parse_table_borders_def};
-pub(super) use super::table_borders::*;
+use super::table_borders::{
+    apply_cell_spacing, mirror_columns, settle_row_borders, share_row_top_margins,
+};
 use super::{
     ParseContext, WML_NS, collect_block_nodes, parse_cell_border, parse_cell_border_left,
     parse_cell_border_right, parse_hex_color, parse_on_off, parse_paragraph_spacing, twips_attr,

@@ -9,7 +9,7 @@ use crate::model::{
 
 use super::color::stroke_border;
 use super::helpers::{align_offset, draw_horizontal_rule};
-pub(super) use super::hf_fields::{page_field_text, substitute_hf_runs};
+use super::hf_fields::substitute_hf_runs;
 use super::layout::{
     LineOpts, LinkAnnotation, RenderOpts, TextLine, build_lines, is_text_empty,
     line_h_with_picture, lines_height, picture_line_bottom, position_stretch,
@@ -19,8 +19,6 @@ use super::positioning::resolve_h_position;
 use super::table;
 use super::table_layout::HfSubstitution;
 use super::{RenderContext, resolve_line_h};
-
-pub(super) use crate::model::styleref_key;
 
 /// Header lines size as body lines do: runs of nothing but spaces or tabs
 /// size nothing, and a line left with nothing takes the paragraph mark's
@@ -743,7 +741,7 @@ pub(super) fn header_float_floor(
         .flat_map(|para| &para.floating_images)
         .filter(|fi| fi.wrap_type.wraps_beside() || matches!(fi.wrap_type, WrapType::TopAndBottom))
         .filter_map(|fi| {
-            let fi_x = super::resolve_h_position(
+            let fi_x = resolve_h_position(
                 fi.h_relative_from,
                 &fi.h_position,
                 fi.image.display_width,
@@ -1032,7 +1030,7 @@ fn hf_float_zone(
     own_before: f32,
 ) -> HfFloatZone {
     let text_width = sp.text_width();
-    let fi_x = super::resolve_h_position(
+    let fi_x = resolve_h_position(
         fi.h_relative_from,
         &fi.h_position,
         fi.image.display_width,
@@ -1424,7 +1422,7 @@ pub(super) fn render_header_footer(
                             if let Some(pdf_name) = pc.floating_image_names.get(&(pi, fi_idx)) {
                                 let img = &fi.image;
                                 let zone = hf_float_zone(fi, sp, slot_top, own_before);
-                                super::smartart::render_image_with_clip(
+                                super::shape_path::render_image_with_clip(
                                     content,
                                     pdf_name,
                                     zone.left,
@@ -1434,7 +1432,7 @@ pub(super) fn render_header_footer(
                                     img.clip_geometry.as_ref(),
                                 );
                                 if let Some(sc) = img.stroke_color {
-                                    super::smartart::stroke_image_border(
+                                    super::shape_path::stroke_image_border(
                                         content,
                                         zone.left,
                                         zone.bottom,
@@ -1491,7 +1489,7 @@ pub(super) fn render_header_footer(
                             (x, y_bottom, img.display_width, img.display_height),
                             pc.effect_para_names.get(&pi),
                         );
-                        super::smartart::render_image_with_clip(
+                        super::shape_path::render_image_with_clip(
                             content,
                             pdf_name,
                             x,
@@ -1501,7 +1499,7 @@ pub(super) fn render_header_footer(
                             img.clip_geometry.as_ref(),
                         );
                         if let Some(sc) = img.stroke_color {
-                            super::smartart::stroke_image_border(
+                            super::shape_path::stroke_image_border(
                                 content,
                                 x,
                                 y_bottom,
@@ -1898,7 +1896,7 @@ fn render_hf_textbox(
 ) {
     let text_width = sp.text_width();
     let tb_height = super::textbox_render::textbox_height(tb, ctx);
-    let tb_x = super::resolve_h_position(
+    let tb_x = resolve_h_position(
         tb.h_relative_from,
         &tb.h_position,
         tb.width_pt,
@@ -2020,7 +2018,7 @@ fn render_hf_textbox(
                         (hf_box_text_w(tp, content_w) - img.display_width).max(0.0),
                     );
                 let img_y = tb_cursor - tp.space_before - img.display_height;
-                super::smartart::render_image_with_clip(
+                super::shape_path::render_image_with_clip(
                     content,
                     pdf_name,
                     img_x,

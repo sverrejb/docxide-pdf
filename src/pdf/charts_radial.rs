@@ -7,9 +7,10 @@ use crate::model::{InlineChart, LegendPosition, View3D};
 
 use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
 use super::charts::{
-    VALUE_LABEL_SINK, data_label, fill_strips, polygon, resolve_accent_colors, show_text,
-    text_width, title_band,
+    VALUE_LABEL_SINK, data_label, polygon, resolve_accent_colors, show_text, title_band,
 };
+use super::charts_3d::fill_strips;
+use super::charts_format::text_width;
 use super::color::fill_rgb;
 
 struct RadialLayout<'a> {

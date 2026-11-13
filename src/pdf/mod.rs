@@ -113,7 +113,7 @@ use prepass::{
     body_page_field_text, body_runs, cell_grid_pitch, compute_bookmark_positions, document_lang,
     keeps_section_mark_line,
 };
-use smartart::draw_shape_path;
+use shape_path::draw_shape_path;
 use table::render_table;
 use textbox_render::render_single_textbox;
 
@@ -344,7 +344,7 @@ fn styleref_insert(
 ) {
     for name in std::iter::once(id).chain(style_id_to_name.get(id).map(String::as_str)) {
         for (form, value) in para.styleref_values(text) {
-            let key = header_footer::styleref_key(name, form);
+            let key = crate::model::styleref_key(name, form);
             if !page_first.contains_key(&key) {
                 page_first.insert(key.clone(), value.to_string());
             }
@@ -556,9 +556,9 @@ fn lines_kept_together(widow_control: bool, n: impl FnOnce() -> usize) -> usize 
 /// `table::render_table` sizes it.
 fn first_row_height(table: &crate::model::Table, ctx: &RenderContext, col_w: f32) -> f32 {
     let mut col_widths = if table.fixed_layout {
-        table_layout::fixed_columns(table, col_w, ctx.compat_mode)
+        table_columns::fixed_columns(table, col_w, ctx.compat_mode)
     } else {
-        table_layout::auto_fit_columns(
+        table_columns::auto_fit_columns(
             table,
             ctx.fonts,
             Some(col_w),
@@ -566,7 +566,7 @@ fn first_row_height(table: &crate::model::Table, ctx: &RenderContext, col_w: f32
             table.autofit_overhang(ctx.compat_mode),
         )
     };
-    table_layout::apply_pct_width(table, &mut col_widths, col_w, ctx.compat_mode);
+    table_columns::apply_pct_width(table, &mut col_widths, col_w, ctx.compat_mode);
     table_layout::compute_row_layouts(table, &col_widths, ctx, None)
         .first()
         .map_or(0.0, |r| r.height)

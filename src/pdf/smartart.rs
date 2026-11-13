@@ -6,13 +6,9 @@ use crate::fonts::FontEntry;
 use crate::model::{SmartArtDiagram, SmartArtShape, SmartArtTextAlign, SmartArtTextAnchor};
 
 use super::charts;
+use super::charts_format::text_width;
 use super::color;
-// The shape helpers grew up here and the rest of the renderer still reaches
-// them through this module.
-pub(super) use super::shape_path::{
-    draw_shape_path, draw_shape_stroke_path, render_image_with_clip, shape_text_rect,
-    stroke_image_border,
-};
+use super::shape_path::{draw_shape_path, draw_shape_stroke_path};
 
 pub(super) fn render_smartart(
     content: &mut Content,
@@ -233,7 +229,7 @@ fn wrap_shape_text<'a>(
             && let Some(first_run) = para.runs.first()
         {
             let fe = resolve_run_font(first_run, seen_fonts, sa_font_entry);
-            let bw = charts::text_width(bullet_text, first_run.font_size, fe);
+            let bw = text_width(bullet_text, first_run.font_size, fe);
             words.push(Piece {
                 text: bullet_text,
                 width: bw,
@@ -246,7 +242,7 @@ fn wrap_shape_text<'a>(
         for run in &para.runs {
             let fe = resolve_run_font(run, seen_fonts, sa_font_entry);
             let efs = effective_font_size(run);
-            let space_w = charts::text_width(" ", efs, fe);
+            let space_w = text_width(" ", efs, fe);
 
             for (i, word) in run.text.split(' ').enumerate() {
                 if word.is_empty() && i > 0 {
@@ -255,7 +251,7 @@ fn wrap_shape_text<'a>(
                 let ww = if word.is_empty() {
                     0.0
                 } else {
-                    charts::text_width(word, efs, fe)
+                    text_width(word, efs, fe)
                 };
                 words.push(Piece {
                     text: word,

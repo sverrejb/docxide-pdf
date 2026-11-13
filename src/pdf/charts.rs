@@ -10,12 +10,10 @@ use crate::model::{
 use super::chart_legend::{
     LegendItem, LegendPlacement, SwatchStyle, render_chart_legend, render_swatch,
 };
-pub(super) use super::charts_3d::fill_strips;
 use super::charts_3d::{Space, depth_rows, draw_bar_3d, draw_ribbons, on_page};
 use super::charts_ex;
-pub(super) use super::charts_format::text_width;
 use super::charts_format::{
-    apply_number_format, compute_axis_range, format_tick_label, wrap_label,
+    apply_number_format, compute_axis_range, format_tick_label, text_width, wrap_label,
 };
 use super::charts_radar::render_radar;
 use super::charts_radial;

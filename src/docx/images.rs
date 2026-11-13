@@ -9,14 +9,10 @@ use crate::model::{
 };
 
 use super::charts::parse_chart_from_zip;
-pub(super) use super::media::MediaParts;
 use super::media::{find_blip, find_blip_embeds, read_image_from_zip, tile_picture};
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
 use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
 use super::vml_object::compute_object_height;
-pub(super) use super::vml_object::{
-    is_vml_picture, parse_object_floating_image, parse_object_inline_image,
-};
 use super::{
     CHART_NS, DML_NS, PIC_NS, ParseContext, REL_NS, WML_NS, WPD_NS, WPS_NS, angle_attr, dml,
     emu_attr, emu_attr_opt, emu_to_pts, f32_attr, frac_attr, parse_hex_color, parse_on_off,

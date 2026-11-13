@@ -1290,7 +1290,7 @@ pub(super) fn empty_frame_table_bands(
                     }) {
                         return false;
                     }
-                    let widths = table_layout::auto_fit_columns(
+                    let widths = table_columns::auto_fit_columns(
                         t,
                         ctx.fonts,
                         None,

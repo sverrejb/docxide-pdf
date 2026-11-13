@@ -1987,7 +1987,7 @@ pub(super) fn render_paragraph_lines(
                     chunk.inline_image_effect_xobjs.as_ref(),
                 );
 
-                super::smartart::render_image_with_clip(
+                super::shape_path::render_image_with_clip(
                     content,
                     img_name,
                     x,
@@ -1998,7 +1998,7 @@ pub(super) fn render_paragraph_lines(
                 );
 
                 if let Some(sc) = chunk.inline_image_stroke_color {
-                    super::smartart::stroke_image_border(
+                    super::shape_path::stroke_image_border(
                         content,
                         x,
                         img_bottom,

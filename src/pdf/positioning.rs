@@ -310,7 +310,7 @@ fn render_one_floating_image(
         let figure = tags.hoist_figure(img.alt.as_deref(), fi.anchor_seq);
         tags.begin(content, page, figure);
     }
-    super::smartart::render_image_with_clip(
+    super::shape_path::render_image_with_clip(
         content,
         pdf_name,
         fi_x,
@@ -332,7 +332,7 @@ fn render_one_floating_image(
     );
 
     if let Some(sc) = img.stroke_color {
-        super::smartart::stroke_image_border(
+        super::shape_path::stroke_image_border(
             content,
             fi_x,
             fi_y_bottom,

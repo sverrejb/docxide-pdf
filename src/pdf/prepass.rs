@@ -55,13 +55,13 @@ pub(super) fn body_page_field_text(
     match run.field_code {
         Some(FieldCode::Page(fmt)) => {
             let (num, section_fmt) = fields.pages.get(page_idx)?;
-            Some(header_footer::page_field_text(
+            Some(hf_fields::page_field_text(
                 *num,
                 fmt.or(section_fmt.as_deref()),
             ))
         }
-        Some(FieldCode::NumPages(fmt)) => Some(header_footer::page_field_text(fields.total, fmt)),
-        Some(FieldCode::SectionPages(fmt)) => Some(header_footer::page_field_text(
+        Some(FieldCode::NumPages(fmt)) => Some(hf_fields::page_field_text(fields.total, fmt)),
+        Some(FieldCode::SectionPages(fmt)) => Some(hf_fields::page_field_text(
             fields.section_pages[sect_idx],
             fmt,
         )),
@@ -269,7 +269,7 @@ pub(super) fn compute_bookmark_positions(
     // "i" front matter shows 1, not the sheet count).
     let labels = page_number_formats(doc, &pages)
         .into_iter()
-        .map(|(n, fmt)| header_footer::page_field_text(n, fmt))
+        .map(|(n, fmt)| hf_fields::page_field_text(n, fmt))
         .collect();
     (bookmark_positions, labels)
 }

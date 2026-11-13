@@ -8,16 +8,17 @@ use crate::model::{
     TextShadow, Textbox, VertAlign,
 };
 
-pub(super) use super::field_code::*;
-use super::images::{
-    RunDrawingResult, is_vml_picture, parse_object_floating_image, parse_object_inline_image,
-    parse_run_drawing,
+use super::field_code::{
+    has_switch, is_toc_instr, macrobutton_display, parse_checkbox, parse_eq_overstrike,
+    parse_field_code, switch_args,
 };
+use super::images::{RunDrawingResult, parse_run_drawing};
 use super::styles::{
     ComplexProps, ParagraphStyle, RunProps, StyleDefaults, ThemeFonts, half_points,
     parse_font_size, parse_run_props, resolve_font_from_node_opt,
 };
-use super::textbox::{parse_connector_from_vml, parse_textbox_from_vml};
+use super::vml_object::{is_vml_picture, parse_object_floating_image, parse_object_inline_image};
+use super::vml_shape::{parse_connector_from_vml, parse_textbox_from_vml};
 use super::{
     MATH_NS, MC_NS_TOP, OFFICE_NS, ParseContext, REL_NS, VML_NS, WML_NS, math_run_text, math_val,
     parse_hex_color, parse_pt, twips_attr, wml, wml_attr, wml_bool,
