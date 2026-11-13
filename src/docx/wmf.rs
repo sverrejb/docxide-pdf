@@ -58,13 +58,17 @@ fn wmf_records(data: &[u8]) -> Option<impl Iterator<Item = Option<(u16, &[u8])>>
     };
     Some(std::iter::from_fn(move || {
         let (size_words, func) = (le_u32(data, i)? as usize, le_u16(data, i + 4)?);
-        let size_bytes = size_words * 2;
-        if size_bytes < 6 || i + size_bytes > data.len() {
+        let end = size_words
+            .checked_mul(2)
+            .filter(|&size_bytes| size_bytes >= 6)
+            .and_then(|size_bytes| i.checked_add(size_bytes))
+            .filter(|&end| end <= data.len());
+        let Some(end) = end else {
             i = data.len();
             return Some(None);
-        }
-        let params = &data[i + 6..i + size_bytes];
-        i += size_bytes;
+        };
+        let params = &data[i + 6..end];
+        i = end;
         Some(Some((func, params)))
     }))
 }
