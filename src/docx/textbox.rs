@@ -837,15 +837,7 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
     if !stroked && fill.is_none() {
         return None;
     }
-    let stroke_width = shape
-        .attribute("strokeweight")
-        .and_then(parse_pt)
-        .filter(|w| *w > 0.0)
-        .unwrap_or(0.75);
-    let stroke_color = shape
-        .attribute("strokecolor")
-        .and_then(parse_vml_color)
-        .unwrap_or([0, 0, 0]);
+    let (stroke_color, stroke_width) = vml_stroke(shape);
 
     let VmlBoxStyle {
         width,
@@ -935,6 +927,16 @@ pub(super) fn parse_connector_from_vml(pict: roxmltree::Node) -> Option<Connecto
     Some(line)
 }
 
+/// A VML shape's outline colour and width, black 0.75pt unless written out.
+fn vml_stroke(shape: roxmltree::Node) -> ([u8; 3], f32) {
+    let color = shape.attribute("strokecolor").and_then(parse_vml_color);
+    let width = shape
+        .attribute("strokeweight")
+        .and_then(parse_pt)
+        .filter(|w| *w > 0.0);
+    (color.unwrap_or([0, 0, 0]), width.unwrap_or(0.75))
+}
+
 /// A stroked VML line (`o:spt` 32) with zeroed position and size; the caller
 /// supplies the placement.
 pub(super) fn parse_vml_line(shape: roxmltree::Node) -> Option<ConnectorShape> {
@@ -942,6 +944,7 @@ pub(super) fn parse_vml_line(shape: roxmltree::Node) -> Option<ConnectorShape> {
         return None;
     }
     let flip = vml_style_prop(shape.attribute("style").unwrap_or(""), "flip").unwrap_or("");
+    let (stroke_color, stroke_width) = vml_stroke(shape);
     Some(ConnectorShape {
         behind_doc: false,
         h_position: HorizontalPosition::Offset(0.0),
@@ -950,15 +953,12 @@ pub(super) fn parse_vml_line(shape: roxmltree::Node) -> Option<ConnectorShape> {
         v_relative_from: VRelativeFrom::default(),
         width: 0.0,
         height: 0.0,
-        stroke_color: shape
-            .attribute("strokecolor")
-            .and_then(parse_vml_color)
-            .unwrap_or([0, 0, 0]),
-        stroke_width: shape
-            .attribute("strokeweight")
-            .and_then(parse_pt)
-            .filter(|w| w.is_finite() && *w > 0.0)
-            .unwrap_or(0.75),
+        stroke_color,
+        stroke_width: if stroke_width.is_finite() {
+            stroke_width
+        } else {
+            0.75
+        },
         connector_type: ConnectorType::Line {
             flip_h: flip.contains('x'),
             flip_v: flip.contains('y'),
@@ -1025,16 +1025,8 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     // forced borderless, dropping e.g. the "Nota Bene" box outline.
     let stroked = !matches!(shape.attribute("stroked"), Some("f") | Some("false"));
     let (stroke_color, stroke_width) = if stroked {
-        let w = shape
-            .attribute("strokeweight")
-            .and_then(parse_pt)
-            .filter(|w| *w > 0.0)
-            .unwrap_or(0.75);
-        let c = shape
-            .attribute("strokecolor")
-            .and_then(parse_vml_color)
-            .unwrap_or([0, 0, 0]);
-        (Some(c), w)
+        let (color, width) = vml_stroke(shape);
+        (Some(color), width)
     } else {
         (None, 0.0)
     };
