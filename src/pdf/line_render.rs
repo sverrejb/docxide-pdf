@@ -7,7 +7,7 @@ use pdf_writer::types::TextRenderingMode;
 use pdf_writer::{Buf, Content, Name, Primitive, Rect, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
-use crate::model::{Alignment, FormCheckbox, ParagraphBorder, TextFill};
+use crate::model::{Alignment, FormCheckbox, ParagraphBorder, TextFill, UnderlineStyle};
 
 use super::color::{fill_color_or_black, stroke_color_or_black};
 use super::layout::{MixedJustify, TextLine, WordChunk, char_justify_gaps, spaces_before_each};
@@ -16,8 +16,9 @@ use super::line_sizing::{
 };
 use super::link_tagger::{LinkAnnotation, LinkTagger};
 
-/// A decoration rectangle (underline, strikethrough, shading): x, y, width, height, colour.
-type Decoration = (f32, f32, f32, f32, Option<[u8; 3]>);
+/// A decoration rectangle (underline, strikethrough, shading): x, y, width,
+/// height, colour, and the dash pattern of a dotted or dashed underline.
+type Decoration = (f32, f32, f32, f32, Option<[u8; 3]>, Option<&'static [f32]>);
 
 /// The lines (top, thickness) of an underline at `font_size` under the
 /// baseline `y`. Word draws a single underline from the font's post table, its
@@ -67,6 +68,14 @@ fn push_decoration(
     height: f32,
     color: Option<[u8; 3]>,
 ) {
+    push_dashed_decoration(decorations, (x, y, width, height, color, None));
+}
+
+/// `push_decoration` for a line drawn in `dashes` (`UnderlineStyle::dashes`);
+/// only spans with the same pattern join, so the pattern restarts where the
+/// style changes.
+fn push_dashed_decoration(decorations: &mut Vec<Decoration>, deco: Decoration) {
+    let (x, y, width, height, color, dashes) = deco;
     // Look back past the other line of a double underline (or a strike on the
     // same run), which interleave with this one chunk by chunk.
     // Only a touching span joins: an underlined word after a gap of plain text
@@ -75,17 +84,35 @@ fn push_decoration(
         .iter_mut()
         .rev()
         .take(3)
-        .find(|(dx, dy, dw, dh, dc)| {
+        .find(|(dx, dy, dw, dh, dc, dd)| {
             (*dy - y).abs() < 0.01
                 && (*dh - height).abs() < 0.01
                 && *dc == color
+                && *dd == dashes
                 && (x - (*dx + *dw)).abs() < 0.5
         });
     if let Some(prev) = merged {
         prev.2 = (x + width) - prev.0;
     } else {
-        decorations.push((x, y, width, height, color));
+        decorations.push(deco);
     }
+}
+
+/// The on segments (x, width) of a `dashes` pattern from `x` over `width`:
+/// Word starts with a dash at the left end and cuts the last one at the right.
+fn dash_segments(x: f32, width: f32, dashes: &[f32]) -> Vec<(f32, f32)> {
+    let mut out = Vec::new();
+    let mut at = x;
+    for (i, len) in dashes.iter().cycle().enumerate() {
+        if at >= x + width - 0.001 {
+            break;
+        }
+        if i % 2 == 0 {
+            out.push((at, len.min(x + width - at)));
+        }
+        at += len;
+    }
+    out
 }
 
 /// Word sets a legacy check box in a square cell as wide and tall as one line
@@ -1399,7 +1426,7 @@ pub(super) fn render_paragraph_lines(
                     for item in &mb.items {
                         let (gx, gy, size, color, item_font, bytes) = match item {
                             crate::math::MathItem::Rule { x: rx, y: ry, w, h } => {
-                                decorations.push((x + rx, cy + ry, *w, *h, effective_color));
+                                decorations.push((x + rx, cy + ry, *w, *h, effective_color, None));
                                 continue;
                             }
                             crate::math::MathItem::Glyph {
@@ -1790,13 +1817,33 @@ pub(super) fn render_paragraph_lines(
                 } else {
                     chunk.width
                 };
-                if chunk.underline && deco_w > 0.0 {
+                // `words` leaves the spaces between words bare.
+                let underline_w = if chunk.underline_style == UnderlineStyle::Words {
+                    chunk.width
+                } else {
+                    deco_w
+                };
+                if chunk.underline && underline_w > 0.0 {
                     let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str()).copied();
                     let link = chunk.hyperlink_url.is_some();
-                    for (top, th) in
-                        underline_lines(entry, chunk.font_size, chunk.double_underline, link, y)
-                    {
-                        push_decoration(&mut decorations, x, top, deco_w, th, chunk.color);
+                    for (top, th) in underline_lines(
+                        entry,
+                        chunk.font_size,
+                        chunk.underline_style == UnderlineStyle::Double,
+                        link,
+                        y,
+                    ) {
+                        push_dashed_decoration(
+                            &mut decorations,
+                            (
+                                x,
+                                top,
+                                underline_w,
+                                th,
+                                chunk.color,
+                                chunk.underline_style.dashes(),
+                            ),
+                        );
                     }
                 }
                 if chunk.strikethrough || chunk.dstrike {
@@ -1899,8 +1946,17 @@ pub(super) fn render_paragraph_lines(
             let w = (start + sp.width).min(line_right) - left;
             if w > 0.0 {
                 let entry = pdf_name_to_entry.get(sp.pdf_font.as_str()).copied();
-                for (top, th) in underline_lines(entry, sp.font_size, sp.double, false, y) {
-                    push_decoration(&mut decorations, left, top, w, th, sp.color);
+                for (top, th) in underline_lines(
+                    entry,
+                    sp.font_size,
+                    sp.style == UnderlineStyle::Double,
+                    false,
+                    y,
+                ) {
+                    push_dashed_decoration(
+                        &mut decorations,
+                        (left, top, w, th, sp.color, sp.style.dashes()),
+                    );
                 }
             }
         }
@@ -2021,12 +2077,21 @@ pub(super) fn render_paragraph_lines(
             }
         }
 
-        for &(dx, dy, dw, dh, dcolor) in &decorations {
+        for &(dx, dy, dw, dh, dcolor, dashes) in &decorations {
             if dcolor != current_color {
                 fill_color_or_black(content, dcolor);
                 current_color = dcolor;
             }
-            content.rect(dx, dy, dw, dh).fill_nonzero();
+            match dashes {
+                Some(dashes) => {
+                    for (sx, sw) in dash_segments(dx, dw, dashes) {
+                        content.rect(sx, dy, sw, dh).fill_nonzero();
+                    }
+                }
+                None => {
+                    content.rect(dx, dy, dw, dh).fill_nonzero();
+                }
+            }
         }
 
         let same_ruby = |a: &WordChunk, b: &WordChunk| matches!((&a.ruby, &b.ruby), (Some(x), Some(y)) if Arc::ptr_eq(x, y));
@@ -2099,6 +2164,27 @@ pub(super) fn push_clip(content: &mut Content, rect: Option<(f32, f32, f32, f32)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dash_patterns_start_on_and_cut_the_last_dash() {
+        // Word online, dotted under 4.25pt: dots at 0 and 3, the second cut.
+        let dotted = UnderlineStyle::Dotted.dashes().unwrap();
+        assert_eq!(
+            dash_segments(10.0, 4.25, dotted),
+            [(10.0, 1.5), (13.0, 1.25)]
+        );
+        // dotDash: a 3pt dash, a 1pt gap, a 1pt dot, a 1pt gap.
+        let dot_dash = UnderlineStyle::DotDash.dashes().unwrap();
+        assert_eq!(
+            dash_segments(0.0, 7.0, dot_dash),
+            [(0.0, 3.0), (4.0, 1.0), (6.0, 1.0)]
+        );
+        assert_eq!(
+            UnderlineStyle::parse("dashLongHeavy"),
+            UnderlineStyle::DashLong
+        );
+        assert_eq!(UnderlineStyle::parse("wave"), UnderlineStyle::Single);
+    }
 
     #[test]
     fn tj_run_moves_each_chunk_to_its_start_and_joins_text() {

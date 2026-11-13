@@ -705,6 +705,54 @@ impl Paragraph {
     }
 }
 
+/// A `w:u` style as Word online draws it (probe 2026-11-13,
+/// `tests/output/probe_ustyle`): every style uses the single line's offset
+/// and thickness, and the dash lengths are fixed in points at every size.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum UnderlineStyle {
+    #[default]
+    Single,
+    Double,
+    Dotted,
+    Dash,
+    DashLong,
+    DotDash,
+    DotDotDash,
+    /// Words only, not the spaces between them.
+    Words,
+}
+
+impl UnderlineStyle {
+    /// ponytail: the Heavy variants draw at the single thickness and the
+    /// waves as a single line; Word's thick and wave geometry are unmodelled
+    /// (roadmap, Underlines).
+    pub fn parse(val: &str) -> Self {
+        match val {
+            "double" => Self::Double,
+            "dotted" | "dottedHeavy" => Self::Dotted,
+            "dash" | "dashedHeavy" => Self::Dash,
+            "dashLong" | "dashLongHeavy" => Self::DashLong,
+            "dotDash" | "dashDotHeavy" => Self::DotDash,
+            "dotDotDash" | "dashDotDotHeavy" => Self::DotDotDash,
+            "words" => Self::Words,
+            _ => Self::Single,
+        }
+    }
+
+    /// Alternating on/off lengths in points, starting with a dash at the
+    /// underline's left end.
+    pub fn dashes(self) -> Option<&'static [f32]> {
+        Some(match self {
+            Self::Dotted => &[1.5, 1.5],
+            Self::Dash => &[4.0, 2.0],
+            Self::DashLong => &[8.0, 4.0],
+            Self::DotDash => &[3.0, 1.0, 1.0, 1.0],
+            Self::DotDotDash => &[2.25, 0.75, 0.75, 0.75, 0.75, 0.75],
+            _ => return None,
+        })
+    }
+}
+
 pub struct HorizontalRule {
     pub height_pt: f32,
     pub fill_color: [u8; 3],
@@ -733,7 +781,7 @@ pub struct Run {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
-    pub double_underline: bool,
+    pub underline_style: UnderlineStyle,
     pub strikethrough: bool,
     pub dstrike: bool,
     /// Inserted, deleted or reformatted under tracked changes, printed in the
@@ -929,7 +977,7 @@ impl Default for Run {
             bold: false,
             italic: false,
             underline: false,
-            double_underline: false,
+            underline_style: UnderlineStyle::Single,
             strikethrough: false,
             revised: false,
             dstrike: false,

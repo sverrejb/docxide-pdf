@@ -379,7 +379,7 @@ pub(super) struct WordChunk {
     pub(super) x_offset: f32, // x relative to line start
     pub(super) width: f32,
     pub(super) underline: bool,
-    pub(super) double_underline: bool,
+    pub(super) underline_style: crate::model::UnderlineStyle,
     pub(super) strikethrough: bool,
     pub(super) dstrike: bool,
     /// A tracked change (markup view): its line gets a change bar.
@@ -515,7 +515,7 @@ impl WordChunk {
             x_offset,
             width,
             underline: false,
-            double_underline: false,
+            underline_style: crate::model::UnderlineStyle::Single,
             strikethrough: false,
             dstrike: false,
             revised: false,
@@ -589,7 +589,7 @@ impl WordChunk {
             },
             border: run.border.clone(),
             underline: run.underline,
-            double_underline: run.double_underline,
+            underline_style: run.underline_style,
             strikethrough: run.strikethrough,
             dstrike: run.dstrike,
             revised: run.revised,
@@ -704,7 +704,7 @@ impl WordChunk {
         entry: &FontEntry,
         font_size: f32,
         color: Option<[u8; 3]>,
-        double_underline: bool,
+        underline_style: crate::model::UnderlineStyle,
         border: Option<ParagraphBorder>,
         x_offset: f32,
         width: f32,
@@ -713,7 +713,7 @@ impl WordChunk {
             entry,
             font_size,
             color,
-            double_underline,
+            underline_style,
             border,
             x_offset,
             width,
@@ -728,7 +728,7 @@ impl WordChunk {
         entry: &FontEntry,
         font_size: f32,
         color: Option<[u8; 3]>,
-        double_underline: bool,
+        underline_style: crate::model::UnderlineStyle,
         border: Option<ParagraphBorder>,
         x_offset: f32,
         width: f32,
@@ -739,7 +739,7 @@ impl WordChunk {
             // contiguous (otherwise a None-border space chunk splits the box).
             border,
             underline: true,
-            double_underline,
+            underline_style,
             ..Self::blank(entry.pdf_name.clone(), font_size, x_offset, width)
         }
     }
@@ -823,7 +823,7 @@ pub(super) struct EndSpace {
     pub(super) pdf_font: String,
     pub(super) font_size: f32,
     pub(super) color: Option<[u8; 3]>,
-    pub(super) double: bool,
+    pub(super) style: crate::model::UnderlineStyle,
 }
 
 impl TextLine {
@@ -1494,7 +1494,12 @@ struct PendingSpaceRun<'a> {
 /// across a space that belongs to a neighbouring non-underlined run). A struck
 /// run (a deletion): Word's strike bridges the space.
 fn underlines_space(run: &Run) -> bool {
-    run.underline || run.strikethrough || run.dstrike
+    underlines_spaces(run) || run.strikethrough || run.dstrike
+}
+
+/// An underline that also runs under spaces: all but `words`.
+fn underlines_spaces(run: &Run) -> bool {
+    run.underline && run.underline_style != crate::model::UnderlineStyle::Words
 }
 
 fn space_underline(
@@ -1509,7 +1514,7 @@ fn space_underline(
         entry,
         font_size,
         run.color,
-        run.double_underline,
+        run.underline_style,
         run.border.clone(),
         x,
         width,
@@ -1564,7 +1569,7 @@ fn underline_line_end(
         return;
     }
     for sp in spaces {
-        if sp.run.underline && sp.run.rtl == cjk.bidi {
+        if underlines_spaces(sp.run) && sp.run.rtl == cjk.bidi {
             let x_offset = if cjk.bidi {
                 line.total_width - x - sp.width
             } else {
@@ -1576,7 +1581,7 @@ fn underline_line_end(
                 pdf_font: sp.entry.pdf_name.clone(),
                 font_size: sp.font_size,
                 color: sp.run.color,
-                double: sp.run.double_underline,
+                style: sp.run.underline_style,
             });
         }
         x += sp.width;
@@ -3485,7 +3490,7 @@ pub(super) fn build_tabbed_line(
                     entry,
                     eff_fs,
                     tab_run.color,
-                    tab_run.double_underline,
+                    tab_run.underline_style,
                     tab_run.border.clone(),
                     current_x,
                     seg_start - current_x,
@@ -3924,8 +3929,8 @@ mod tests {
             assert_eq!(build(false, width), build(true, width), "width={width}");
         }
         let entry = FontEntry::stub();
-        let tab = WordChunk::tab_underline(&entry, 10.0, None, false, None, 0.0, 30.0);
-        let space = WordChunk::word_space_underline(&entry, 10.0, None, false, None, 30.0, 3.0);
+        let tab = WordChunk::tab_underline(&entry, 10.0, None, Default::default(), None, 0.0, 30.0);
+        let space = WordChunk::word_space_underline(&entry, 10.0, None, Default::default(), None, 30.0, 3.0);
         assert_eq!(line_space_width(&[tab, space]), 3.0);
     }
 
@@ -3933,7 +3938,7 @@ mod tests {
     fn justify_counts_word_spaces_not_run_joins() {
         let entry = FontEntry::stub();
         let chunk = |text: &str, x: f32, w: f32| {
-            let mut c = WordChunk::tab_underline(&entry, 12.0, None, false, None, x, w);
+            let mut c = WordChunk::tab_underline(&entry, 12.0, None, Default::default(), None, x, w);
             c.text = text.to_string();
             c
         };
@@ -3968,7 +3973,7 @@ mod tests {
     fn compress_punctuation_trims_marks_evenly_and_shifts_followers() {
         let entry = FontEntry::stub();
         let chunk = |text: &str, x: f32| {
-            let mut c = WordChunk::tab_underline(&entry, 16.0, None, false, None, x, 32.0);
+            let mut c = WordChunk::tab_underline(&entry, 16.0, None, Default::default(), None, x, 32.0);
             c.text = text.to_string();
             c
         };

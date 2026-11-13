@@ -66,7 +66,7 @@ pub(super) struct StyleDefaults {
     pub(super) strikethrough: bool,
     pub(super) dstrike: bool,
     pub(super) underline: bool,
-    pub(super) double_underline: bool,
+    pub(super) underline_style: crate::model::UnderlineStyle,
     pub(super) color: Option<[u8; 3]>,
     pub(super) char_spacing: f32,
     pub(super) lang: Option<String>,
@@ -155,7 +155,7 @@ pub(super) struct RunProps {
     pub(super) bold: Option<bool>,
     pub(super) italic: Option<bool>,
     pub(super) underline: Option<bool>,
-    pub(super) double_underline: Option<bool>,
+    pub(super) underline_style: Option<crate::model::UnderlineStyle>,
     pub(super) strikethrough: Option<bool>,
     pub(super) dstrike: Option<bool>,
     pub(super) caps: Option<bool>,
@@ -240,7 +240,7 @@ pub(super) fn parse_run_props(rpr: roxmltree::Node, theme: &ThemeFonts) -> RunPr
         bold: wml_bool(rpr, "b"),
         italic: wml_bool(rpr, "i"),
         underline: parse_underline(rpr),
-        double_underline: parse_double_underline(rpr),
+        underline_style: parse_underline_style(rpr),
         strikethrough: wml_bool(rpr, "strike"),
         dstrike: wml_bool(rpr, "dstrike"),
         caps: wml_bool(rpr, "caps"),
@@ -284,7 +284,7 @@ impl RunProps {
             bold,
             italic,
             underline,
-            double_underline,
+            underline_style,
             strikethrough,
             dstrike,
             caps,
@@ -472,8 +472,8 @@ fn parse_underline(rpr: roxmltree::Node) -> Option<bool> {
     wml_attr(rpr, "u").map(|v| v != "none")
 }
 
-fn parse_double_underline(rpr: roxmltree::Node) -> Option<bool> {
-    wml_attr(rpr, "u").map(|v| v == "double")
+fn parse_underline_style(rpr: roxmltree::Node) -> Option<crate::model::UnderlineStyle> {
+    wml_attr(rpr, "u").map(crate::model::UnderlineStyle::parse)
 }
 
 pub(super) fn parse_char_spacing(rpr: roxmltree::Node) -> Option<f32> {
@@ -647,7 +647,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
             defaults.strikethrough = r.strikethrough.unwrap_or(false);
             defaults.dstrike = r.dstrike.unwrap_or(false);
             defaults.underline = r.underline.unwrap_or(false);
-            defaults.double_underline = r.double_underline.unwrap_or(false);
+            defaults.underline_style = r.underline_style.unwrap_or_default();
             defaults.color = r.color;
             defaults.char_spacing = r.char_spacing.unwrap_or(0.0);
             (defaults.lang, defaults.lang_east_asia, defaults.lang_bidi) =

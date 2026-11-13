@@ -206,7 +206,7 @@ impl Run {
         Run {
             inline_image: Some(img),
             underline: self.underline,
-            double_underline: self.double_underline,
+            underline_style: self.underline_style,
             color: self.color,
             vanish: self.vanish,
             ..self.minimal_run()
@@ -223,7 +223,7 @@ impl Run {
             bold: self.bold,
             italic: self.italic,
             underline: self.underline,
-            double_underline: self.double_underline,
+            underline_style: self.underline_style,
             color: self.color,
             ..self.minimal_run()
         }
@@ -274,7 +274,7 @@ struct ParagraphRunDefaults {
     small_caps: bool,
     vanish: bool,
     underline: bool,
-    double_underline: bool,
+    underline_style: crate::model::UnderlineStyle,
     strikethrough: bool,
     dstrike: bool,
     color: Option<[u8; 3]>,
@@ -329,7 +329,9 @@ impl ParagraphRunDefaults {
             small_caps: style_or(|r| r.small_caps, defaults.small_caps),
             vanish: style_or(|r| r.vanish, defaults.vanish),
             underline: style_or(|r| r.underline, defaults.underline),
-            double_underline: style_or(|r| r.double_underline, defaults.double_underline),
+            underline_style: run
+                .and_then(|r| r.underline_style)
+                .unwrap_or(defaults.underline_style),
             strikethrough: style_or(|r| r.strikethrough, defaults.strikethrough),
             dstrike: style_or(|r| r.dstrike, defaults.dstrike),
             color: run.and_then(|r| r.color).or(defaults.color),
@@ -448,10 +450,10 @@ impl ParagraphRunDefaults {
                 .underline
                 .or_else(|| cs(|c| c.underline))
                 .unwrap_or(self.underline),
-            double_underline: own
-                .double_underline
-                .or_else(|| cs(|c| c.double_underline))
-                .unwrap_or(self.double_underline),
+            underline_style: own
+                .underline_style
+                .or_else(|| char_style.and_then(|c| c.underline_style))
+                .unwrap_or(self.underline_style),
             strikethrough: own
                 .strikethrough
                 .or_else(|| cs(|c| c.strikethrough))
@@ -935,7 +937,11 @@ fn mark_revision(
                 r.dstrike = moved;
             } else {
                 r.underline = true;
-                r.double_underline = moved;
+                r.underline_style = if moved {
+                    crate::model::UnderlineStyle::Double
+                } else {
+                    crate::model::UnderlineStyle::Single
+                };
             }
         }
     } else if rpr.is_some_and(|rpr| wml(rpr, "rPrChange").is_some()) {
@@ -1084,7 +1090,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && prev.bold == run.bold
                 && prev.italic == run.italic
                 && prev.underline == run.underline
-                && prev.double_underline == run.double_underline
+                && prev.underline_style == run.underline_style
                 && prev.strikethrough == run.strikethrough
                 && prev.dstrike == run.dstrike
                 && prev.char_spacing == run.char_spacing
@@ -2124,7 +2130,7 @@ mod tests {
             .iter()
             .map(|(r, ..)| Run {
                 text: r.text().unwrap_or("").to_string(),
-                double_underline: true,
+                underline_style: crate::model::UnderlineStyle::Double,
                 ..Run::default()
             })
             .collect();
@@ -2132,14 +2138,22 @@ mod tests {
             mark_revision(&mut runs[i..=i], *node, wml(*node, "rPr"), &revisions);
         }
         assert_eq!(runs.len(), 5);
-        assert!(runs[0].revised && runs[0].underline && !runs[0].double_underline);
+        assert!(
+            runs[0].revised
+                && runs[0].underline
+                && runs[0].underline_style == crate::model::UnderlineStyle::Single
+        );
         assert_eq!(runs[0].color, Some(AUTHOR_COLORS[0]));
         assert!(runs[1].revised && runs[1].strikethrough && !runs[1].underline);
         assert_eq!(runs[1].color, Some(AUTHOR_COLORS[1]));
         assert!(!runs[2].revised && runs[2].color.is_none());
         let green = Some([0x2C, 0x62, 0x34]);
         assert!(runs[3].dstrike && !runs[3].strikethrough && runs[3].color == green);
-        assert!(runs[4].underline && runs[4].double_underline && runs[4].color == green);
+        assert!(
+            runs[4].underline
+                && runs[4].underline_style == crate::model::UnderlineStyle::Double
+                && runs[4].color == green
+        );
     }
 
     #[test]
