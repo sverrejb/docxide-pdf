@@ -4,8 +4,10 @@ mod chartex;
 mod charts;
 mod color;
 mod comments;
+mod doc_fields;
 mod embedded_fonts;
 pub(crate) mod emf;
+mod field_code;
 mod group;
 mod headers_footers;
 mod images;
@@ -19,10 +21,13 @@ mod settings;
 pub(crate) mod smartart;
 mod styles;
 pub(crate) mod svg;
+mod table_borders;
 mod tables;
 mod textbox;
+mod theme;
 mod wmf;
 mod wordart;
+mod xml;
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -36,6 +41,10 @@ use crate::model::{
 
 use styles::{ParagraphStyle, StyleDefaults, parse_line_spacing, parse_styles, parse_theme};
 
+use doc_fields::{
+    double_wide_char_spacing, expand_toc_fields, grid_char_pitch, link_textbox_stories,
+    resolve_body_stylerefs, resolve_seq_fields,
+};
 use embedded_fonts::parse_font_table;
 use headers_footers::{parse_endnotes, parse_footnotes};
 use numbering::parse_numbering;
@@ -43,171 +52,7 @@ use relationships::parse_part_relationships;
 use sections::parse_section_properties;
 use settings::parse_settings;
 use tables::parse_table_node;
-
-pub(super) const WML_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-pub(super) const DML_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
-pub(super) const WPD_NS: &str =
-    "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
-pub(super) const WPS_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
-pub(super) const REL_NS: &str =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-pub(super) const MC_NS_TOP: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
-pub(super) const CHART_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
-pub(super) const DSP_NS: &str = "http://schemas.microsoft.com/office/drawing/2008/diagram";
-pub(super) const W14_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordml";
-pub(super) const VML_NS: &str = "urn:schemas-microsoft-com:vml";
-pub(super) const W10_NS: &str = "urn:schemas-microsoft-com:office:word";
-pub(super) const OFFICE_NS: &str = "urn:schemas-microsoft-com:office:office";
-pub(super) const PIC_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/picture";
-pub(super) const DIAGRAM_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
-pub(super) const MATH_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/math";
-pub(super) const WPC_NS: &str =
-    "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas";
-pub(super) const WPG_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
-
-pub(super) fn twips_to_pts(twips: f32) -> f32 {
-    twips / 20.0
-}
-
-pub(super) fn emu_to_pts(emu: f32) -> f32 {
-    emu / 12700.0
-}
-
-/// A numeric attribute; `None` when absent or unparsable.
-pub(super) fn f32_attr<'n, 'm>(
-    node: roxmltree::Node,
-    attr: impl Into<roxmltree::ExpandedName<'n, 'm>>,
-) -> Option<f32> {
-    node.attribute(attr).and_then(|v| v.parse::<f32>().ok())
-}
-
-/// An EMU attribute in points; `None` when absent.
-pub(super) fn emu_attr_opt<'n, 'm>(
-    node: roxmltree::Node,
-    attr: impl Into<roxmltree::ExpandedName<'n, 'm>>,
-) -> Option<f32> {
-    f32_attr(node, attr).map(emu_to_pts)
-}
-
-/// An EMU attribute in points; 0 when absent.
-pub(super) fn emu_attr(node: roxmltree::Node, attr: &str) -> f32 {
-    emu_attr_opt(node, attr).unwrap_or(0.0)
-}
-
-/// A DrawingML angle attribute (60000ths of a degree) in degrees.
-pub(super) fn angle_attr<'n, 'm>(
-    node: roxmltree::Node,
-    attr: impl Into<roxmltree::ExpandedName<'n, 'm>>,
-) -> Option<f32> {
-    f32_attr(node, attr).map(|v| v / 60_000.0)
-}
-
-/// A DrawingML percentage attribute (`ST_Percentage` as 1/1000 of a percent)
-/// as a fraction.
-pub(super) fn frac_attr<'n, 'm>(
-    node: roxmltree::Node,
-    attr: impl Into<roxmltree::ExpandedName<'n, 'm>>,
-) -> Option<f32> {
-    f32_attr(node, attr).map(|v| v / 100_000.0)
-}
-
-/// ST_OnOff truthiness (§17.17.4): "1", "true", and "on" all mean on.
-pub(super) fn parse_on_off(v: &str) -> bool {
-    matches!(v, "1" | "true" | "on")
-}
-
-/// Parse a VML/CSS length like "12.5pt" — the "pt" suffix and surrounding
-/// whitespace are optional.
-/// A VML length in points: `12pt`, `2in`, `5cm`, `10mm`, `3pc`, `96px` or a
-/// bare number (points). An OLE preview sized `height:2in` fell back to its
-/// `dyaOrig` (240pt for a 144pt chart) and moved to the next page.
-pub(super) fn parse_pt(s: &str) -> Option<f32> {
-    let s = s.trim();
-    let (num, per_unit) = [
-        ("pt", 1.0),
-        ("in", 72.0),
-        ("cm", 72.0 / 2.54),
-        ("mm", 72.0 / 25.4),
-        ("pc", 12.0),
-        ("px", 0.75),
-    ]
-    .into_iter()
-    .find_map(|(unit, k)| s.strip_suffix(unit).map(|n| (n, k)))
-    .unwrap_or((s, 1.0));
-    num.trim().parse::<f32>().ok().map(|v| v * per_unit)
-}
-
-/// Find a child element by name and namespace.
-pub(super) fn find_child<'a>(
-    node: roxmltree::Node<'a, 'a>,
-    name: &str,
-    namespace: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
-    node.children().find(|n| n.has_tag_name((namespace, name)))
-}
-
-pub(super) fn dml<'a>(
-    node: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(node, name, DML_NS)
-}
-
-/// All child elements with the given name and namespace.
-pub(super) fn find_children<'a>(
-    node: roxmltree::Node<'a, 'a>,
-    name: &str,
-    namespace: &str,
-) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> {
-    node.children()
-        .filter(move |n| n.has_tag_name((namespace, name)))
-}
-
-pub(super) fn dml_children<'a>(
-    parent: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> {
-    find_children(parent, name, DML_NS)
-}
-
-pub(super) fn wpd<'a>(
-    node: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(node, name, WPD_NS)
-}
-
-pub(super) fn wps<'a>(
-    node: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(node, name, WPS_NS)
-}
-
-pub(super) fn dsp<'a>(
-    node: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(node, name, DSP_NS)
-}
-
-pub(super) fn chart_ns<'a>(
-    node: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(node, name, CHART_NS)
-}
-
-pub(super) fn chart_ns_attr<'a>(node: roxmltree::Node<'a, 'a>, child: &str) -> Option<&'a str> {
-    chart_ns(node, child).and_then(|n| n.attribute("val"))
-}
-
-pub(super) fn chart_ns_children<'a>(
-    parent: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> {
-    find_children(parent, name, CHART_NS)
-}
+use xml::*;
 
 /// How one document's tracked changes print. Every part (body, headers,
 /// notes) shares one, so an author keeps one colour across the document.
@@ -466,24 +311,6 @@ pub(super) fn highlight_color(name: &str) -> Option<[u8; 3]> {
     }
 }
 
-pub(super) fn wml_bool(parent: roxmltree::Node, name: &str) -> Option<bool> {
-    wml(parent, name).map(|n| {
-        n.attribute((WML_NS, "val"))
-            .is_none_or(|v| v != "0" && v != "false")
-    })
-}
-
-pub(super) fn wml<'a>(
-    node: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(node, name, WML_NS)
-}
-
-pub(super) fn wml_attr<'a>(node: roxmltree::Node<'a, 'a>, child: &str) -> Option<&'a str> {
-    wml(node, child).and_then(|n| n.attribute((WML_NS, "val")))
-}
-
 /// A paragraph mark's tracked change of `kind` ("ins" or "del"); a moved
 /// mark counts as the insertion (`moveTo`) or deletion (`moveFrom`) it is.
 pub(super) fn mark_revision<'a>(
@@ -506,58 +333,6 @@ pub(super) fn revised_mark<'a>(
 
 pub(super) fn is_move(revision: roxmltree::Node) -> bool {
     matches!(revision.tag_name().name(), "moveFrom" | "moveTo")
-}
-
-/// First math-namespace child element with the given local name.
-pub(super) fn math_child<'a>(
-    parent: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(parent, name, MATH_NS)
-}
-
-/// A math property's `m:val`: `<pr><name m:val="…"/></pr>` under `node`.
-pub(super) fn math_val<'a>(node: roxmltree::Node<'a, 'a>, pr: &str, name: &str) -> Option<&'a str> {
-    math_child(math_child(node, pr)?, name)?.attribute((MATH_NS, "val"))
-}
-
-/// A math property flag (`<pr><name m:val="…"/></pr>`): None when absent; an
-/// element without `m:val` is on (ST_OnOff).
-pub(super) fn math_bool(node: roxmltree::Node, pr: &str, name: &str) -> Option<bool> {
-    let n = math_child(math_child(node, pr)?, name)?;
-    Some(n.attribute((MATH_NS, "val")).is_none_or(parse_on_off))
-}
-
-/// A math run's text (its `m:t` children).
-pub(super) fn math_run_text(r: roxmltree::Node) -> String {
-    find_children(r, "t", MATH_NS)
-        .filter_map(|t| t.text())
-        .collect()
-}
-
-/// A WordprocessingML twips attribute in points. ST_TwipsMeasure also
-/// takes a universal measure such as "10mm" (§22.9.2.15): a page written
-/// with `w:left="10mm"` lost its margins to the 1in default.
-pub(super) fn twips_attr(node: roxmltree::Node, attr: &str) -> Option<f32> {
-    let v = node.attribute((WML_NS, attr))?;
-    v.parse::<f32>()
-        .ok()
-        .map(twips_to_pts)
-        .or_else(|| universal_measure_pt(v))
-}
-
-fn universal_measure_pt(v: &str) -> Option<f32> {
-    let per_unit = [
-        ("mm", 72.0 / 25.4),
-        ("cm", 72.0 / 2.54),
-        ("in", 72.0),
-        ("pt", 1.0),
-        ("pc", 12.0),
-        ("pi", 12.0),
-    ];
-    per_unit
-        .iter()
-        .find_map(|(unit, k)| Some(v.strip_suffix(unit)?.parse::<f32>().ok()? * k))
 }
 
 pub(super) fn parse_one_border(node: roxmltree::Node) -> Option<ParagraphBorder> {
@@ -1635,440 +1410,8 @@ fn parse_zip<R: Read + std::io::Seek>(
     Ok(doc)
 }
 
-/// A `linesAndChars` grid adds its `charSpace` to every character a run
-/// snapped to it draws, Latin or East Asian, at any size (Word probes
-/// 2026-11-08: +1pt under 4096, −0.49 under −2000; tokyo_welfare's 10.5pt
-/// ideographs step 10.58). ponytail: body only; `snapToChars` snaps to
-/// whole cells instead and is not modelled.
-fn grid_char_pitch(doc: &mut Document, grid_deltas: &[f32]) {
-    for (section, &delta) in doc.sections.iter_mut().zip(grid_deltas) {
-        let grid = section.properties.grid_type;
-        if delta == 0.0 || grid != crate::model::DocGridType::LinesAndChars {
-            continue;
-        }
-        let mut paras = Vec::new();
-        body_paragraphs(&mut section.blocks, &mut paras);
-        for run in paras.into_iter().flat_map(|p| p.runs.iter_mut()) {
-            if run.snap_to_grid {
-                run.char_spacing += delta;
-            }
-        }
-    }
-}
-
-/// Under `balanceSingleByteDoubleByteWidth` Word spaces a full-width
-/// character as two bytes: its run's `w:spacing` counts twice
-/// (chinese_student_union: −1.6pt in 14pt text draws 10.75pt ideographs,
-/// 12.5 without the flag; Word probes 2026-11-08). ponytail: body runs of
-/// East Asian characters only; mixed runs and headers keep single spacing.
-fn double_wide_char_spacing(doc: &mut Document) {
-    let mut paras = Vec::new();
-    for section in &mut doc.sections {
-        body_paragraphs(&mut section.blocks, &mut paras);
-    }
-    for run in paras.into_iter().flat_map(|p| p.runs.iter_mut()) {
-        if !run.text.is_empty() && run.text.chars().all(is_east_asian_char) {
-            run.char_spacing *= 2.0;
-        }
-    }
-}
-
-/// Number the body's SEQ fields in document order, one counter per name
-/// (issue #145: a stale "old" cache shows 1). `\s n` restarts a counter
-/// after a built-in "heading 1"…"heading n" paragraph that follows the
-/// sequence's previous field, so a heading before an intervening `\c` does
-/// not count; custom styles with an outline level never do (Word online
-/// probes, 2026-11-03; issue #146). ponytail: text-box captions are not
-/// counted.
-fn resolve_seq_fields(doc: &mut Document) {
-    use crate::model::{FieldCode, SeqStep};
-    let mut paras = Vec::new();
-    for section in &mut doc.sections {
-        body_paragraphs(&mut section.blocks, &mut paras);
-    }
-    // Per name: the count and the paragraph holding the last field.
-    let mut counters: HashMap<String, (u32, usize)> = HashMap::new();
-    // The latest built-in heading paragraph per 0-based level (0 = none,
-    // harmless because `last` starts at 0 too).
-    let mut last_heading = [0usize; 9];
-    for (i, para) in paras.into_iter().enumerate() {
-        if let Some(level) = para
-            .style_id
-            .as_deref()
-            .and_then(|id| doc.style_id_to_name.get(id))
-            .and_then(|name| styles::builtin_heading_level(name))
-        {
-            last_heading[level as usize] = i;
-        }
-        for run in &mut para.runs {
-            let Some(FieldCode::Seq {
-                name,
-                format,
-                step,
-                hidden,
-            }) = &run.field_code
-            else {
-                continue;
-            };
-            let (counter, last) = counters.entry(name.clone()).or_insert((0, 0));
-            match step {
-                SeqStep::Next => *counter += 1,
-                // A repeat before any number shows the first.
-                SeqStep::Repeat => *counter = (*counter).max(1),
-                SeqStep::Restart(n) => *counter = *n,
-                SeqStep::Heading(n) => {
-                    let restarts = last_heading[..(*n as usize).min(9)]
-                        .iter()
-                        .any(|&at| at > *last);
-                    *counter = if restarts { 1 } else { *counter + 1 };
-                }
-            }
-            *last = i;
-            run.text = if *hidden {
-                String::new()
-            } else {
-                numbering::format_number(*counter, format.unwrap_or("decimal"))
-            };
-        }
-    }
-}
-
-/// What a TOC field collects: `\o "a-b"` (and `\u`) the heading outline
-/// levels, `\t "Style,level,…"` paragraphs of a style, `\c "Name"` paragraphs
-/// holding a SEQ of that name; `\n` drops the page numbers. Without any of
-/// them Word takes headings 1–3.
-#[derive(Debug, PartialEq)]
-struct TocSpec {
-    outline: Option<std::ops::RangeInclusive<u8>>,
-    styles: Vec<(String, u8)>,
-    seq: Option<String>,
-    page_numbers: bool,
-    /// `\c`, with or without a name: a table of figures, whose entries all
-    /// take the "table of figures" style instead of "toc N".
-    figures: bool,
-}
-
-impl TocSpec {
-    fn parse(instr: &str) -> TocSpec {
-        let has = |s| runs::has_switch(instr, s);
-        let mut outline = toc_switch_arg(instr, "\\o")
-            .and_then(|r| r.split_once('-'))
-            .and_then(|(a, b)| Some(a.trim().parse().ok()?..=b.trim().parse().ok()?))
-            .or_else(|| (has("\\o") || has("\\u")).then_some(1..=9));
-        let styles: Vec<(String, u8)> = toc_switch_arg(instr, "\\t")
-            .map(|list| {
-                let items: Vec<&str> = list.split([',', ';']).map(str::trim).collect();
-                items
-                    .chunks(2)
-                    .filter_map(|c| Some((c.first()?.to_string(), c.get(1)?.parse().ok()?)))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let seq = toc_switch_arg(instr, "\\c").map(str::to_string);
-        if outline.is_none() && styles.is_empty() && seq.is_none() {
-            outline = Some(1..=3);
-        }
-        TocSpec {
-            outline,
-            styles,
-            seq,
-            page_numbers: !has("\\n"),
-            figures: has("\\c"),
-        }
-    }
-
-    /// The TOC level `p` enters at, if any.
-    fn level_of(&self, p: &crate::model::Paragraph, names: &HashMap<String, String>) -> Option<u8> {
-        use crate::model::FieldCode;
-        if let (Some(range), Some(level)) = (&self.outline, p.outline_level)
-            && range.contains(&(level + 1))
-        {
-            return Some(level + 1);
-        }
-        if let Some(id) = &p.style_id
-            && let Some((_, level)) = self.styles.iter().find(|(name, _)| {
-                id.eq_ignore_ascii_case(name)
-                    || names.get(id).is_some_and(|n| n.eq_ignore_ascii_case(name))
-            })
-        {
-            return Some(*level);
-        }
-        let seq = self.seq.as_deref()?;
-        p.runs
-            .iter()
-            .any(|r| matches!(&r.field_code, Some(FieldCode::Seq { name, .. }) if name.eq_ignore_ascii_case(seq)))
-            .then_some(1)
-    }
-}
-
-/// The argument after a TOC switch (`\o "1-3"`), if the switch is present
-/// and followed by one (not by the next switch).
-fn toc_switch_arg<'a>(instr: &'a str, switch: &'a str) -> Option<&'a str> {
-    runs::switch_args(instr, switch)
-        .next()
-        .filter(|arg| !arg.starts_with('\\'))
-}
-
-fn xml_text(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('"', "&quot;")
-}
-
-/// Regenerate the TOC fields whose cache is a single paragraph (issue #145's
-/// "Update field in Word."), as Word's field update does: one "toc N"
-/// paragraph per entry with its text, a dot-leader right tab 10 twips inside
-/// the margin and a PAGEREF to the entry's paragraph (a bookmark added here),
-/// then the field's own paragraph left empty. Later TOCs are expanded first
-/// so the earlier ones' block indices hold. ponytail: `\p` separators, `\b`
-/// scopes and TC fields are ignored; without a "toc N" style a level N entry
-/// is indented 11pt × (N − 1).
-fn expand_toc_fields<R: Read + std::io::Seek>(
-    sections: &mut [Section],
-    ctx: &mut ParseContext<'_, R>,
-) {
-    let mut hosts = Vec::new();
-    for (s, section) in sections.iter().enumerate() {
-        for (b, block) in section.blocks.iter().enumerate() {
-            if matches!(block, Block::Paragraph(p) if p.toc_field.is_some()) {
-                hosts.push((s, b));
-            }
-        }
-    }
-    let names = &ctx.styles.style_id_to_name;
-    let mut bookmarks = 0;
-    for (s, b) in hosts.into_iter().rev() {
-        let Block::Paragraph(host) = &mut sections[s].blocks[b] else {
-            continue;
-        };
-        let spec = TocSpec::parse(&host.toc_field.take().unwrap_or_default());
-        host.runs.clear();
-        host.starts_toc_field = false;
-
-        // (level, bookmark, list label, text) of each entry, in document order.
-        let mut entries = Vec::new();
-        let mut paras = Vec::new();
-        for section in sections.iter_mut() {
-            body_paragraphs(&mut section.blocks, &mut paras);
-        }
-        for p in paras {
-            if p.starts_toc_field || p.toc_field.is_some() {
-                continue;
-            }
-            let Some(level) = spec.level_of(p, names) else {
-                continue;
-            };
-            let text: String = p.runs.iter().map(|r| r.text.as_str()).collect();
-            let bookmark = format!("_Toc145_{bookmarks}");
-            bookmarks += 1;
-            p.bookmarks.push(bookmark.clone());
-            let label = p.list_label.clone();
-            entries.push((level, bookmark, label, text.trim().to_string()));
-        }
-
-        let sp = &sections[s].properties;
-        let text_width = sp.page_width - sp.margin_left - sp.margin_right;
-        let tab_pos = (text_width * 20.0).round() as i32 - 10;
-        let mut xmls: Vec<String> = entries
-            .iter()
-            .map(|(level, bookmark, label, text)| {
-                // A table of figures styles every entry "table of figures",
-                // whatever its level; a contents table "toc N". Without the
-                // style Word's stock definition applies: 24pt in (issue #146,
-                // Windows Word 16.0.20527), 11pt × (N − 1) (unprobed).
-                let (name, stock_indent) = if spec.figures {
-                    ("table of figures".to_string(), 480)
-                } else {
-                    (format!("toc {level}"), 220 * (*level as i32 - 1))
-                };
-                let style_id =
-                    names.iter().find(|(_, n)| n.eq_ignore_ascii_case(&name)).map(|(id, _)| id);
-                let mut ppr = match style_id {
-                    Some(id) => format!(r#"<w:pStyle w:val="{}"/>"#, xml_text(id)),
-                    None if stock_indent > 0 => format!(r#"<w:ind w:left="{stock_indent}"/>"#),
-                    None => String::new(),
-                };
-                let mut body = String::new();
-                if !label.is_empty() {
-                    body += &format!(r#"<w:r><w:t xml:space="preserve">{}</w:t></w:r><w:r><w:tab/></w:r>"#, xml_text(label));
-                }
-                body += &format!(r#"<w:r><w:t xml:space="preserve">{}</w:t></w:r>"#, xml_text(text));
-                if spec.page_numbers {
-                    ppr += &format!(r#"<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="{tab_pos}"/></w:tabs>"#);
-                    body += &format!(
-                        r#"<w:r><w:tab/></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGEREF {bookmark} \h </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>"#
-                    );
-                }
-                format!(r#"<w:p xmlns:w="{WML_NS}"><w:pPr>{ppr}</w:pPr>{body}</w:p>"#)
-            })
-            .collect();
-        if xmls.is_empty() {
-            xmls.push(format!(
-                r#"<w:p xmlns:w="{WML_NS}"><w:r><w:t>No table of contents entries found.</w:t></w:r></w:p>"#
-            ));
-        }
-        let opts = paragraph::ParagraphOptions {
-            resolve_bookmarks: false,
-            resolve_outline_level: false,
-            resolve_drawings: false,
-            collect_extra_textboxes: false,
-            style_num_id: None,
-            style_num_ilvl: None,
-        };
-        let mut generated: Vec<Block> = xmls
-            .iter()
-            .filter_map(|xml| roxmltree::Document::parse(xml).ok())
-            .map(|doc| {
-                ctx.fields = Default::default();
-                let mut lists = numbering::ListCounters::default();
-                Block::Paragraph(paragraph::build_paragraph(
-                    doc.root_element(),
-                    ctx,
-                    &mut lists,
-                    &opts,
-                ))
-            })
-            .collect();
-        if let Some(Block::Paragraph(first)) = generated.first_mut() {
-            first.starts_toc_field = true;
-        }
-        sections[s].blocks.splice(b..b, generated);
-    }
-}
-
-/// Every body paragraph, table cells included, in document order.
-fn body_paragraphs<'a>(blocks: &'a mut [Block], out: &mut Vec<&'a mut crate::model::Paragraph>) {
-    for block in blocks {
-        match block {
-            Block::Paragraph(p) => out.push(p),
-            Block::Table(t) => {
-                for cell in t.rows.iter_mut().flat_map(|r| r.cells.iter_mut()) {
-                    body_paragraphs(&mut cell.content, out);
-                }
-            }
-        }
-    }
-}
-
-/// Each box of a linked chain shares the story its first box holds and
-/// learns the text areas of the boxes before it, from which the renderer works
-/// out the part it shows. A box alone in its chain (a standalone `wps:txbx`
-/// with an id) keeps its story as an unlinked box. ponytail: body text boxes
-/// only, not headers or groups.
-fn link_textbox_stories(doc: &mut Document) {
-    let mut paras = Vec::new();
-    for section in &mut doc.sections {
-        body_paragraphs(&mut section.blocks, &mut paras);
-    }
-    let mut boxes: Vec<(u32, u32, &mut crate::model::Textbox)> = paras
-        .into_iter()
-        .flat_map(|p| p.textboxes.iter_mut())
-        .filter_map(|tb| Some((tb.link.as_ref()?.id, tb.link.as_ref()?.seq, tb)))
-        .collect();
-    boxes.sort_by_key(|&(id, seq, _)| (id, seq));
-    for chain in boxes.chunk_by_mut(|a, b| a.0 == b.0) {
-        if let [(_, _, tb)] = chain {
-            tb.link = None;
-            continue;
-        }
-        let story = std::sync::Arc::new(std::mem::take(&mut chain[0].2.paragraphs));
-        let tables = std::sync::Arc::new(std::mem::take(&mut chain[0].2.tables));
-        let mut before = Vec::new();
-        for (_, _, tb) in chain.iter_mut() {
-            let area = tb.text_area(tb.height_pt);
-            if let Some(link) = &mut tb.link {
-                link.story = story.clone();
-                link.tables = tables.clone();
-                link.before = before.clone();
-                link.continues = true;
-            }
-            before.push(area);
-        }
-        if let Some(link) = chain.last_mut().and_then(|(_, _, tb)| tb.link.as_mut()) {
-            link.continues = false;
-        }
-    }
-}
-
-/// Body STYLEREF fields show the nearest paragraph in the named style before
-/// the field, else the first one after it (§17.16.5.59). Word updates them on
-/// export, so the cached text is stale (issue #142: the body copy of a header's
-/// STYLEREF kept "Heading pending"). Headers resolve theirs per page instead.
-fn resolve_body_stylerefs(doc: &mut Document) {
-    use crate::model::{FieldCode, styleref_key};
-    let names = std::mem::take(&mut doc.style_id_to_name);
-    let mut paras = Vec::new();
-    for section in &mut doc.sections {
-        body_paragraphs(&mut section.blocks, &mut paras);
-    }
-    // Per paragraph, the keys it defines (paragraph style and character
-    // styles, by id and by name) and their values.
-    let defined: Vec<Vec<(String, String)>> = paras
-        .iter()
-        .map(|p| {
-            let mut defs = Vec::new();
-            let mut define = |id: &str, text: String| {
-                for name in std::iter::once(id).chain(names.get(id).map(String::as_str)) {
-                    for (form, value) in p.styleref_values(&text) {
-                        defs.push((styleref_key(name, form), value.to_string()));
-                    }
-                }
-            };
-            if let Some(sid) = &p.style_id {
-                let text: String = p.runs.iter().map(|r| r.text.as_str()).collect();
-                if !text.is_empty() {
-                    define(sid, text);
-                }
-            }
-            for group in p.runs.chunk_by(|a, b| a.char_style_id == b.char_style_id) {
-                if let Some(csid) = &group[0].char_style_id {
-                    let text: String = group.iter().map(|r| r.text.as_str()).collect();
-                    if !text.is_empty() {
-                        define(csid, text);
-                    }
-                }
-            }
-            defs
-        })
-        .collect();
-    let lookup = |key: &str, at: usize| {
-        let before = (0..at).rev();
-        let after = at + 1..defined.len();
-        before.chain(after).find_map(|i| {
-            defined[i]
-                .iter()
-                .find(|(k, _)| k == key)
-                .map(|(_, v)| v.clone())
-        })
-    };
-    for (i, p) in paras.iter_mut().enumerate() {
-        for run in &mut p.runs {
-            if let Some(FieldCode::StyleRef { name, form }) = run.field_code.clone()
-                && let Some(text) = lookup(&styleref_key(&name, form), i)
-            {
-                run.text = text;
-            }
-        }
-    }
-    doc.style_id_to_name = names;
-}
-
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn vml_lengths_convert_to_points() {
-        let pt = super::parse_pt;
-        assert_eq!(pt("12pt"), Some(12.0));
-        assert_eq!(pt(" 2in "), Some(144.0));
-        assert_eq!(pt("186.8pt"), Some(186.8));
-        assert!((pt("2.54cm").unwrap() - 72.0).abs() < 1e-4);
-        assert!((pt("25.4mm").unwrap() - 72.0).abs() < 1e-4);
-        assert_eq!(pt("3pc"), Some(36.0));
-        assert_eq!(pt("96px"), Some(72.0));
-        assert_eq!(pt("7"), Some(7.0));
-        assert_eq!(pt("auto"), None);
-    }
-
     #[test]
     fn border_styles_parse_and_size_their_bands() {
         use crate::model::BorderStyle;
@@ -2114,39 +1457,6 @@ mod tests {
             ranges.shown.contains(&3),
             "an empty range keeps its balloon"
         );
-    }
-
-    #[test]
-    fn toc_spec_reads_its_switches() {
-        let spec = super::TocSpec::parse(r#" TOC \o "1-3" \h \z \u "#);
-        assert_eq!((spec.outline, spec.page_numbers), (Some(1..=3), true));
-        let spec = super::TocSpec::parse(r#" TOC \t "Figure Caption,1,Table Caption,2" \n "#);
-        let styles = [
-            ("Figure Caption".to_string(), 1),
-            ("Table Caption".to_string(), 2),
-        ];
-        assert_eq!(spec.styles, styles);
-        assert!(!spec.page_numbers && spec.outline.is_none());
-        let spec = super::TocSpec::parse(r#" TOC \c "Figure" "#);
-        assert_eq!(spec.seq.as_deref(), Some("Figure"));
-        assert!(spec.figures);
-        assert!(super::TocSpec::parse(r#" TOC \t "Figure Caption,1" \h \z \c "#).figures);
-        let spec = super::TocSpec::parse(" TOC \\h ");
-        assert_eq!(spec.outline, Some(1..=3));
-        assert!(!spec.figures);
-    }
-
-    #[test]
-    fn twips_take_universal_measures() {
-        let doc = roxmltree::Document::parse(
-            r#"<w:m xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:a="1440" w:b="10mm" w:c="1in" w:d="-2.5pt"/>"#,
-        )
-        .unwrap();
-        let n = doc.root_element();
-        assert_eq!(super::twips_attr(n, "a"), Some(72.0));
-        assert!((super::twips_attr(n, "b").unwrap() - 28.346).abs() < 0.01);
-        assert_eq!(super::twips_attr(n, "c"), Some(72.0));
-        assert_eq!(super::twips_attr(n, "d"), Some(-2.5));
     }
 
     use super::*;
@@ -2226,21 +1536,6 @@ mod tests {
             let blocks = collect_block_nodes(doc.root_element(), false);
             assert_eq!(blocks.len(), usize::from(!deleted), "{paragraph}");
         }
-    }
-
-    #[test]
-    fn test_twips_to_pts() {
-        assert_eq!(twips_to_pts(0.0), 0.0);
-        assert_eq!(twips_to_pts(20.0), 1.0);
-        assert_eq!(twips_to_pts(360.0), 18.0);
-        assert_eq!(twips_to_pts(1440.0), 72.0); // 1 inch
-    }
-
-    #[test]
-    fn test_emu_to_pts() {
-        assert_eq!(emu_to_pts(0.0), 0.0);
-        assert_eq!(emu_to_pts(12700.0), 1.0);
-        assert_eq!(emu_to_pts(914400.0), 72.0); // 1 inch
     }
 
     // --- Color parsing ---
@@ -2335,62 +1630,6 @@ mod tests {
         assert!(!is_east_asian_char('1'));
         assert!(!is_east_asian_char(' '));
         assert!(!is_east_asian_char('é'));
-    }
-
-    // --- XML-based utility tests ---
-
-    #[test]
-    fn test_wml_bool() {
-        let xml = format!(
-            r#"<w:pPr xmlns:w="{}">
-                <w:b/>
-                <w:i w:val="0"/>
-                <w:caps w:val="true"/>
-                <w:vanish w:val="false"/>
-            </w:pPr>"#,
-            WML_NS
-        );
-        let doc = roxmltree::Document::parse(&xml).unwrap();
-        let node = doc.root_element();
-        // Present with no val attribute → true
-        assert_eq!(wml_bool(node, "b"), Some(true));
-        // val="0" → false
-        assert_eq!(wml_bool(node, "i"), Some(false));
-        // val="true" → true
-        assert_eq!(wml_bool(node, "caps"), Some(true));
-        // val="false" → false
-        assert_eq!(wml_bool(node, "vanish"), Some(false));
-        // Missing element → None
-        assert_eq!(wml_bool(node, "strike"), None);
-    }
-
-    #[test]
-    fn test_wml_attr() {
-        let xml = format!(
-            r#"<w:pPr xmlns:w="{}">
-                <w:jc w:val="center"/>
-                <w:sz w:val="24"/>
-            </w:pPr>"#,
-            WML_NS
-        );
-        let doc = roxmltree::Document::parse(&xml).unwrap();
-        let node = doc.root_element();
-        assert_eq!(wml_attr(node, "jc"), Some("center"));
-        assert_eq!(wml_attr(node, "sz"), Some("24"));
-        assert_eq!(wml_attr(node, "missing"), None);
-    }
-
-    #[test]
-    fn test_twips_attr() {
-        let xml = format!(
-            r#"<w:ind xmlns:w="{}" w:left="720" w:right="360"/>"#,
-            WML_NS
-        );
-        let doc = roxmltree::Document::parse(&xml).unwrap();
-        let node = doc.root_element();
-        assert_eq!(twips_attr(node, "left"), Some(36.0)); // 720/20=36pt
-        assert_eq!(twips_attr(node, "right"), Some(18.0)); // 360/20=18pt
-        assert_eq!(twips_attr(node, "hanging"), None);
     }
 
     // --- Tab stops ---
