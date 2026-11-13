@@ -161,7 +161,7 @@ pub(crate) fn emf_to_raster(data: &[u8]) -> Option<Vec<u8>> {
     let mut vector = false;
     for_each_raw_record(data, |rec_type, payload| {
         match rec_type {
-            81 if bmp.is_none() => bmp = decode_stretchdibits(payload),
+            81 if bmp.is_none() => bmp = decode_dib_at(payload, 40),
             76 | 77 if bmp.is_none() => bmp = decode_dib_at(payload, 76),
             t if paints_vector(t) => vector = true,
             _ => {}
@@ -235,6 +235,10 @@ fn decode(rec_type: u32, payload: &[u8]) -> EmfRecord {
     use EmfRecord::*;
     let i32_at = |off: usize| le_i32(payload, off);
     let u32_at = |off: usize| le_u32(payload, off);
+    let xy = |v: fn(i32, i32) -> EmfRecord| match (i32_at(0), i32_at(4)) {
+        (Some(x), Some(y)) => v(x, y),
+        _ => Skip,
+    };
     match rec_type {
         1 => Header,
         14 => Eof,
@@ -246,30 +250,12 @@ fn decode(rec_type: u32, payload: &[u8]) -> EmfRecord {
             1 => SetPolyFillMode(FillRule::Alternate),
             _ => SetPolyFillMode(FillRule::Winding),
         },
-        9 => match (i32_at(0), i32_at(4)) {
-            (Some(x), Some(y)) => SetWindowExtEx(x, y),
-            _ => Skip,
-        },
-        10 => match (i32_at(0), i32_at(4)) {
-            (Some(x), Some(y)) => SetWindowOrgEx(x, y),
-            _ => Skip,
-        },
-        11 => match (i32_at(0), i32_at(4)) {
-            (Some(x), Some(y)) => SetViewportExtEx(x, y),
-            _ => Skip,
-        },
-        12 => match (i32_at(0), i32_at(4)) {
-            (Some(x), Some(y)) => SetViewportOrgEx(x, y),
-            _ => Skip,
-        },
-        27 => match (i32_at(0), i32_at(4)) {
-            (Some(x), Some(y)) => MoveToEx(x, y),
-            _ => Skip,
-        },
-        54 => match (i32_at(0), i32_at(4)) {
-            (Some(x), Some(y)) => LineTo(x, y),
-            _ => Skip,
-        },
+        9 => xy(SetWindowExtEx),
+        10 => xy(SetWindowOrgEx),
+        11 => xy(SetViewportExtEx),
+        12 => xy(SetViewportOrgEx),
+        27 => xy(MoveToEx),
+        54 => xy(LineTo),
         88 => decode_polybezier16(payload)
             .map(PolyBezierTo16)
             .unwrap_or(Skip),
@@ -318,17 +304,11 @@ fn decode(rec_type: u32, payload: &[u8]) -> EmfRecord {
     }
 }
 
-/// EMR_STRETCHDIBITS: the BITMAPINFO (`offBmiSrc`/`cbBmiSrc`) and pixel bits
-/// (`offBitsSrc`/`cbBitsSrc`) are addressed from the record start, i.e. 8 bytes
-/// before the payload. Returns them wrapped as a BMP file.
-fn decode_stretchdibits(payload: &[u8]) -> Option<Vec<u8>> {
-    decode_dib_at(payload, 40)
-}
-
 /// The offBmiSrc/cbBmiSrc/offBitsSrc/cbBitsSrc fields of a bitmap record,
 /// starting at payload offset `fields`: 40 for STRETCHDIBITS, 76 for
 /// EMR_BITBLT / EMR_STRETCHBLT, whose source transform and colour come first
-/// ([MS-EMF] 2.3.1.2 and 2.3.1.6).
+/// ([MS-EMF] 2.3.1.2 and 2.3.1.6). The offsets count from the record start,
+/// 8 bytes before the payload. Returns the bitmap as a BMP file.
 fn decode_dib_at(payload: &[u8], fields: usize) -> Option<Vec<u8>> {
     let u32_at = |off: usize| le_u32(payload, off).map(|v| v as usize);
     let part = |off: usize, len: usize| -> Option<&[u8]> {
