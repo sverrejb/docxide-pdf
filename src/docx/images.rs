@@ -794,31 +794,15 @@ fn parse_wrap_polygon(wrap_elem: roxmltree::Node) -> Option<Vec<(i32, i32)>> {
     let poly = wrap_elem
         .children()
         .find(|c| c.has_tag_name((WPD_NS, "wrapPolygon")))?;
-    let mut vertices = Vec::new();
-    for child in poly.children() {
-        if child.tag_name().namespace() != Some(WPD_NS) {
-            continue;
-        }
-        match child.tag_name().name() {
-            "start" | "lineTo" => {
-                let x = child
-                    .attribute("x")
-                    .and_then(|v| v.parse::<i32>().ok())
-                    .unwrap_or(0);
-                let y = child
-                    .attribute("y")
-                    .and_then(|v| v.parse::<i32>().ok())
-                    .unwrap_or(0);
-                vertices.push((x, y));
-            }
-            _ => {}
-        }
-    }
-    if vertices.is_empty() {
-        None
-    } else {
-        Some(vertices)
-    }
+    let vertices: Vec<_> = poly
+        .children()
+        .filter(|c| c.has_tag_name((WPD_NS, "start")) || c.has_tag_name((WPD_NS, "lineTo")))
+        .map(|c| {
+            let coord = |a| c.attribute(a).and_then(|v| v.parse().ok()).unwrap_or(0);
+            (coord("x"), coord("y"))
+        })
+        .collect();
+    (!vertices.is_empty()).then_some(vertices)
 }
 
 pub(super) enum RunDrawingResult {
