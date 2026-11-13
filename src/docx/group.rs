@@ -18,8 +18,8 @@ use super::images::{
     parse_wrap_type, place_anchored, read_image_from_zip, vml_imagedata_props, vml_z_order,
 };
 use super::textbox::{
-    find_sp_pr, parse_connector_shape_node, parse_vml_box_style, parse_vml_line, parse_wsp_shape,
-    vml_style_prop,
+    find_sp_pr, is_connector_wsp, parse_connector_shape_node, parse_vml_box_style, parse_vml_line,
+    parse_wsp_shape, vml_style_prop,
 };
 use super::{
     PIC_NS, ParseContext, REL_NS, VML_NS, WPC_NS, WPG_NS, WPS_NS, dml, emu_attr, parse_pt,
@@ -313,11 +313,7 @@ fn emit_wsp<R: Read + Seek>(
     let (x, y) = t.apply(xfrm.off.0, xfrm.off.1);
     let (w, h) = t.scale(xfrm.ext.0, xfrm.ext.1);
 
-    let prst = dml(sp_pr, "prstGeom").and_then(|g| g.attribute("prst"));
-    let has_txbx = wsp.children().any(|n| n.has_tag_name((WPS_NS, "txbx")));
-    let is_connector = matches!(prst, Some("line" | "straightConnector1" | "arc")) && !has_txbx;
-
-    if is_connector {
+    if is_connector_wsp(wsp, sp_pr) {
         if let Some(mut conn) = parse_connector_shape_node(wsp, ctx.theme) {
             let (mut cx, mut cy) = (x, y);
             conn.width = w;

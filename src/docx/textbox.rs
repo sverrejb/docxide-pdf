@@ -310,12 +310,12 @@ fn parse_path_commands(path: roxmltree::Node) -> Vec<CustomPathCommand> {
     {
         match child.tag_name().name() {
             "moveTo" => {
-                if let Some((x, y)) = dml_pt(child) {
+                if let Some((x, y)) = collect_dml_points(child).into_iter().next() {
                     commands.push(CustomPathCommand::MoveTo { x, y });
                 }
             }
             "lnTo" => {
-                if let Some((x, y)) = dml_pt(child) {
+                if let Some((x, y)) = collect_dml_points(child).into_iter().next() {
                     commands.push(CustomPathCommand::LineTo { x, y });
                 }
             }
@@ -360,12 +360,10 @@ fn parse_path_commands(path: roxmltree::Node) -> Vec<CustomPathCommand> {
     commands
 }
 
-fn dml_pt(parent: roxmltree::Node) -> Option<(String, String)> {
-    let pt = find_dml(parent, "pt")?;
-    Some((
-        pt.attribute("x").unwrap_or("0").to_string(),
-        pt.attribute("y").unwrap_or("0").to_string(),
-    ))
+/// Line and arc presets without text are connectors.
+pub(super) fn is_connector_wsp(wsp: roxmltree::Node, sp_pr: roxmltree::Node) -> bool {
+    let prst = find_dml(sp_pr, "prstGeom").and_then(|g| g.attribute("prst"));
+    matches!(prst, Some("line" | "straightConnector1" | "arc")) && find_wps(wsp, "txbx").is_none()
 }
 
 pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
@@ -389,15 +387,10 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
     let sp_pr = find_sp_pr(wsp);
     let (glow, reflection) = super::images::parse_glow_reflection(sp_pr);
 
-    // Line/arc presets without text are connectors — decline so the caller
-    // falls through to the connector parser, which renders flipH/flipV and
-    // arc sweep angles that the preset-geometry textbox path doesn't.
-    let prst = sp_pr
-        .and_then(|sp| find_dml(sp, "prstGeom"))
-        .and_then(|g| g.attribute("prst"));
-    if matches!(prst, Some("line" | "straightConnector1" | "arc"))
-        && find_wps(wsp, "txbx").is_none()
-    {
+    // Connectors are declined so the caller falls through to the connector
+    // parser, which renders flipH/flipV and arc sweep angles that the
+    // preset-geometry textbox path doesn't.
+    if sp_pr.is_some_and(|sp| is_connector_wsp(wsp, sp)) {
         return None;
     }
     // `a:grpFill` takes the fill of the nearest enclosing group that has its

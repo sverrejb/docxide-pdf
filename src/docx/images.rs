@@ -400,7 +400,7 @@ fn parse_image_rotation(sp_pr: Option<roxmltree::Node>) -> f32 {
 /// Parse outline stroke from `pic:spPr/a:ln` (or a picture-filled shape's).
 fn parse_pic_outline(sp_pr: Option<roxmltree::Node>, theme: &ThemeFonts) -> (Option<[u8; 3]>, f32) {
     sp_pr
-        .and_then(|s| s.children().find(|c| c.has_tag_name((DML_NS, "ln"))))
+        .and_then(|s| dml(s, "ln"))
         .and_then(|ln| super::color::parse_line_stroke(ln, theme))
         .map_or((None, 0.0), |(color, width)| (Some(color), width))
 }
