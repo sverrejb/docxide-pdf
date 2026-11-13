@@ -1403,66 +1403,67 @@ pub(super) fn render_header_footer(
                 .unwrap_or(font_size * ascender_ratio);
                 let mut baseline_y = cursor_y - line_ascent;
 
-                // Paint in z-order: the shapes above the pictures after them
-                // (a white "Agenda" title box over a banner picture).
-                let pictures_first = para
-                    .floating_images
+                // Paint pictures and text boxes interleaved in z-order:
+                // renewable_dispatch's white "Agenda" box sits above the banner
+                // picture while a second text box sits below it. The stable
+                // sort keeps text boxes before pictures at equal z.
+                let mut by_z: Vec<(u32, Option<usize>, Option<usize>)> = para
+                    .textboxes
                     .iter()
-                    .map(|f| f.z_index)
-                    .max()
-                    .zip(para.textboxes.iter().map(|t| t.z_index).min())
-                    .is_some_and(|(top_picture, low_box)| top_picture < low_box);
-                for pictures in [pictures_first, !pictures_first] {
-                    if pictures {
-                        // Render floating images and register float zones,
-                        // overlapping ones in z-order like the body does.
-                        let mut by_z: Vec<_> = para.floating_images.iter().enumerate().collect();
-                        by_z.sort_by_key(|(_, fi)| fi.z_index);
-                        for (fi_idx, fi) in by_z {
-                            if let Some(pdf_name) = pc.floating_image_names.get(&(pi, fi_idx)) {
-                                let img = &fi.image;
-                                let zone = hf_float_zone(fi, sp, slot_top, own_before);
-                                super::shape_path::render_image_with_clip(
+                    .enumerate()
+                    .map(|(i, tb)| (tb.z_index, Some(i), None))
+                    .chain(
+                        para.floating_images
+                            .iter()
+                            .enumerate()
+                            .map(|(i, fi)| (fi.z_index, None, Some(i))),
+                    )
+                    .collect();
+                by_z.sort_by_key(|&(z, ..)| z);
+                for (_, tb_idx, fi_idx) in by_z {
+                    if let Some(fi_idx) = fi_idx {
+                        // Render floating images and register float zones.
+                        let fi = &para.floating_images[fi_idx];
+                        if let Some(pdf_name) = pc.floating_image_names.get(&(pi, fi_idx)) {
+                            let img = &fi.image;
+                            let zone = hf_float_zone(fi, sp, slot_top, own_before);
+                            super::shape_path::render_image_with_clip(
+                                content,
+                                pdf_name,
+                                zone.left,
+                                zone.bottom,
+                                img.display_width,
+                                img.display_height,
+                                img.clip_geometry.as_ref(),
+                            );
+                            if let Some(sc) = img.stroke_color {
+                                super::shape_path::stroke_image_border(
                                     content,
-                                    pdf_name,
                                     zone.left,
                                     zone.bottom,
                                     img.display_width,
                                     img.display_height,
+                                    sc,
+                                    img.stroke_width,
                                     img.clip_geometry.as_ref(),
                                 );
-                                if let Some(sc) = img.stroke_color {
-                                    super::shape_path::stroke_image_border(
-                                        content,
-                                        zone.left,
-                                        zone.bottom,
-                                        img.display_width,
-                                        img.display_height,
-                                        sc,
-                                        img.stroke_width,
-                                        img.clip_geometry.as_ref(),
-                                    );
-                                }
-                                // Register float zone for wrapping images
-                                if fi.wrap_type.wraps_beside() {
-                                    hdr_fz.push(zone);
-                                }
+                            }
+                            // Register float zone for wrapping images
+                            if fi.wrap_type.wraps_beside() {
+                                hdr_fz.push(zone);
                             }
                         }
-                    } else {
-                        // Render textboxes
-                        for tb in &para.textboxes {
-                            render_hf_textbox(
-                                content,
-                                tb,
-                                ctx,
-                                sp,
-                                anchor_top(tb.on_line),
-                                &sub,
-                                gradient_specs,
-                                links,
-                            );
-                        }
+                    } else if let Some(tb) = tb_idx.map(|i| &para.textboxes[i]) {
+                        render_hf_textbox(
+                            content,
+                            tb,
+                            ctx,
+                            sp,
+                            anchor_top(tb.on_line),
+                            &sub,
+                            gradient_specs,
+                            links,
+                        );
                     }
                 }
 
