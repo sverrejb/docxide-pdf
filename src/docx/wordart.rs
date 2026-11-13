@@ -132,7 +132,6 @@ pub(super) fn parse_vml_wordart(
     shape: roxmltree::Node,
     textpath: roxmltree::Node,
     styles: &StylesInfo,
-    _theme: &ThemeFonts,
 ) -> Option<Textbox> {
     let text = textpath.attribute("string")?;
     if text.is_empty() {

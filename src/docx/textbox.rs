@@ -1020,7 +1020,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
             .children()
             .find(|n| n.has_tag_name((VML_NS, "textpath")))
         {
-            return super::wordart::parse_vml_wordart(shape, tp, ctx.styles, ctx.theme);
+            return super::wordart::parse_vml_wordart(shape, tp, ctx.styles);
         }
         // Stroke-only VML preset shapes (e.g. a curly brace, o:spt 87) have
         // neither a textbox nor a textpath. They were previously dropped
@@ -1222,8 +1222,6 @@ mod connector_layer_tests {
             assert_eq!(actual, expected);
         }
     }
-
-    use std::collections::HashMap;
 
     #[test]
     fn anchored_connector_preserves_behind_document_layer() {
