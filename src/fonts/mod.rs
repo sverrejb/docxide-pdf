@@ -360,6 +360,7 @@ pub(crate) type FontFiles = RefCell<HashMap<Vec<u8>, Ref>>;
 /// What a font is resolved against: the document's embedded fonts and
 /// fontTable, the characters the font has to cover, and whether it is for Word
 /// text (DrawingML text with no fontTable entry keeps the last resort).
+#[derive(Clone, Copy)]
 pub(crate) struct FontContext<'a> {
     pub(crate) embedded_fonts: &'a EmbeddedFonts,
     pub(crate) font_table: &'a FontTable,
