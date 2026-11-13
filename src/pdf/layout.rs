@@ -6160,6 +6160,25 @@ pub(super) fn render_paragraph_lines(
                     run.flush(content);
                     move_to(content, start_x, fy);
 
+                    // A segment of the chunk in its own font, or in the fallback
+                    // font when its characters are missing from the primary one.
+                    let show_seg = |content: &mut Content, seg: &str, fb: Option<usize>| {
+                        let fb = fb.map(|k| fallbacks[k]);
+                        match fb.and_then(|f| Some((f, f.char_to_gid.as_ref()?))) {
+                            Some((fb, map)) => {
+                                content.set_font(Name(fb.pdf_name.as_bytes()), chunk.font_size);
+                                content.show(Str(&encode_as_gids(seg, map)));
+                                content.set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
+                            }
+                            _ => {
+                                content.show(Str(&encode_text_for_pdf(
+                                    seg,
+                                    &chunk.pdf_font,
+                                    &pdf_name_to_entry,
+                                )));
+                            }
+                        }
+                    };
                     match draw {
                         GlyphDraw::Placed(entry, glyphs) => {
                             let trailing = boundary_space.then_some(" ");
@@ -6168,40 +6187,20 @@ pub(super) fn render_paragraph_lines(
                         GlyphDraw::Extras(extras) => {
                             // Only the East Asian gaps widen: one Tc per segment, the
                             // fallback font where the primary lacks the glyphs.
-                            let chars: Vec<char> = chunk.text.chars().collect();
-                            let mut i = 0;
-                            while i < chars.len() {
-                                let fb = fallback_idx(chars[i]);
-                                let mut j = i + 1;
-                                while j < chars.len()
-                                    && extras[j] == extras[i]
-                                    && fallback_idx(chars[j]) == fb
-                                {
-                                    j += 1;
-                                }
-                                let cs = chunk.char_spacing + extras[i];
+                            let keyed: Vec<(char, f32, Option<usize>)> = chunk
+                                .text
+                                .chars()
+                                .zip(extras)
+                                .map(|(c, x)| (c, x, fallback_idx(c)))
+                                .collect();
+                            for seg in keyed.chunk_by(|a, b| a.1 == b.1 && a.2 == b.2) {
+                                let cs = chunk.char_spacing + seg[0].1;
                                 if cs != cur_char_spacing {
                                     content.set_char_spacing(cs);
                                     cur_char_spacing = cs;
                                 }
-                                let seg: String = chars[i..j].iter().collect();
-                                let fb = fb.map(|k| fallbacks[k]);
-                                match fb.and_then(|f| Some((f, f.char_to_gid.as_ref()?))) {
-                                    Some((fb, map)) => {
-                                        content.set_font(Name(fb.pdf_name.as_bytes()), chunk.font_size);
-                                        content.show(Str(&encode_as_gids(&seg, map)));
-                                        content
-                                            .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
-                                    }
-                                    _ => {
-                                        content.show(Str(&encode_text_for_pdf(
-                                            &seg,
-                                            &chunk.pdf_font,
-                                            &pdf_name_to_entry,
-                                        )));
-                                    }
-                                }
-                                i = j;
+                                let text: String = seg.iter().map(|k| k.0).collect();
+                                show_seg(content, &text, seg[0].2);
                             }
                             if boundary_space {
                                 if effective_cs != cur_char_spacing {
@@ -6227,41 +6226,17 @@ pub(super) fn render_paragraph_lines(
                             );
                         }
                         GlyphDraw::Fallbacks => {
-                            // A segment of the chunk in its own font, or in the fallback
-                            // font when its characters are missing from the primary one.
-                            let show_seg = |content: &mut Content, seg: &[char], fb: Option<usize>| {
-                                let seg: String = seg.iter().collect();
-                                if let Some(fallback) = fb.map(|k| fallbacks[k]) {
-                                    if let Some(map) = fallback.char_to_gid.as_ref() {
-                                        content.set_font(
-                                            Name(fallback.pdf_name.as_bytes()),
-                                            chunk.font_size,
-                                        );
-                                        content.show(Str(&encode_as_gids(&seg, map)));
-                                        content
-                                            .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
-                                    }
-                                } else {
-                                    let bytes =
-                                        encode_text_for_pdf(&seg, &chunk.pdf_font, &pdf_name_to_entry);
-                                    content.show(Str(&bytes));
-                                }
-                            };
-                            // Split text into runs of primary vs fallback chars
-                            let mut seg_start = 0;
-                            let mut cur_fb = None;
-                            let chars: Vec<char> = chunk.text.chars().collect();
-                            for (i, &ch) in chars.iter().enumerate() {
-                                let fb = fallback_idx(ch);
-                                if i == 0 {
-                                    cur_fb = fb;
-                                } else if fb != cur_fb {
-                                    show_seg(content, &chars[seg_start..i], cur_fb);
-                                    seg_start = i;
-                                    cur_fb = fb;
-                                }
+                            let keyed: Vec<(char, Option<usize>)> =
+                                chunk.text.chars().map(|c| (c, fallback_idx(c))).collect();
+                            // An empty chunk (an underlined tab gap) still shows its
+                            // empty string, as the plain path does.
+                            if keyed.is_empty() {
+                                show_seg(content, "", None);
                             }
-                            show_seg(content, &chars[seg_start..], cur_fb);
+                            for seg in keyed.chunk_by(|a, b| a.1 == b.1) {
+                                let text: String = seg.iter().map(|k| k.0).collect();
+                                show_seg(content, &text, seg[0].1);
+                            }
                             if boundary_space {
                                 content.show(Str(&encode_text_for_pdf(
                                     " ",
