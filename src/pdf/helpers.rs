@@ -237,6 +237,38 @@ pub(super) fn collect_paras(para: &Paragraph) -> Vec<&Paragraph> {
     out
 }
 
+/// How far outside its `space` a paragraph's left or right border sits.
+const LEFT_BORDER_GAP: f32 = 1.47;
+const RIGHT_BORDER_GAP: f32 = 1.73;
+
+/// How far a top or bottom border runs past its box at each side: to a side
+/// border's outer edge, or without one by the side gaps Word keeps anyway
+/// (paragraph-border-styles: 70.5–541.7 on a 72–540 measure).
+pub(super) fn horizontal_border_ext(borders: &crate::model::ParagraphBorders) -> (f32, f32) {
+    let ext = |b: &Option<ParagraphBorder>, gap: f32| b.as_ref().map_or(gap, |b| b.extent() / 2.0);
+    (
+        ext(&borders.left, LEFT_BORDER_GAP),
+        ext(&borders.right, RIGHT_BORDER_GAP),
+    )
+}
+
+/// How far outside the text the left and right borders' inner edges sit
+/// (`space` plus the gap), or their stroke centres with `to_centre`.
+pub(super) fn side_border_outsets(
+    borders: &crate::model::ParagraphBorders,
+    to_centre: bool,
+) -> (f32, f32) {
+    let outset = |b: Option<&crate::model::ParagraphBorder>, gap: f32| {
+        b.map_or(0.0, |b| {
+            b.space_pt + gap + if to_centre { b.extent() / 2.0 } else { 0.0 }
+        })
+    };
+    (
+        outset(borders.left.as_ref(), LEFT_BORDER_GAP),
+        outset(borders.right.as_ref(), RIGHT_BORDER_GAP),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

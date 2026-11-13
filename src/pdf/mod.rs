@@ -52,6 +52,7 @@ use header_footer::{
 };
 pub(super) use helpers::resolve_line_h;
 use helpers::{
+    horizontal_border_ext, side_border_outsets,
     align_offset, auto_ascent_scale, between_space, border_band, border_box_indents, bottom_border,
     collect_paras, draw_horizontal_rule, joins_border_group, spacing_leading,
 };
@@ -3188,38 +3189,6 @@ fn smartart_alt(diagrams: &[crate::model::SmartArtDiagram]) -> Option<String> {
         .filter(|t| !t.trim().is_empty())
         .collect();
     (!lines.is_empty()).then(|| lines.join("\n"))
-}
-
-/// How far outside its `space` a paragraph's left or right border sits.
-const LEFT_BORDER_GAP: f32 = 1.47;
-const RIGHT_BORDER_GAP: f32 = 1.73;
-
-/// How far a top or bottom border runs past its box at each side: to a side
-/// border's outer edge, or without one by the side gaps Word keeps anyway
-/// (paragraph-border-styles: 70.5–541.7 on a 72–540 measure).
-pub(super) fn horizontal_border_ext(borders: &crate::model::ParagraphBorders) -> (f32, f32) {
-    let ext = |b: &Option<ParagraphBorder>, gap: f32| b.as_ref().map_or(gap, |b| b.extent() / 2.0);
-    (
-        ext(&borders.left, LEFT_BORDER_GAP),
-        ext(&borders.right, RIGHT_BORDER_GAP),
-    )
-}
-
-/// How far outside the text the left and right borders' inner edges sit
-/// (`space` plus the gap), or their stroke centres with `to_centre`.
-pub(super) fn side_border_outsets(
-    borders: &crate::model::ParagraphBorders,
-    to_centre: bool,
-) -> (f32, f32) {
-    let outset = |b: Option<&crate::model::ParagraphBorder>, gap: f32| {
-        b.map_or(0.0, |b| {
-            b.space_pt + gap + if to_centre { b.extent() / 2.0 } else { 0.0 }
-        })
-    };
-    (
-        outset(borders.left.as_ref(), LEFT_BORDER_GAP),
-        outset(borders.right.as_ref(), RIGHT_BORDER_GAP),
-    )
 }
 
 /// An empty section mark keeps its line after an inline table (the rule is
