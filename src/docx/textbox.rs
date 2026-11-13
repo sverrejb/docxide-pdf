@@ -12,7 +12,7 @@ use super::images::{extent_dimensions, parse_anchor_position, vml_z_order};
 use super::styles::{ThemeFillStyle, ThemeFonts};
 use super::{
     DML_NS, MC_NS_TOP, OFFICE_NS, ParseContext, VML_NS, WML_NS, WPD_NS, WPG_NS, WPS_NS, angle_attr,
-    dml as find_dml, dml_children as find_dml_all, emu_attr, emu_attr_opt, frac_attr, parse_pt,
+    dml as find_dml, dml_children as find_dml_all, emu_attr_opt, frac_attr, parse_pt,
     wps as find_wps,
 };
 
@@ -368,32 +368,6 @@ fn dml_pt(parent: roxmltree::Node) -> Option<(String, String)> {
     ))
 }
 
-fn parse_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
-    let Some(bp) = find_wps(wsp, "bodyPr") else {
-        return (3.6, 7.2, 3.6, 7.2); // Word defaults: 0.05" top/bottom, 0.1" left/right
-    };
-    let emu_to_pt = |attr: &str, default: f32| -> f32 { emu_attr_opt(bp, attr).unwrap_or(default) };
-    (
-        emu_to_pt("tIns", 3.6),
-        emu_to_pt("lIns", 7.2),
-        emu_to_pt("bIns", 3.6),
-        emu_to_pt("rIns", 7.2),
-    )
-}
-
-/// WordArt defaults to 0 margins unless explicitly set.
-fn parse_wordart_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
-    let Some(bp) = find_wps(wsp, "bodyPr") else {
-        return (0.0, 0.0, 0.0, 0.0);
-    };
-    (
-        emu_attr(bp, "tIns"),
-        emu_attr(bp, "lIns"),
-        emu_attr(bp, "bIns"),
-        emu_attr(bp, "rIns"),
-    )
-}
-
 pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
     anchor: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
@@ -483,9 +457,6 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
 
     let shape_type = sp_pr.map(parse_shape_geometry).unwrap_or_default();
 
-    let (mut margin_top, mut margin_left, mut margin_bottom, mut margin_right) =
-        parse_body_margins(wsp);
-
     let body_pr = find_wps(wsp, "bodyPr");
     let no_text_wrap = body_pr
         .and_then(|bp| bp.attribute("wrap"))
@@ -505,14 +476,18 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
             auto_fit: AutoFit::None,
         });
 
-    // WordArt defaults to zero body margins unless explicitly set
-    if wa_props.is_wordart {
-        let (wt, wl, wb, wr) = parse_wordart_body_margins(wsp);
-        margin_top = wt;
-        margin_left = wl;
-        margin_bottom = wb;
-        margin_right = wr;
-    }
+    // Word's default body insets are 0.05" top/bottom and 0.1" left/right;
+    // WordArt's are zero.
+    let (v_inset, h_inset) = if wa_props.is_wordart {
+        (0.0, 0.0)
+    } else {
+        (3.6, 7.2)
+    };
+    let inset = |attr, default| {
+        body_pr
+            .and_then(|bp| emu_attr_opt(bp, attr))
+            .unwrap_or(default)
+    };
 
     // A chain's first box holds the story (wps:txbx id); the others say
     // where they follow on (wps:linkedTxbx id seq).
@@ -570,10 +545,10 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         stroke_width,
         stroke_dash,
         text_anchor,
-        margin_top: margin_top + outline_inset,
-        margin_left: margin_left + outline_inset,
-        margin_bottom: margin_bottom + outline_inset,
-        margin_right: margin_right + outline_inset,
+        margin_top: inset("tIns", v_inset) + outline_inset,
+        margin_left: inset("lIns", h_inset) + outline_inset,
+        margin_bottom: inset("bIns", v_inset) + outline_inset,
+        margin_right: inset("rIns", h_inset) + outline_inset,
         no_text_wrap,
         text_warp: wa_props.text_warp,
         auto_fit: wa_props.auto_fit,
