@@ -315,6 +315,8 @@ Open queue from the large-corpus and focus-fixture rounds:
   bars 70.525–541.725 on a 72–540 measure). Cells do this
   (`helpers::shading_outsets`); body and header shading still stop at the
   text box.
+  Two consecutive same-fill paragraphs in a cell keep a white gap between
+  them where the body closes it (unmeasured in cells).
 - **Paragraph borders** (issue #145): table cell borders keep their own dash arrays and draw wave and thin/thick pairs
   as one line (`pdf::table::draw_border` has no Wave or ThinThick arm).
 - **Trailing punctuation**: Word never lets a Latin mark hang past the margin

@@ -709,6 +709,39 @@ mod tests {
     }
 
     #[test]
+    fn cell_paragraphs_take_style_shading_unless_direct_shd_clears_it() {
+        let cell_para = |ppr: &str| {
+            format!(
+                r#"<w:p><w:pPr><w:pStyle w:val="Bar"/>{ppr}</w:pPr><w:r><w:t>x</w:t></w:r></w:p>"#
+            )
+        };
+        let document = format!(
+            r#"<w:document xmlns:w="{WML_NS}"><w:body><w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>{}{}</w:tc></w:tr></w:tbl><w:sectPr/></w:body></w:document>"#,
+            cell_para(""),
+            cell_para(r#"<w:shd w:val="clear" w:color="auto" w:fill="auto"/>"#),
+        );
+        let styles = format!(
+            r#"<w:styles xmlns:w="{WML_NS}"><w:style w:type="paragraph" w:styleId="Bar"><w:name w:val="Bar"/><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="00B0F0"/></w:pPr></w:style></w:styles>"#
+        );
+        let parsed = crate::docx::parse_parts(&[
+            ("word/document.xml", &document),
+            ("word/styles.xml", &styles),
+        ]);
+        let crate::model::Block::Table(t) = &parsed.sections[0].blocks[0] else {
+            panic!("expected a table");
+        };
+        let shading: Vec<_> = t.rows[0].cells[0]
+            .content
+            .iter()
+            .map(|b| match b {
+                crate::model::Block::Paragraph(p) => p.shading,
+                _ => panic!("expected paragraphs"),
+            })
+            .collect();
+        assert_eq!(shading, [Some([0x00, 0xB0, 0xF0]), None]);
+    }
+
+    #[test]
     fn hanging_indent_adds_one_stop_at_the_indent() {
         let mut stops = Vec::new();
         add_hanging_tab_stop(&mut stops, 28.35, 28.35);
