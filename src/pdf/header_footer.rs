@@ -880,12 +880,7 @@ pub(super) fn hf_paragraphs(hf: &HeaderFooter) -> Vec<&Paragraph> {
         .iter()
         .flat_map(|block| match block {
             Block::Paragraph(p) => vec![p],
-            Block::Table(t) => t
-                .rows
-                .iter()
-                .flat_map(|row| row.cells.iter())
-                .flat_map(|cell| cell.all_paragraphs())
-                .collect(),
+            Block::Table(t) => t.all_paragraphs().collect(),
         })
         .collect()
 }

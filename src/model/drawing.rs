@@ -490,9 +490,7 @@ impl Textbox {
     pub fn table_paragraphs(&self) -> Vec<&Paragraph> {
         self.content_tables()
             .iter()
-            .flat_map(|(_, t)| &t.rows)
-            .flat_map(|r| &r.cells)
-            .flat_map(|c| c.all_paragraphs())
+            .flat_map(|(_, t)| t.all_paragraphs())
             .collect()
     }
 

@@ -64,10 +64,7 @@ fn collect_all_paras(doc: &Document) -> ParaSets<'_> {
             match block {
                 Block::Paragraph(para) => collect_paras(para),
                 Block::Table(table) => table
-                    .rows
-                    .iter()
-                    .flat_map(|row| row.cells.iter())
-                    .flat_map(|cell| cell.all_paragraphs())
+                    .all_paragraphs()
                     .flat_map(|para| collect_paras(para))
                     .collect(),
             }

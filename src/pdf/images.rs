@@ -1018,24 +1018,14 @@ pub(super) fn embed_all_images(
                 .flat_map(|tb| tb.content_tables())
                 .map(|(_, t)| t),
         );
-        for table in tables {
-            for row in &table.rows {
-                for cell in &row.cells {
-                    for para in cell.all_paragraphs() {
-                        for img in para
-                            .image
-                            .iter()
-                            .chain(para.runs.iter().filter_map(|run| run.inline_image.as_ref()))
-                            .chain(para.floating_images.iter().map(|fi| &fi.image))
-                        {
-                            em.embed_table_image(
-                                img,
-                                &mut table_cell_image_names,
-                                &mut effect_table_names,
-                            );
-                        }
-                    }
-                }
+        for para in tables.into_iter().flat_map(|t| t.all_paragraphs()) {
+            for img in para
+                .image
+                .iter()
+                .chain(para.runs.iter().filter_map(|run| run.inline_image.as_ref()))
+                .chain(para.floating_images.iter().map(|fi| &fi.image))
+            {
+                em.embed_table_image(img, &mut table_cell_image_names, &mut effect_table_names);
             }
         }
     }
@@ -1101,14 +1091,8 @@ fn push_block_textboxes<'a>(block: &'a Block, out: &mut Vec<&'a Textbox>) {
             }
         }
         Block::Table(table) => {
-            for row in &table.rows {
-                for cell in &row.cells {
-                    for para in cell.all_paragraphs() {
-                        for tb in &para.textboxes {
-                            push_textbox(tb, out);
-                        }
-                    }
-                }
+            for tb in table.all_paragraphs().flat_map(|p| &p.textboxes) {
+                push_textbox(tb, out);
             }
         }
     }
