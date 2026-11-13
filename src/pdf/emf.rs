@@ -17,7 +17,11 @@ use crate::fonts::{FontEntry, font_key_for};
 enum EmfObject {
     Brush(Option<[u8; 3]>),
     Pen(Option<([u8; 3], i32)>),
-    Font { key: String, height: i32 },
+    Font {
+        key: String,
+        height: i32,
+        escapement: i32,
+    },
 }
 
 #[derive(Clone)]
@@ -31,7 +35,7 @@ struct EmfState {
     /// `None` is the null brush / pen.
     selected_brush: Option<[u8; 3]>,
     selected_pen: Option<([u8; 3], i32)>,
-    font: Option<(String, i32)>,
+    font: Option<(String, i32, i32)>,
     text_color: [u8; 3],
     text_align: u32,
     /// Between BEGINPATH and the record that paints or discards the path.
@@ -220,6 +224,7 @@ impl Translator<'_> {
             CreateFont {
                 handle,
                 height,
+                escapement,
                 bold,
                 italic,
                 face,
@@ -230,6 +235,7 @@ impl Translator<'_> {
                     EmfObject::Font {
                         key,
                         height: *height,
+                        escapement: *escapement,
                     },
                 );
             }
@@ -245,7 +251,11 @@ impl Translator<'_> {
                 match obj {
                     Some(EmfObject::Brush(c)) => state.selected_brush = c,
                     Some(EmfObject::Pen(p)) => state.selected_pen = p,
-                    Some(EmfObject::Font { key, height }) => state.font = Some((key, height)),
+                    Some(EmfObject::Font {
+                        key,
+                        height,
+                        escapement,
+                    }) => state.font = Some((key, height, escapement)),
                     None => {}
                 }
             }
@@ -281,6 +291,29 @@ impl Translator<'_> {
                 }
                 if open {
                     self.stroke();
+                }
+            }
+            Poly { polys, close } => {
+                for pts in polys {
+                    for (k, &(x, y)) in pts.iter().enumerate() {
+                        let (u, v) = self.mapper.map(state, x, y);
+                        if k == 0 {
+                            self.content.move_to(u, v);
+                        } else {
+                            self.content.line_to(u, v);
+                        }
+                    }
+                    if *close {
+                        self.content.close_path();
+                    }
+                }
+                if !state.in_path {
+                    if *close && state.selected_brush.is_some() {
+                        let rule = state.fill_rule;
+                        self.paint(rule);
+                    } else {
+                        self.stroke();
+                    }
                 }
             }
             CloseFigure => {
@@ -427,7 +460,7 @@ impl Translator<'_> {
     // ponytail: no clipping (INTERSECTCLIPRECT/EXTSELECTCLIPRGN), opaque
     // backgrounds, escapement or TA_UPDATECP; add when a fixture needs them.
     fn text(&mut self, x: i32, y: i32, text: &str, dx: &[i32]) {
-        let Some((key, height)) = &self.state.font else {
+        let Some((key, height, escapement)) = &self.state.font else {
             return;
         };
         let Some(entry) = self.fonts.get(key) else {
@@ -457,20 +490,25 @@ impl Translator<'_> {
         };
         let width: f64 = advances.iter().take(chars.len()).sum();
         let align = self.state.text_align;
-        let x0 = match align & 6 {
-            2 => x as f64 - width,       // TA_RIGHT
-            6 => x as f64 - width / 2.0, // TA_CENTER
-            _ => x as f64,
+        let along = match align & 6 {
+            2 => -width,       // TA_RIGHT
+            6 => -width / 2.0, // TA_CENTER
+            _ => 0.0,
         };
-        let baseline = match align & 24 {
-            24 => y as f64,                                          // TA_BASELINE
-            8 => y as f64 - (line_ratio - ascent_ratio) as f64 * em, // TA_BOTTOM
-            _ => y as f64 + ascent_ratio as f64 * em,                // TA_TOP
+        let down = match align & 24 {
+            24 => 0.0,                                       // TA_BASELINE
+            8 => -(line_ratio - ascent_ratio) as f64 * em, // TA_BOTTOM
+            _ => ascent_ratio as f64 * em,                   // TA_TOP
         };
+        // The escapement turns the text counter-clockwise; logical y runs down.
+        let (sin, cos) = (*escapement as f64 / 10.0).to_radians().sin_cos();
+        let x0 = x as f64 + along * cos + down * sin;
+        let baseline = y as f64 - along * sin + down * cos;
         let (u, v) = self.mapper.map_f(&self.state, x0, baseline);
         let (u1, _) = self.mapper.map_f(&self.state, x0 + 1.0, baseline);
         let (_, v1) = self.mapper.map_f(&self.state, x0, baseline + 1.0);
         let (sx, sy) = (u1 - u, v - v1);
+        let (sin, cos) = (sin as f32, cos as f32);
 
         self.used_fonts
             .insert(entry.pdf_name.clone(), entry.font_ref);
@@ -478,7 +516,8 @@ impl Translator<'_> {
         c.begin_text();
         c.set_font(Name(entry.pdf_name.as_bytes()), 1.0);
         fill_rgb(c, self.state.text_color);
-        c.set_text_matrix([sx * em as f32, 0.0, 0.0, sy * em as f32, u, v]);
+        let (ex, ey) = (sx * em as f32, sy * em as f32);
+        c.set_text_matrix([ex * cos, ex * sin, -ey * sin, ey * cos, u, v]);
         let mut tj = c.show_positioned();
         let mut items = tj.items();
         let mut buf = [0u8; 4];

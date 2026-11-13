@@ -1802,45 +1802,53 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         runs.push(fmt.ptab_run(alignment));
                     }
                 }
-                "br" if field_stack.is_empty() => match child.attribute((WML_NS, "type")) {
-                    Some("page") => {
-                        // Floats anchored before the break belong to the page it
-                        // ends (flyer templates put every text box in front of it).
-                        let floats_before = !floating_images.is_empty()
-                            || !textboxes.is_empty()
-                            || !connectors.is_empty()
-                            || !smartart.is_empty();
-                        if runs.is_empty() && pending_text.is_empty() && !floats_before {
-                            page_break_before_content = true;
-                        } else {
-                            flush_pending(&mut pending_text, &mut runs);
-                            page_break_at.get_or_insert(runs.len());
-                            has_page_break_after = true;
-                        }
-                    }
-                    // Text after a column break moves on, like after a page break
-                    Some("column") => {
-                        if runs.is_empty() && pending_text.is_empty() {
-                            has_column_break = true;
-                        } else {
-                            flush_pending(&mut pending_text, &mut runs);
-                            if page_break_at.is_none() {
-                                page_break_at = Some(runs.len());
-                                column_break_at = true;
+                // A break in a field's displayed result breaks the line too (a
+                // HYPERLINK result "(URIs)<br/>Line break inside hyperlink"
+                // prints on two lines); a dynamic field's result is one
+                // placeholder string, re-evaluated at render.
+                "br" if fields_visible(&field_stack)
+                    && !field_stack.last().is_some_and(|f| f.dynamic()) =>
+                {
+                    match child.attribute((WML_NS, "type")) {
+                        Some("page") => {
+                            // Floats anchored before the break belong to the page it
+                            // ends (flyer templates put every text box in front of it).
+                            let floats_before = !floating_images.is_empty()
+                                || !textboxes.is_empty()
+                                || !connectors.is_empty()
+                                || !smartart.is_empty();
+                            if runs.is_empty() && pending_text.is_empty() && !floats_before {
+                                page_break_before_content = true;
+                            } else {
+                                flush_pending(&mut pending_text, &mut runs);
+                                page_break_at.get_or_insert(runs.len());
+                                has_page_break_after = true;
                             }
                         }
-                    }
-                    _ => {
-                        if child.attribute((WML_NS, "clear")) == Some("all") {
-                            has_clear_break = true;
+                        // Text after a column break moves on, like after a page break
+                        Some("column") => {
+                            if runs.is_empty() && pending_text.is_empty() {
+                                has_column_break = true;
+                            } else {
+                                flush_pending(&mut pending_text, &mut runs);
+                                if page_break_at.is_none() {
+                                    page_break_at = Some(runs.len());
+                                    column_break_at = true;
+                                }
+                            }
                         }
-                        flush_pending(&mut pending_text, &mut runs);
-                        runs.push(Run {
-                            is_line_break: true,
-                            ..fmt.minimal_run()
-                        });
+                        _ => {
+                            if child.attribute((WML_NS, "clear")) == Some("all") {
+                                has_clear_break = true;
+                            }
+                            flush_pending(&mut pending_text, &mut runs);
+                            runs.push(Run {
+                                is_line_break: true,
+                                ..fmt.minimal_run()
+                            });
+                        }
                     }
-                },
+                }
                 // A carriage return breaks the line like a text-wrapping br (§17.3.3.4).
                 "cr" if field_stack.is_empty() => {
                     flush_pending(&mut pending_text, &mut runs);

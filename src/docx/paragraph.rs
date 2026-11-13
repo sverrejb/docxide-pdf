@@ -232,6 +232,12 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     let (space_before_auto, space_after_auto) =
         super::autospacing(ppr, para_style, &ctx.styles.defaults);
+    // A frame never splits: Word drops a break that ends or splits it, and
+    // one opening it moves it to the next column (Word examples: a page break
+    // opening a frame in two columns puts it in column 2 of the same page).
+    let frame_props = parse_frame_props(ppr, para_style.and_then(|s| s.frame_attrs.as_ref()));
+    let framed = frame_props.is_some();
+    let explicit_page_break = parsed.has_explicit_page_break_before && !framed;
     Paragraph {
         kashida_reserve: ctx.text_width * super::runs::paragraph_kashida(ppr, para_style),
         runs,
@@ -271,7 +277,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         shading: para_shading,
         // A direct pageBreakBefore, on or off, overrides the style's
         // (wa_child's Part 1 heading turns its Heading2 break off).
-        page_break_before: parsed.has_explicit_page_break_before
+        page_break_before: explicit_page_break
             || ppr
                 .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))
                 .unwrap_or_else(|| {
@@ -279,12 +285,13 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
                         .and_then(|s| s.page_break_before)
                         .unwrap_or(false)
                 }),
-        page_break_before_explicit: parsed.has_explicit_page_break_before,
-        page_break_after: parsed.has_page_break_after,
-        page_break_at: parsed.page_break_at,
-        column_break_before: parsed.has_column_break,
+        page_break_before_explicit: explicit_page_break,
+        page_break_after: parsed.has_page_break_after && !framed,
+        page_break_at: parsed.page_break_at.filter(|_| !framed),
+        column_break_before: parsed.has_column_break
+            || (parsed.has_explicit_page_break_before && framed),
         // split_at_page_break hands a mid-paragraph one to the continuation
-        column_break_after: parsed.column_break_at,
+        column_break_after: parsed.column_break_at && !framed,
         clears_floats: parsed.has_clear_break,
         tab_stops,
         floating_images,
@@ -308,7 +315,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         auto_space_de,
         auto_space_dn,
         bidi,
-        frame_props: parse_frame_props(ppr, para_style.and_then(|s| s.frame_attrs.as_ref())),
+        frame_props,
         ..numbering.into_paragraph()
     }
 }

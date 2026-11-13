@@ -311,6 +311,35 @@ one document −0.9 from the fixed-layout columns.
 `fonts/` and the assets repo: 317 set 72.98 → 73.18 (labels `tc-gap13`,
 `tc-comments12`), the two 3-vs-4 siblings +19 and +40.
 
+Round 5 (2026-11-09, worktree `tc-round5`): the published set has grown to
+3393 tracked documents; a fixed sample of 487 (every 7th,
+`tests/output/r5/s500`, labels `r5-*`) scored 62.10 at the start against
+the competitor's 61.59. Fixed, one commit each:
+- An installed font beats the document's embedded copy (probe: Courier New
+  embedded as "Times New Roman" prints in Times; under an unknown name in
+  Courier). A redline embedding a gap-less Times New Roman 13.1 → 81.2.
+- A fixed-layout cell lays its text out at the drawn column width, not
+  max(column, tcW): 2in columns under 4800-twip cells break 72pt
+  "aft|er" (12.3 → 83.0, another +53).
+- A line break inside a field's displayed result (HYPERLINK) breaks the
+  line.
+- EMF polygons and polylines (EMR_POLYGON16 etc., 16- and 32-bit, poly-
+  variants) and font escapement (rotated axis titles); the WMF translator
+  passes lines, text, fonts and save/restore. An OLE chart preview's bars
+  were missing.
+Not code (left): author colours follow the reference Mac's author memory
+(one author, "Comparison", prints D13438, 0078D4, 394146 or CC3595 in
+different single-author documents; four siblings at 26 vs 68 are colour
+alone: thin red strokes fall under the ink threshold where 394146 does
+not); DejaVu Sans Mono in this Mac's user fonts for the altName-Verdana
+family; Roboto Bold and Ubuntu missing here (Office's cloud cache has
+Roboto Regular/Light/Medium only); Palatino is Mac-only and Word for Mac
+uses its hhea box (1.10em) where we use win (1.66em). Open: an auto-width
+AutoFit table whose saved grid (3851/5211) disagrees with its tcW
+(2745/6068): Word draws the grid, we the tcW (acd3595c3a, 13.9 vs 69.8);
+a reference printed with an empty markup pane and no comments, the only
+document in the sample with `w:cellDel` (3890d0a960).
+
 The competitor's current release, rescored locally with the same scorer and
 Word's markup palette (`--revisions word --compress`), reads Word's own font
 folders (Word.app's DFonts, Office's cloud font cache) and resolves the same

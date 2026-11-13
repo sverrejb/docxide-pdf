@@ -30,6 +30,10 @@ lines fall differently on the 150 dpi pixel grid.
   85.6 (27/27 exact), japanese_medical_consultation_form 64.9 → 62.2,
   isla_language_lesson_plan 69.5 → 67.4, polish_municipal_letter 77.8 → 76.2.
 
+**Follow-up (2026-11-10):** sample500kB TxtBnd 34.4 → 32.3 accepted with
+an unchanged PDF; most likely the Nov 9 TxtBnd line-grouping rewrite
+(a1c9eb15d), not confirmed by scoring with the old metric.
+
 **Engine-gap list (CI comparison 2026-11-09, `git show
 origin/gh-pages:report.json`):** 48 fixtures where another engine beats us
 by ≥3pp J (120 on 2026-11-07), ours vs the best engine:
@@ -481,6 +485,11 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 - Footnotes that don't fit: Word splits a note across pages with a
   continuation separator (uk_commercial p17/18); we move the reference line.
+- frame-clip-page-break (J 60.9, SSIM 72.2): body and frame match Word; the
+  footnote separator rule sits 10.4pt too high (ours 330.30, Word 340.73 from
+  the top). The docx has no styles.xml and the separator paragraph has no
+  pPr, so its line height falls back to defaults; suspect ours differ from
+  Word's (unverified). The near-empty page magnifies the miss in the scores.
 - Footnote paragraphs other than numbered ones are hand-built in
   `parse_footnotes` (endnotes already use `build_paragraph`): borders,
   shading, `style_id`, contextual spacing missing; note tables are flattened
@@ -535,6 +544,8 @@ Open queue from the large-corpus and focus-fixture rounds:
   type), secondary axes; see `current_focus/3d_charts.md`.
 - WordArt level 5: VML gradient/pattern fills, VML shadow, shapetype →
   prstTxWarp mapping.
+- VML fill off check (`filled="f"`, `on="f|false|0"`) is spelled out in
+  images.rs, textbox.rs and wordart.rs; textbox.rs:1012 lacks `"0"`.
 
 ## RTL / BiDi
 

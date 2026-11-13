@@ -1634,7 +1634,7 @@ fn render_vertical_cjk_cell(
                 // ponytail: no link annotations in vertical text, so no Link
                 // elements either; add both if a document has one
                 if let Some(lt) = link_tags.as_mut() {
-                    lt.chunk(content, chunk, None, boundary_space);
+                    lt.chunk(content, chunk, None, boundary_space, &mut |_| {});
                 }
                 content.set_font(Name(chunk.pdf_font.as_bytes()), fs);
 
