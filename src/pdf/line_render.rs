@@ -2334,7 +2334,10 @@ mod tests {
         );
         let heavy = UnderlineStyle::parse("dashLongHeavy");
         assert!(heavy.heavy() && heavy.dashes() == UnderlineStyle::DashLong.dashes());
-        assert_eq!(UnderlineStyle::parse("wavyDouble").wave(), Some((0.25, true)));
+        assert_eq!(
+            UnderlineStyle::parse("wavyDouble").wave(),
+            Some((0.25, true))
+        );
     }
 
     #[test]
