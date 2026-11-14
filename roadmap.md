@@ -30,10 +30,6 @@ lines fall differently on the 150 dpi pixel grid.
   85.6 (27/27 exact), japanese_medical_consultation_form 64.9 → 62.2,
   isla_language_lesson_plan 69.5 → 67.4, polish_municipal_letter 77.8 → 76.2.
 
-**Follow-up (2026-11-10):** sample500kB TxtBnd 34.4 → 32.3 accepted with
-an unchanged PDF; most likely the Nov 9 TxtBnd line-grouping rewrite
-(a1c9eb15d), not confirmed by scoring with the old metric.
-
 **Engine-gap list (CI comparison 2026-11-09, `git show
 origin/gh-pages:report.json`):** 48 fixtures where another engine beats us
 by ≥3pp J (120 on 2026-11-07), ours vs the best engine:
@@ -53,8 +49,7 @@ by ≥3pp J (120 on 2026-11-07), ours vs the best engine:
   shifted-text-position0-mixed1-* 72.2, numeric-suffix-final-five /
   -short-final / -split-final 48–49, case114 47.4, nested-percent-5000-*
   93.9, displaced-anchor-narrow-compat12-overlap0-* 85.0,
-  go_math_grade4_guide 78.1 (double-underline was on this list at 55.8; it
-  is 80.9 since the 2026-11-09 double-underline rule).
+  go_math_grade4_guide 78.1.
 - 3pp: case152–154/166/167 66.8, vml-group-picture-washout 96.8,
   traditional_skills_job_form 52.6, case59 93.1.
 
@@ -107,9 +102,6 @@ Leads from the 2026-11-07/08 triage round, still open:
   `empty_frame_table_bands` only reserves the box on the first page. Word
   reserves it on the page where the anchor lands (2026-11-08), so the fix
   needs to know which page the preceding table ends on before layout.
-- Double underline geometry is done (`line_render.rs` `double_underline`,
-  2026-11-09, 170/172 online probe points exact); unchecked: the 2026-11-07
-  note that Word also underlines a line's trailing space.
 - nested-floats-spaced-text-bottom-cell (42.8): the same two registration
   tables in a vAlign=bottom cell. Bottom cells now float like centred ones,
   but Word sets the 12 spacer marks beside the floats (topic 2 lines higher)
@@ -742,10 +734,7 @@ Backlog (details in `current_focus/A11Y.md`):
 - Floating-table keep-together could be geometric (`fp.y > saved`) instead of
   reading raw `tblpY` (`text_anchor_offset`).
 - Spring-cleaning next rounds (`current_focus/spring_cleaning.md`, whose
-  "Not done" list is otherwise still accurate). Done in the 2026-11-13
-  simplify pass: `render_paragraph_lines` takes `RenderOpts`, picture
-  effects go through `color::draw_image_halo`/`draw_image_afterglow`, and
-  whole and split table cells share one renderer. Left: `assemble_pdf_pages`
+  "Not done" list is otherwise still accurate). Left: `assemble_pdf_pages`
   parameter bundling, `PageBuilder` (parallel `all_*` Vecs) →
   `Vec<FinishedPage>`, the 4× textbox layout.
 - `pdf/images.rs`: the seven per-kind name maps remain beside the shared
@@ -874,11 +863,6 @@ All are meant to keep output identical unless the entry says otherwise.
 
 ## Test harness and tooling
 
-- Watch: scraped/door_air_cooling_unit_spec gave two different PDFs over
-  three runs (2026-10-03). Not reproduced since; the likely cause, concurrent
-  writers splicing the font-index cache, is fixed (atomic rename + end
-  marker). If any fixture differs between runs again, compare
-  `mutool info -F` with a `DOCXIDE_NO_FONT_CACHE=1` run first.
 - Engine-comparison site: veraPDF already runs once per fixture; if runs
   grow, batch it per shard via a `page-metrics` pre-pass.
   `engine_compare.py` `pdf_creator()` truncates Quartz producers at the
