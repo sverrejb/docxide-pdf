@@ -854,11 +854,11 @@ All are meant to keep output identical unless the entry says otherwise.
 
 ## Test harness and tooling
 
-- Deterministic output regressed once: scraped/door_air_cooling_unit_spec gave
-  two different PDFs over three runs (2026-10-03); likely the font-index
-  cache race, fixed 2026-11-13 (`save_cache` writes a temp file and
-  renames it). Every worktree's `fonts/` symlink is still its own dir
-  entry, so each one rewrites the cache.
+- Watch: scraped/door_air_cooling_unit_spec gave two different PDFs over
+  three runs (2026-10-03). Not reproduced since; the likely cause, concurrent
+  writers splicing the font-index cache, is fixed (atomic rename + end
+  marker). If any fixture differs between runs again, compare
+  `mutool info -F` with a `DOCXIDE_NO_FONT_CACHE=1` run first.
 - Engine-comparison site: veraPDF already runs once per fixture; if runs
   grow, batch it per shard via a `page-metrics` pre-pass.
   `engine_compare.py` `pdf_creator()` truncates Quartz producers at the
