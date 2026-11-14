@@ -545,16 +545,24 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                     && img.alpha.is_none()
                     && img.soft_edge.is_none();
                 if let Some(p) = untouched.then(|| palette_png(&img.data)).flatten() {
+                    // The palette goes in its own Flate stream, as in Word's
+                    // files: inline it costs more than a small image saves.
+                    let lookup_ref = self.next_ref();
+                    let lookup = miniz_oxide::deflate::compress_to_vec_zlib(&p.palette, 6);
+                    self.pdf
+                        .stream(lookup_ref, &lookup)
+                        .filter(Filter::FlateDecode);
                     let data = miniz_oxide::deflate::compress_to_vec_zlib(&p.rows, 6);
                     let mut xobj = self.pdf.image_xobject(xobj_ref, &data);
                     xobj.filter(Filter::FlateDecode);
                     xobj.width(p.width as i32);
                     xobj.height(p.height as i32);
-                    xobj.color_space().indexed(
-                        Name(b"DeviceRGB"),
-                        (p.palette.len() / 3) as i32 - 1,
-                        &p.palette,
-                    );
+                    xobj.insert(Name(b"ColorSpace"))
+                        .array()
+                        .item(Name(b"Indexed"))
+                        .item(Name(b"DeviceRGB"))
+                        .item((p.palette.len() / 3) as i32 - 1)
+                        .item(lookup_ref);
                     xobj.bits_per_component(p.bits as i32);
                     return xobj_ref;
                 }
