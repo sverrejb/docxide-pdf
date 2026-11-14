@@ -9314,6 +9314,18 @@
     "jaccard": 0.9121,
     "ssim": 0.9491
   },
+  "cases/underline-color": {
+    "jaccard": 0.8919,
+    "ssim": 0.9607
+  },
+  "cases/underline-thick-heavy": {
+    "jaccard": 0.9088,
+    "ssim": 0.9614
+  },
+  "cases/underline-wave": {
+    "jaccard": 0.8905,
+    "ssim": 0.956
+  },
   "cases/underlined-inline-picture": {
     "jaccard": 0.9917,
     "ssim": 0.9922
@@ -10749,8 +10761,8 @@
     "a11y_text": 0.9811
   },
   "scraped/isla_language_lesson_plan": {
-    "jaccard": 0.6743,
-    "ssim": 0.9138,
+    "jaccard": 0.6755,
+    "ssim": 0.9144,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,

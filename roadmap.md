@@ -347,17 +347,18 @@ Open queue from the large-corpus and focus-fixture rounds:
   stop.
 - Tab stops: decimal precision unverified; bar tabs act as left stops and draw
   no line (no `Bar` variant in `TabAlignment`).
-- Underlines (`UnderlineStyle`; dotted, dash, dashLong, dotDash, dotDotDash
-  and words follow Word, probe kit `.worktrees/roadmap-top3/tests/output/probe_ustyle/`): thick and
-  the Heavy variants draw at the single thickness. Word's thick line fits
-  no rule yet: 1.25–3.0pt over Calibri/Arial/TNR/Aptos at 8–36pt, thick −
-  single anywhere from 0.25 to 1.0pt (`measure_thick.py` on `thick.pdf`).
-  Waves draw single: Word strokes a 0.25pt zigzag (1pt half-period,
-  amplitude growing with size) whose height above the single line is
-  irregular (Arial 10pt sits above the baseline; `wave.pdf`). `w:u
-  w:color` is ignored (no fixture's colour differs from its text). Word
-  draws nothing for an unknown `w:u` value; we draw single.
-  A tab in a `words` run is still underlined (unprobed).
+- Underlines (`UnderlineStyle`, `line_render::thick_underline` /
+  `wave_bands`; fixtures cases/underline-thick-heavy, -wave, -color; probe
+  kit `.worktrees/roadmap-top3/tests/output/probe_ustyle/`, `fine.txt` and
+  `wall.txt` hold Word's thick and wave geometry at 6–40pt in four fonts).
+  Open: the thick/wave model is exact on 105/140 (thick) and 115/140 (wave)
+  probe lines and 0.25pt off on the rest (Arial 24 thick 2.25 vs Word 2.0);
+  at 6–11pt Word lifts both lines towards the baseline (Arial 8–12, Times
+  6–8, Calibri 6), which no metric tried explains. Word steps its wave
+  1.0005pt per half-wave (0.03pt drift per 63pt), we 1pt. `w:u`
+  themeTint/themeShade are not applied. Word draws nothing for an unknown
+  `w:u` value; we draw single. A tab in a `words` run is still underlined
+  (unprobed).
 - `w:beforeLines`/`w:afterLines` (Word probe kit
   `.worktrees/roadmap-top3/tests/output/probe_lines/`) are read from the
   paragraph and its style chain; docDefaults and table-style `w:spacing`

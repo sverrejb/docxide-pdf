@@ -705,51 +705,90 @@ impl Paragraph {
     }
 }
 
-/// A `w:u` style as Word online draws it (probe 2026-11-13,
-/// kit named in roadmap.md): every style uses the single line's offset
-/// and thickness, and the dash lengths are fixed in points at every size.
+/// A `w:u` style as Word online draws it (probes 2026-11-13/14, kits named in
+/// roadmap.md): the plain styles use the single line's offset and thickness,
+/// thick and the Heavy styles one thicker line nearer the baseline, and the
+/// dash lengths are fixed in points at every size.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum UnderlineStyle {
     #[default]
     Single,
     Double,
+    Thick,
     Dotted,
     Dash,
     DashLong,
     DotDash,
     DotDotDash,
+    DottedHeavy,
+    DashHeavy,
+    DashLongHeavy,
+    DotDashHeavy,
+    DotDotDashHeavy,
+    Wave,
+    WavyHeavy,
+    WavyDouble,
     /// Words only, not the spaces between them.
     Words,
 }
 
 impl UnderlineStyle {
-    /// ponytail: the Heavy variants draw at the single thickness and the
-    /// waves as a single line; Word's thick and wave geometry are unmodelled
-    /// (roadmap, Underlines).
     pub fn parse(val: &str) -> Self {
         match val {
             "double" => Self::Double,
-            "dotted" | "dottedHeavy" => Self::Dotted,
-            "dash" | "dashedHeavy" => Self::Dash,
-            "dashLong" | "dashLongHeavy" => Self::DashLong,
-            "dotDash" | "dashDotHeavy" => Self::DotDash,
-            "dotDotDash" | "dashDotDotHeavy" => Self::DotDotDash,
+            "thick" => Self::Thick,
+            "dotted" => Self::Dotted,
+            "dash" => Self::Dash,
+            "dashLong" => Self::DashLong,
+            "dotDash" => Self::DotDash,
+            "dotDotDash" => Self::DotDotDash,
+            "dottedHeavy" => Self::DottedHeavy,
+            "dashedHeavy" => Self::DashHeavy,
+            "dashLongHeavy" => Self::DashLongHeavy,
+            "dashDotHeavy" => Self::DotDashHeavy,
+            "dashDotDotHeavy" => Self::DotDotDashHeavy,
+            "wave" => Self::Wave,
+            "wavyHeavy" => Self::WavyHeavy,
+            "wavyDouble" => Self::WavyDouble,
             "words" => Self::Words,
             _ => Self::Single,
         }
     }
 
+    /// Drawn with the thick line's geometry.
+    pub fn heavy(self) -> bool {
+        matches!(
+            self,
+            Self::Thick
+                | Self::DottedHeavy
+                | Self::DashHeavy
+                | Self::DashLongHeavy
+                | Self::DotDashHeavy
+                | Self::DotDotDashHeavy
+        )
+    }
+
     /// Alternating on/off lengths in points, starting with a dash at the
-    /// underline's left end.
+    /// underline's left end; a Heavy style keeps its plain style's lengths.
     pub fn dashes(self) -> Option<&'static [f32]> {
         Some(match self {
-            Self::Dotted => &[1.5, 1.5],
-            Self::Dash => &[4.0, 2.0],
-            Self::DashLong => &[8.0, 4.0],
-            Self::DotDash => &[3.0, 1.0, 1.0, 1.0],
-            Self::DotDotDash => &[2.25, 0.75, 0.75, 0.75, 0.75, 0.75],
+            Self::Dotted | Self::DottedHeavy => &[1.5, 1.5],
+            Self::Dash | Self::DashHeavy => &[4.0, 2.0],
+            Self::DashLong | Self::DashLongHeavy => &[8.0, 4.0],
+            Self::DotDash | Self::DotDashHeavy => &[3.0, 1.0, 1.0, 1.0],
+            Self::DotDotDash | Self::DotDotDashHeavy => &[2.25, 0.75, 0.75, 0.75, 0.75, 0.75],
             _ => return None,
         })
+    }
+
+    /// A wavy style's stroke width and whether it is doubled.
+    pub fn wave(self) -> Option<(f32, bool)> {
+        match self {
+            Self::Wave => Some((0.25, false)),
+            Self::WavyHeavy => Some((1.0, false)),
+            Self::WavyDouble => Some((0.25, true)),
+            _ => None,
+        }
     }
 }
 
@@ -782,6 +821,8 @@ pub struct Run {
     pub italic: bool,
     pub underline: bool,
     pub underline_style: UnderlineStyle,
+    /// The underline's own colour (`w:u w:color`); `None` draws it in `color`.
+    pub underline_color: Option<[u8; 3]>,
     pub strikethrough: bool,
     pub dstrike: bool,
     /// Inserted, deleted or reformatted under tracked changes, printed in the
@@ -978,6 +1019,7 @@ impl Default for Run {
             italic: false,
             underline: false,
             underline_style: UnderlineStyle::Single,
+            underline_color: None,
             strikethrough: false,
             revised: false,
             dstrike: false,

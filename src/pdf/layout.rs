@@ -380,6 +380,8 @@ pub(super) struct WordChunk {
     pub(super) width: f32,
     pub(super) underline: bool,
     pub(super) underline_style: crate::model::UnderlineStyle,
+    /// `w:u w:color`; `None` draws the underline in `color`.
+    pub(super) underline_color: Option<[u8; 3]>,
     pub(super) strikethrough: bool,
     pub(super) dstrike: bool,
     /// A tracked change (markup view): its line gets a change bar.
@@ -516,6 +518,7 @@ impl WordChunk {
             width,
             underline: false,
             underline_style: crate::model::UnderlineStyle::Single,
+            underline_color: None,
             strikethrough: false,
             dstrike: false,
             revised: false,
@@ -590,6 +593,7 @@ impl WordChunk {
             border: run.border.clone(),
             underline: run.underline,
             underline_style: run.underline_style,
+            underline_color: run.underline_color,
             strikethrough: run.strikethrough,
             dstrike: run.dstrike,
             revised: run.revised,
@@ -1513,7 +1517,7 @@ fn space_underline(
     let chunk = WordChunk::word_space_underline(
         entry,
         font_size,
-        run.color,
+        run.underline_color.or(run.color),
         run.underline_style,
         run.border.clone(),
         x,
@@ -1580,7 +1584,7 @@ fn underline_line_end(
                 width: sp.width,
                 pdf_font: sp.entry.pdf_name.clone(),
                 font_size: sp.font_size,
-                color: sp.run.color,
+                color: sp.run.underline_color.or(sp.run.color),
                 style: sp.run.underline_style,
             });
         }
@@ -3489,7 +3493,7 @@ pub(super) fn build_tabbed_line(
                 all_chunks.push(WordChunk::tab_underline(
                     entry,
                     eff_fs,
-                    tab_run.color,
+                    tab_run.underline_color.or(tab_run.color),
                     tab_run.underline_style,
                     tab_run.border.clone(),
                     current_x,

@@ -17,24 +17,60 @@ use super::line_sizing::{
 use super::link_tagger::{LinkAnnotation, LinkTagger};
 
 /// A decoration rectangle (underline, strikethrough, shading): x, y, width,
-/// height, colour, and the dash pattern of a dotted or dashed underline.
-type Decoration = (f32, f32, f32, f32, Option<[u8; 3]>, Option<&'static [f32]>);
+/// height, colour, and how the rectangle is drawn.
+type Decoration = (f32, f32, f32, f32, Option<[u8; 3]>, DecoKind);
 
-/// The lines (top, thickness) of an underline at `font_size` under the
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum DecoKind {
+    Solid,
+    /// `UnderlineStyle::dashes` cut out of the rectangle.
+    Dashed(&'static [f32]),
+    /// A zigzag across the rectangle's height, stroked `width` wide, its
+    /// half-waves on a 1pt grid from `anchor` (the column's left edge).
+    Wave {
+        width: f32,
+        anchor: f32,
+    },
+}
+
+impl DecoKind {
+    fn of(style: UnderlineStyle, anchor: f32) -> Self {
+        match (style.dashes(), style.wave()) {
+            (Some(dashes), _) => Self::Dashed(dashes),
+            (_, Some((width, _))) => Self::Wave { width, anchor },
+            _ => Self::Solid,
+        }
+    }
+}
+
+/// The lines (bottom, thickness) of an underline at `font_size` under the
 /// baseline `y`. Word draws a single underline from the font's post table, its
 /// offset below the baseline and its thickness each on a 0.25pt grid (online
 /// export probe: Calibri, Times New Roman, Arial, Aptos at 10/12/22pt). A
-/// double underline is two lines half as thick, see `double_underline`.
+/// double underline is two lines half as thick, see `double_underline`; thick
+/// and Heavy lines see `thick_underline`. A wavy style gets the band its
+/// zigzag spans, two for wavyDouble (`wave_bands`).
 pub(super) fn underline_lines(
     entry: Option<&FontEntry>,
     font_size: f32,
-    double: bool,
+    style: UnderlineStyle,
     link: bool,
     y: f32,
 ) -> Vec<(f32, f32)> {
+    let double = style == UnderlineStyle::Double;
     if let Some(e) = entry
         && let Some((offset, th)) = post_underline(e, font_size)
     {
+        if style.wave().is_some() {
+            return wave_bands(e, font_size, style)
+                .into_iter()
+                .map(|(top, h)| (y - top - h, h))
+                .collect();
+        }
+        if style.heavy() {
+            let (top, th) = thick_underline(e, font_size).unwrap_or((offset, th));
+            return vec![(y - top - th, th)];
+        }
         if !double {
             return vec![(y - offset - th, th)];
         }
@@ -46,7 +82,7 @@ pub(super) fn underline_lines(
             .map(|(top, th)| (y - top - th, th))
             .collect();
     }
-    let thick = (font_size * 0.05).max(0.5);
+    let thick = (font_size * 0.05).max(0.5) * if style.heavy() { 2.0 } else { 1.0 };
     let ul_y = if link {
         y - font_size * 0.08
     } else {
@@ -68,14 +104,13 @@ fn push_decoration(
     height: f32,
     color: Option<[u8; 3]>,
 ) {
-    push_dashed_decoration(decorations, (x, y, width, height, color, None));
+    push_dashed_decoration(decorations, (x, y, width, height, color, DecoKind::Solid));
 }
 
-/// `push_decoration` for a line drawn in `dashes` (`UnderlineStyle::dashes`);
-/// only spans with the same pattern join, so the pattern restarts where the
-/// style changes.
+/// `push_decoration` for a line drawn dashed or wavy (`DecoKind`); only spans
+/// drawn the same way join, so a pattern restarts where the style changes.
 fn push_dashed_decoration(decorations: &mut Vec<Decoration>, deco: Decoration) {
-    let (x, y, width, height, color, dashes) = deco;
+    let (x, y, width, height, color, kind) = deco;
     // Look back past the other line of a double underline (or a strike on the
     // same run), which interleave with this one chunk by chunk.
     // Only a touching span joins: an underlined word after a gap of plain text
@@ -88,7 +123,7 @@ fn push_dashed_decoration(decorations: &mut Vec<Decoration>, deco: Decoration) {
             (*dy - y).abs() < 0.01
                 && (*dh - height).abs() < 0.01
                 && *dc == color
-                && *dd == dashes
+                && *dd == kind
                 && (x - (*dx + *dw)).abs() < 0.5
         });
     if let Some(prev) = merged {
@@ -173,6 +208,83 @@ pub(super) fn post_underline(entry: &FontEntry, font_size: f32) -> Option<(f32, 
     let (offset, thickness) = on_quarter_point_grid(pos * font_size, th * font_size);
     let descent = quarter_pt(descent * font_size);
     Some((offset.min(descent - thickness), thickness))
+}
+
+/// Word's thick underline, also the Heavy styles' line (online probe
+/// 2026-11-14, Calibri, Arial, Times New Roman and Aptos at 6-40pt): its top
+/// at half the single line's offset, rounded up to the 0.25pt grid; its bottom
+/// at the single line's unrounded centre, rounded; at least 1.25pt thick, 1.5pt
+/// once the single line is 0.75pt. Returns (top offset, thickness).
+/// ponytail: 105 of 140 probe lines exact, 27 within 0.25pt; at 6-11pt Word
+/// lifts the line towards the baseline (Arial most), which this misses.
+fn thick_underline(entry: &FontEntry, font_size: f32) -> Option<(f32, f32)> {
+    let (pos, th, _) = entry.underline?;
+    let (offset, single) = post_underline(entry, font_size)?;
+    let top = ceil_quarter_pt(offset / 2.0);
+    let min = if single >= 0.75 { 1.5 } else { 1.25 };
+    Some((
+        top,
+        (quarter_pt(font_size * (pos + th / 2.0)) - top).max(min),
+    ))
+}
+
+/// The bands (top offset, height) a wavy underline's zigzag spans: from the
+/// thick line's top down a third of the single and thick lines' thicknesses
+/// together (online probe 2026-11-14, 6-40pt in four fonts: 115 of 140 lines
+/// exact, the rest within 0.25pt but where `thick_underline` misses). wavyDouble
+/// draws two waves a third as tall at the band's top and bottom.
+fn wave_bands(entry: &FontEntry, font_size: f32, style: UnderlineStyle) -> Vec<(f32, f32)> {
+    let (Some((top, thick)), Some((_, single))) = (
+        thick_underline(entry, font_size),
+        post_underline(entry, font_size),
+    ) else {
+        return Vec::new();
+    };
+    let amp = quarter_pt((single + thick) / 3.0).max(0.25);
+    if style.wave().is_some_and(|(_, double)| double) {
+        let small = quarter_pt(amp / 3.0).max(0.25);
+        return vec![(top, small), (top + amp - small, small)];
+    }
+    vec![(top, amp)]
+}
+
+fn ceil_quarter_pt(v: f32) -> f32 {
+    (v * 4.0 - 1e-4).ceil() / 4.0
+}
+
+/// A zigzag over `width` from `x`, alternating between `bottom` and
+/// `bottom + height` at every whole point from `anchor` (even points on top),
+/// each half-wave an S-curve; the ends are cut where the run starts and stops.
+fn wave_path(content: &mut Content, x: f32, width: f32, bottom: f32, height: f32, anchor: f32) {
+    let level = |k: f32| {
+        if (k as i64).rem_euclid(2) == 0 {
+            bottom + height
+        } else {
+            bottom
+        }
+    };
+    let at = |px: f32| {
+        let k = (px - anchor).floor();
+        let t = px - anchor - k;
+        let (a, b) = (level(k), level(k + 1.0));
+        a + (b - a) * t
+    };
+    let end = x + width;
+    let mut px = x;
+    let mut py = at(x);
+    content.move_to(px, py);
+    while px < end - 0.001 {
+        let next = ((px - anchor).floor() + 1.0 + anchor).min(end);
+        let ny = if next < end {
+            level((next - anchor).round())
+        } else {
+            at(end)
+        };
+        let mid = (px + next) / 2.0;
+        content.cubic_to(mid, py, mid, ny, next, ny);
+        px = next;
+        py = ny;
+    }
 }
 
 /// Word's double underline from the single one (offset below the baseline and
@@ -836,6 +948,8 @@ pub(super) fn render_paragraph_lines(
     gradient_specs: &mut Vec<super::GradientSpec>,
     opts: RenderOpts<'_>,
 ) {
+    // Wavy underlines keep their phase from the column's left edge.
+    let wave_anchor = margin_left - indent_left;
     let RenderOpts {
         first_line_index,
         line_geometry,
@@ -1426,7 +1540,14 @@ pub(super) fn render_paragraph_lines(
                     for item in &mb.items {
                         let (gx, gy, size, color, item_font, bytes) = match item {
                             crate::math::MathItem::Rule { x: rx, y: ry, w, h } => {
-                                decorations.push((x + rx, cy + ry, *w, *h, effective_color, None));
+                                decorations.push((
+                                    x + rx,
+                                    cy + ry,
+                                    *w,
+                                    *h,
+                                    effective_color,
+                                    DecoKind::Solid,
+                                ));
                                 continue;
                             }
                             crate::math::MathItem::Glyph {
@@ -1826,13 +1947,8 @@ pub(super) fn render_paragraph_lines(
                 if chunk.underline && underline_w > 0.0 {
                     let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str()).copied();
                     let link = chunk.hyperlink_url.is_some();
-                    for (top, th) in underline_lines(
-                        entry,
-                        chunk.font_size,
-                        chunk.underline_style == UnderlineStyle::Double,
-                        link,
-                        y,
-                    ) {
+                    let style = chunk.underline_style;
+                    for (top, th) in underline_lines(entry, chunk.font_size, style, link, y) {
                         push_dashed_decoration(
                             &mut decorations,
                             (
@@ -1840,8 +1956,8 @@ pub(super) fn render_paragraph_lines(
                                 top,
                                 underline_w,
                                 th,
-                                chunk.color,
-                                chunk.underline_style.dashes(),
+                                chunk.underline_color.or(chunk.color),
+                                DecoKind::of(style, wave_anchor),
                             ),
                         );
                     }
@@ -1946,16 +2062,17 @@ pub(super) fn render_paragraph_lines(
             let w = (start + sp.width).min(line_right) - left;
             if w > 0.0 {
                 let entry = pdf_name_to_entry.get(sp.pdf_font.as_str()).copied();
-                for (top, th) in underline_lines(
-                    entry,
-                    sp.font_size,
-                    sp.style == UnderlineStyle::Double,
-                    false,
-                    y,
-                ) {
+                for (top, th) in underline_lines(entry, sp.font_size, sp.style, false, y) {
                     push_dashed_decoration(
                         &mut decorations,
-                        (left, top, w, th, sp.color, sp.style.dashes()),
+                        (
+                            left,
+                            top,
+                            w,
+                            th,
+                            sp.color,
+                            DecoKind::of(sp.style, wave_anchor),
+                        ),
                     );
                 }
             }
@@ -2007,9 +2124,13 @@ pub(super) fn render_paragraph_lines(
                     );
                 }
                 if chunk.underline {
-                    for (bottom, th) in
-                        underline_lines(entry.copied(), chunk.font_size, false, false, y)
-                    {
+                    for (bottom, th) in underline_lines(
+                        entry.copied(),
+                        chunk.font_size,
+                        UnderlineStyle::Single,
+                        false,
+                        y,
+                    ) {
                         push_decoration(
                             &mut decorations,
                             box_x,
@@ -2077,18 +2198,26 @@ pub(super) fn render_paragraph_lines(
             }
         }
 
-        for &(dx, dy, dw, dh, dcolor, dashes) in &decorations {
+        for &(dx, dy, dw, dh, dcolor, kind) in &decorations {
             if dcolor != current_color {
                 fill_color_or_black(content, dcolor);
                 current_color = dcolor;
             }
-            match dashes {
-                Some(dashes) => {
+            match kind {
+                DecoKind::Dashed(dashes) => {
                     for (sx, sw) in dash_segments(dx, dw, dashes) {
                         content.rect(sx, dy, sw, dh).fill_nonzero();
                     }
                 }
-                None => {
+                DecoKind::Wave { width, anchor } => {
+                    content.save_state();
+                    stroke_color_or_black(content, dcolor);
+                    content.set_line_width(width);
+                    wave_path(content, dx, dw, dy, dh, anchor);
+                    content.stroke();
+                    content.restore_state();
+                }
+                DecoKind::Solid => {
                     content.rect(dx, dy, dw, dh).fill_nonzero();
                 }
             }
@@ -2165,6 +2294,30 @@ pub(super) fn push_clip(content: &mut Content, rect: Option<(f32, f32, f32, f32)
 mod tests {
     use super::*;
 
+    /// Calibri's post table; Word online probe values (`thick_underline`).
+    fn calibri() -> FontEntry {
+        FontEntry {
+            underline: Some((232.0 / 2048.0, 134.0 / 2048.0, 550.0 / 2048.0)),
+            ..FontEntry::stub()
+        }
+    }
+
+    #[test]
+    fn thick_and_wave_underlines_follow_word() {
+        let e = calibri();
+        // (top offset, thickness): 11pt 0.75/1.5, 22pt 1.25/2.0, 30pt 1.75/2.75.
+        assert_eq!(thick_underline(&e, 11.0), Some((0.75, 1.5)));
+        assert_eq!(thick_underline(&e, 22.0), Some((1.25, 2.0)));
+        assert_eq!(thick_underline(&e, 30.0), Some((1.75, 2.75)));
+        // Wave bands: 11pt 0.75 tall from 0.75 down, 30pt 1.5 from 1.75.
+        assert_eq!(wave_bands(&e, 11.0, UnderlineStyle::Wave), [(0.75, 0.75)]);
+        assert_eq!(wave_bands(&e, 30.0, UnderlineStyle::Wave), [(1.75, 1.5)]);
+        assert_eq!(
+            wave_bands(&e, 30.0, UnderlineStyle::WavyDouble),
+            [(1.75, 0.5), (2.75, 0.5)]
+        );
+    }
+
     #[test]
     fn dash_patterns_start_on_and_cut_the_last_dash() {
         // Word online, dotted under 4.25pt: dots at 0 and 3, the second cut.
@@ -2179,11 +2332,9 @@ mod tests {
             dash_segments(0.0, 7.0, dot_dash),
             [(0.0, 3.0), (4.0, 1.0), (6.0, 1.0)]
         );
-        assert_eq!(
-            UnderlineStyle::parse("dashLongHeavy"),
-            UnderlineStyle::DashLong
-        );
-        assert_eq!(UnderlineStyle::parse("wave"), UnderlineStyle::Single);
+        let heavy = UnderlineStyle::parse("dashLongHeavy");
+        assert!(heavy.heavy() && heavy.dashes() == UnderlineStyle::DashLong.dashes());
+        assert_eq!(UnderlineStyle::parse("wavyDouble").wave(), Some((0.25, true)));
     }
 
     #[test]

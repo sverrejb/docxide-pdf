@@ -275,6 +275,7 @@ struct ParagraphRunDefaults {
     vanish: bool,
     underline: bool,
     underline_style: crate::model::UnderlineStyle,
+    underline_color: Option<[u8; 3]>,
     strikethrough: bool,
     dstrike: bool,
     color: Option<[u8; 3]>,
@@ -332,6 +333,9 @@ impl ParagraphRunDefaults {
             underline_style: run
                 .and_then(|r| r.underline_style)
                 .unwrap_or(defaults.underline_style),
+            underline_color: run
+                .and_then(|r| r.underline_color)
+                .or(defaults.underline_color),
             strikethrough: style_or(|r| r.strikethrough, defaults.strikethrough),
             dstrike: style_or(|r| r.dstrike, defaults.dstrike),
             color: run.and_then(|r| r.color).or(defaults.color),
@@ -479,6 +483,10 @@ impl ParagraphRunDefaults {
                 .or_else(|| cs(|c| c.vanish))
                 .unwrap_or(self.vanish),
             color,
+            underline_color: own
+                .underline_color
+                .or_else(|| char_style.and_then(|c| c.underline_color))
+                .or(self.underline_color),
             vertical_align: rpr
                 .and_then(|n| wml_attr(n, "vertAlign"))
                 .map(|v| match v {
@@ -932,6 +940,7 @@ fn mark_revision(
         for r in runs.iter_mut() {
             r.revised = true;
             r.color = Some(color);
+            r.underline_color = None;
             if deleted {
                 r.strikethrough = !moved;
                 r.dstrike = moved;
@@ -1099,6 +1108,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && prev.small_caps == run.small_caps
                 && prev.vanish == run.vanish
                 && prev.color == run.color
+                && prev.underline_color == run.underline_color
                 && prev.highlight == run.highlight
                 && prev.shading == run.shading
                 && prev.border == run.border

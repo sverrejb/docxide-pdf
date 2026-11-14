@@ -277,7 +277,13 @@ pub(super) fn render_list_label(
                 (true, Some((bottom, th))) => vec![(bottom - th, th), (bottom + th, th)],
                 (true, None) => vec![],
                 (false, _) => underline_font.map_or(vec![], |(entry, size)| {
-                    super::layout::underline_lines(Some(entry), size, true, false, baseline_y)
+                    super::layout::underline_lines(
+                        Some(entry),
+                        size,
+                        crate::model::UnderlineStyle::Double,
+                        false,
+                        baseline_y,
+                    )
                 }),
             };
             for (bottom, th) in lines {

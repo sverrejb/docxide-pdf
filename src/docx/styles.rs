@@ -67,6 +67,7 @@ pub(super) struct StyleDefaults {
     pub(super) dstrike: bool,
     pub(super) underline: bool,
     pub(super) underline_style: crate::model::UnderlineStyle,
+    pub(super) underline_color: Option<[u8; 3]>,
     pub(super) color: Option<[u8; 3]>,
     pub(super) char_spacing: f32,
     pub(super) lang: Option<String>,
@@ -156,6 +157,8 @@ pub(super) struct RunProps {
     pub(super) italic: Option<bool>,
     pub(super) underline: Option<bool>,
     pub(super) underline_style: Option<crate::model::UnderlineStyle>,
+    /// The `w:u` colour; `None` (or `auto`) draws in the text colour.
+    pub(super) underline_color: Option<[u8; 3]>,
     pub(super) strikethrough: Option<bool>,
     pub(super) dstrike: Option<bool>,
     pub(super) caps: Option<bool>,
@@ -241,6 +244,7 @@ pub(super) fn parse_run_props(rpr: roxmltree::Node, theme: &ThemeFonts) -> RunPr
         italic: wml_bool(rpr, "i"),
         underline: parse_underline(rpr),
         underline_style: parse_underline_style(rpr),
+        underline_color: parse_underline_color(rpr, theme),
         strikethrough: wml_bool(rpr, "strike"),
         dstrike: wml_bool(rpr, "dstrike"),
         caps: wml_bool(rpr, "caps"),
@@ -285,6 +289,7 @@ impl RunProps {
             italic,
             underline,
             underline_style,
+            underline_color,
             strikethrough,
             dstrike,
             caps,
@@ -472,6 +477,20 @@ fn parse_underline(rpr: roxmltree::Node) -> Option<bool> {
     wml_attr(rpr, "u").map(|v| v != "none")
 }
 
+/// `w:u`'s colour: its `w:themeColor` beats `w:color`, as in Word's online
+/// export (underline-color: accent2 drawn over a stated 000000); `auto`
+/// leaves the text colour. ponytail: themeTint/themeShade are not applied.
+fn parse_underline_color(rpr: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
+    let u = wml(rpr, "u")?;
+    u.attribute((WML_NS, "themeColor"))
+        .and_then(|t| theme.colors.get(super::resolve_theme_color_key(t)).copied())
+        .or_else(|| {
+            u.attribute((WML_NS, "color"))
+                .filter(|c| *c != "auto")
+                .and_then(super::parse_hex_color)
+        })
+}
+
 fn parse_underline_style(rpr: roxmltree::Node) -> Option<crate::model::UnderlineStyle> {
     wml_attr(rpr, "u").map(crate::model::UnderlineStyle::parse)
 }
@@ -648,6 +667,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
             defaults.dstrike = r.dstrike.unwrap_or(false);
             defaults.underline = r.underline.unwrap_or(false);
             defaults.underline_style = r.underline_style.unwrap_or_default();
+            defaults.underline_color = r.underline_color;
             defaults.color = r.color;
             defaults.char_spacing = r.char_spacing.unwrap_or(0.0);
             (defaults.lang, defaults.lang_east_asia, defaults.lang_bidi) =
