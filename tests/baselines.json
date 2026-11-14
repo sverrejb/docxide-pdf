@@ -5730,6 +5730,18 @@
     "jaccard": 0.949,
     "ssim": 0.983
   },
+  "cases/line_number_style_by_name": {
+    "jaccard": 0.9565,
+    "ssim": 0.987
+  },
+  "cases/line_number_style_id_only": {
+    "jaccard": 0.9673,
+    "ssim": 0.9919
+  },
+  "cases/line_number_style_props": {
+    "jaccard": 0.9673,
+    "ssim": 0.9919
+  },
   "cases/line_numbering_restart": {
     "jaccard": 0.9388,
     "ssim": 0.9882,
@@ -9016,6 +9028,18 @@
     "a11y_struct": 0.8769,
     "a11y_text": 1.0
   },
+  "cases/text_align_center_fonts": {
+    "jaccard": 0.9292,
+    "ssim": 0.9933
+  },
+  "cases/text_align_center_mixed": {
+    "jaccard": 0.8993,
+    "ssim": 0.9724
+  },
+  "cases/text_align_center_picture": {
+    "jaccard": 0.8362,
+    "ssim": 0.9856
+  },
   "cases/textbox-inline-image-text-clip": {
     "jaccard": 0.9552,
     "ssim": 0.9784,
@@ -9151,6 +9175,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.4706,
     "a11y_text": 0.3122
+  },
+  "cases/toc_pageref_after_tall_table": {
+    "jaccard": 0.5906,
+    "ssim": 0.7439
   },
   "cases/top-aligned-lowered-run": {
     "jaccard": 0.9687,

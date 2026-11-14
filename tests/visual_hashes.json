@@ -2077,6 +2077,15 @@
     "bea81d0cbbc97787ac6dd488f1ab14eb835eb8d16ccfe9927885ed4224e45403",
     "d995b97535a6dac6ee5f42b9b3d694ca2e4682f026453edb63b11b54367a76f8"
   ],
+  "cases/line_number_style_by_name": [
+    "730bf793473bbf67cf7254a00aac2ce62bf0eb56de9cb90ffe66960b75e7bca7"
+  ],
+  "cases/line_number_style_id_only": [
+    "44e2ba75ecc1c9d1e16b02629393b3b3adb7ef6a0d1874338765b82f9463b049"
+  ],
+  "cases/line_number_style_props": [
+    "c4feebcd1bcaeb43457e144e102f63a28e7b06eed554a6a8826fba387d91b0f9"
+  ],
   "cases/line_numbering_restart": [
     "854a93713b6b5995a2a3fd949ea76a6c3771474890c2e6375cc9ebbdfbdbac4f",
     "a0f8632d59fa2ef1cd165ae289df9bfec5bfe62ddecc6a1fc238b70d053bece5",
@@ -3202,6 +3211,15 @@
   "cases/text-box-table-widths": [
     "df94de7aaa70643341d1f19de4a7a952e96c47742cb800566b43a2b430adbdfd"
   ],
+  "cases/text_align_center_fonts": [
+    "b25e1e96fdc25e48d26d8229d52454820ee2fa26129539178ef22c53eb612388"
+  ],
+  "cases/text_align_center_mixed": [
+    "8ae721d7e05735f7b8946c2b6aadfe08dc4fc874408fadd02e090c9eeb92d650"
+  ],
+  "cases/text_align_center_picture": [
+    "b6727e44536ce6efc6c46b18213ddda54a56d54e633ddba64578f5af3e5705bd"
+  ],
   "cases/textbox-inline-image-text-clip": [
     "46f485ffff4e6484c0412749d501f9bfa5622cd8ae2b615ee179a52f3b8d4bdf"
   ],
@@ -3299,6 +3317,12 @@
   ],
   "cases/toc-table-of-figures-style": [
     "9aedfbed6fd9133c16616fe351adae1a7379c07ed68dd402761764f3e4d4732f"
+  ],
+  "cases/toc_pageref_after_tall_table": [
+    "ca39fe72c427991dfb1519053f1a7638eea2eebe101548badfbcdf6a78443245",
+    "521200ade5b330f96cfd5487df7f5ae0e16744bbbce066d80d4c94503254dfa8",
+    "8f2f6588f45a21d168c165b7ff4898383fd6ccedbd6e8f7ed114632df4417f50",
+    "7aea1514de2241fc25bc510d8af39e49ef5de460c066df9d0cc7b2c7d45164d4"
   ],
   "cases/top-aligned-lowered-run": [
     "1bc84c0ee47fafa4f45f40014a0287ee473d8c21b9af8057e607ead5fd5692c3",
