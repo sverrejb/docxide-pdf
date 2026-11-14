@@ -101,7 +101,7 @@ Leads from the 2026-11-07/08 triage round, still open:
   (4pt too); a rule in a table cell lands 113pt left, off the page; and
   `o:hrnoshade`, `o:hrpct` without hrstd and plain `o:hr` rules draw nothing.
   advocacy's rules are such grey bands; isla's is a black stroked box and
-  croatian_grant has neither. Find what switches the rendering (compat
+  croatian_grant's rule is not located yet. Find what switches the rendering (compat
   mode, the paragraph, the run) before changing `draw_horizontal_rule`.
 - `empty-margin-frame-long-prefix` (47.5): the frame's anchor is on page 2;
   `empty_frame_table_bands` only reserves the box on the first page. Word
@@ -525,7 +525,8 @@ Open queue from the large-corpus and focus-fixture rounds:
   (strikeout position), and an exact-line note's baseline 0.13pt above
   (357.60 vs 357.73; the note block may sit on the 0.25pt grid). Word's
   standard separator for a missing separator note and for continuation
-  separators is unprobed.
+  separators is unprobed, as are at-least note lines and a Normal style that
+  differs from docDefaults under the standard separator.
 - Footnote paragraphs other than numbered ones are hand-built in
   `parse_footnotes` (endnotes already use `build_paragraph`): borders,
   shading, `style_id`, contextual spacing missing; note tables are flattened
