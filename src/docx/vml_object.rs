@@ -75,17 +75,21 @@ pub(super) fn is_vml_picture(pict: roxmltree::Node) -> bool {
     })
 }
 
+/// A VML boolean (`filled`, `stroked`, `v:fill @on`) written as false.
+pub(super) fn vml_off(value: Option<&str>) -> bool {
+    matches!(value, Some("f" | "false" | "0"))
+}
+
 /// `<v:fill type="frame" r:id="..."/>`: a picture stretched over the whole
 /// shape.
 fn is_vml_frame_fill(node: roxmltree::Node) -> bool {
-    let off = |value: Option<&str>| matches!(value, Some("f" | "false" | "0"));
     node.has_tag_name((VML_NS, "fill"))
         && node.attribute("type") == Some("frame")
         && node.attribute((REL_NS, "id")).is_some()
-        && !off(node.attribute("on"))
+        && !vml_off(node.attribute("on"))
         && !node
             .parent()
-            .is_some_and(|shape| off(shape.attribute("filled")))
+            .is_some_and(|shape| vml_off(shape.attribute("filled")))
 }
 
 /// VML fractions are plain decimals (".5"), percentages ("50%") or 16.16 fixed

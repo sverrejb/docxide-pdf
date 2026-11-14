@@ -9,7 +9,7 @@ use crate::model::{
 
 use super::images::{extent_dimensions, place_anchored};
 use super::textbox::{TxbxContent, parse_textbox_from_wsp, parse_txbx_content};
-use super::vml_object::{vml_frame_fill_image, vml_z_order};
+use super::vml_object::{vml_frame_fill_image, vml_off, vml_z_order};
 use super::{MC_NS_TOP, OFFICE_NS, ParseContext, VML_NS, WML_NS, WPD_NS, parse_pt};
 
 pub(super) struct VmlBoxStyle {
@@ -162,13 +162,13 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
     // VML fills white by default; only a written fillcolor is drawn
     // (ponytail: the implicit white fill would cover text we place behind).
     // A page-wide v:rect filled #2c3e50 behind a book cover's white title.
-    let fill = (!matches!(shape.attribute("filled"), Some("f") | Some("false")))
+    let fill = (!vml_off(shape.attribute("filled")))
         .then(|| shape.attribute("fillcolor").and_then(parse_vml_color))
         .flatten()
         .map(ShapeFill::Solid);
     // A shape named only by its element draws the default black outline
     // only when the stroke is written out, like the fill.
-    let stroked = !matches!(shape.attribute("stroked"), Some("f") | Some("false"))
+    let stroked = !vml_off(shape.attribute("stroked"))
         && (spt_preset.is_some()
             || shape.attribute("stroked").is_some()
             || shape.attribute("strokecolor").is_some());
@@ -218,9 +218,7 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
 /// VML textboxes have an opaque white solid fill unless explicitly disabled.
 fn parse_vml_textbox_fill(shape: roxmltree::Node) -> Option<ShapeFill> {
     let fill = shape.children().find(|n| n.has_tag_name((VML_NS, "fill")));
-    if matches!(shape.attribute("filled"), Some("f" | "false" | "0"))
-        || fill.is_some_and(|n| matches!(n.attribute("on"), Some("f" | "false" | "0")))
-    {
+    if vml_off(shape.attribute("filled")) || fill.is_some_and(|n| vml_off(n.attribute("on"))) {
         return None;
     }
     // Other VML fill types need their own renderer, not an opaque approximation.
@@ -278,7 +276,7 @@ fn vml_stroke(shape: roxmltree::Node) -> ([u8; 3], f32) {
 /// A stroked VML line (`o:spt` 32) with zeroed position and size; the caller
 /// supplies the placement.
 pub(super) fn parse_vml_line(shape: roxmltree::Node) -> Option<ConnectorShape> {
-    if vml_spt(shape) != Some(32) || matches!(shape.attribute("stroked"), Some("f" | "false")) {
+    if vml_spt(shape) != Some(32) || vml_off(shape.attribute("stroked")) {
         return None;
     }
     let flip = vml_style_prop(shape.attribute("style").unwrap_or(""), "flip").unwrap_or("");
@@ -361,7 +359,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     // VML shapes are stroked by default (black, 0.75pt) unless stroked="f".
     // Word renders this border, so honor it — previously every VML textbox was
     // forced borderless, dropping e.g. the "Nota Bene" box outline.
-    let stroked = !matches!(shape.attribute("stroked"), Some("f") | Some("false"));
+    let stroked = !vml_off(shape.attribute("stroked"));
     let (stroke_color, stroke_width) = if stroked {
         let (color, width) = vml_stroke(shape);
         (Some(color), width)
