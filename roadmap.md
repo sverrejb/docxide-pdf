@@ -376,8 +376,16 @@ Open queue from the large-corpus and focus-fixture rounds:
   `tests/output/probe_lines/`) are read from the
   paragraph and its style chain; docDefaults and table-style `w:spacing`
   still take only the twips. Notes count a line as 12pt whatever the grid.
-- `w:textAlignment`: top is laid out and center only centres list markers;
-  baseline, bottom and auto parse as auto.
+- `w:textAlignment`: top and center are laid out; baseline, bottom and auto
+  parse as auto. Beside an inline picture, top and bottom are off (fixture
+  text_align_center_picture): Word hangs top-aligned text from the picture's
+  top (baseline 10.5pt below it, ours 22pt lower) and bottom-aligned text
+  sits 1.25pt higher than baseline-aligned text.
+  Center is skipped on a line grid (`docGrid type="lines"`), where a picture
+  line is already 4-25pt off at baseline alignment (issue #164 probe: a
+  31.65pt picture and tab-aligned "(1)" at linePitch 312), and exact-spaced
+  center lines are centred in body paragraphs only, not cells, headers or
+  text boxes.
 - `w:mirrorMargins`: parsed (used for odd/even filler pages and the change-bar
   side), never applied to the margins. Do not just swap left/right on even
   pages: victorian_universal_design_policy sets it, yet Word online keeps
@@ -617,11 +625,15 @@ Backlog (details in `current_focus/A11Y.md`):
   table "toc N" by 11pt × (N − 1) when the style is missing (unprobed); a
   table's cells count as its first page, so a split table's later rows
   point at the wrong page; a Word-written TOC spanning paragraphs is still
-  drawn as cached.
-- Issue #147 follow-up: an inline MathType OLE equation sits with its
-  bottom on the baseline like any picture, but Word lifts it by the baseline
-  offset in the equation's WMF preview (MathType's comment record), so the
-  "(1)" labels of `rust.docx` sit 12pt below Word's. The MathType-generated
+  drawn as cached. A PAGEREF prints its cached result, yet Word's online
+  export recomputes it (issue #164 probe: cached 9s print as 2, 4, 4).
+  Printing live pages makes case49's TOC 12/12 (from 3/12) but costs
+  uk_commercial_lease_template 18 of 95 and carbon_farming_initiative_rule 5
+  of 160 entries to our own pagination; switch once those paginate like Word.
+- Issue #147 follow-up: the "(1)" labels of `rust.docx` sat 12pt below
+  Word's. Issue #164 traced the same 12pt to `textAlignment="center"` (a PNG
+  of the equation's size reproduces it; baseline alignment matches the low
+  place), now laid out; recheck `rust.docx` when at hand. The MathType-generated
   WMF previews of its `both.docx` draw nothing in our output, where Word
   paints each as a picture (a bitmap record our WMF vector path skips).
 - Issue #145 follow-ups: a table style's `tblStylePr` (firstRow…) `vAlign`
