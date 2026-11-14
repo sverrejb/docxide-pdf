@@ -86,6 +86,7 @@ fn parse_notes<R: Read + Seek>(
     revisions: &Revisions,
     zip_path: &str,
     element_name: &str,
+    specials: &[String],
     mut build: impl FnMut(
         roxmltree::Node,
         &mut ParseContext<'_, R>,
@@ -127,7 +128,12 @@ fn parse_notes<R: Read + Seek>(
         match node.attribute((WML_NS, "type")) {
             // A body paragraph in all but place: no pStyle means Normal.
             Some("separator") => {
-                separator = parse_note_separator(node, &mut fn_ctx, &mut lists);
+                let listed = node
+                    .attribute((WML_NS, "id"))
+                    .is_some_and(|id| specials.iter().any(|s| s == id));
+                if listed {
+                    separator = parse_note_separator(node, &mut fn_ctx, &mut lists);
+                }
                 continue;
             }
             Some(_) => continue,
@@ -146,6 +152,17 @@ fn parse_notes<R: Read + Seek>(
         }
     }
 
+    // An unlisted (or missing) separator is Word's standard one: a Normal
+    // paragraph with no space after and single lines, whatever the part's
+    // own separator says (probe kit tests/output/probe_sep, footnotes and
+    // endnotes alike).
+    if separator.is_none() {
+        let xml = format!(
+            r#"<w:n xmlns:w="{WML_NS}"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:separator/></w:r></w:p></w:n>"#
+        );
+        let doc = roxmltree::Document::parse(&xml).expect("constant XML");
+        separator = parse_note_separator(doc.root_element(), &mut fn_ctx, &mut lists);
+    }
     (footnotes, separator)
 }
 
@@ -162,6 +179,7 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
     revisions: &Revisions,
+    specials: &[String],
 ) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
     let default_style_id = "FootnoteText";
     parse_notes(
@@ -173,6 +191,7 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
         revisions,
         "word/footnotes.xml",
         "footnote",
+        specials,
         |node, fn_ctx, lists| {
             let mut parse_para = |p: roxmltree::Node,
                                   fn_ctx: &mut ParseContext<'_, R>|
@@ -347,6 +366,7 @@ pub(super) fn parse_endnotes<R: Read + Seek>(
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
     revisions: &Revisions,
+    specials: &[String],
 ) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
     parse_notes(
         zip,
@@ -357,6 +377,7 @@ pub(super) fn parse_endnotes<R: Read + Seek>(
         revisions,
         "word/endnotes.xml",
         "endnote",
+        specials,
         |node, fn_ctx, lists| {
             let mut paragraphs = Vec::new();
             for p in node.children().filter(|n| n.has_tag_name((WML_NS, "p"))) {

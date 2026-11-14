@@ -1113,10 +1113,24 @@ fn parse_zip<R: Read + std::io::Seek>(
     let ft = parse_font_table(zip);
     let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
     let mut media = media::MediaParts::default();
-    let (footnotes, footnote_separator) =
-        parse_footnotes(zip, &mut media, &styles, &theme, &numbering, &revisions);
-    let (endnotes, endnote_separator) =
-        parse_endnotes(zip, &mut media, &styles, &theme, &numbering, &revisions);
+    let (footnotes, footnote_separator) = parse_footnotes(
+        zip,
+        &mut media,
+        &styles,
+        &theme,
+        &numbering,
+        &revisions,
+        &settings.footnote_specials,
+    );
+    let (endnotes, endnote_separator) = parse_endnotes(
+        zip,
+        &mut media,
+        &styles,
+        &theme,
+        &numbering,
+        &revisions,
+        &settings.endnote_specials,
+    );
     let mut comments = comments::parse_comments(zip);
     let (title, author, subject, keywords) = parse_core_props(zip);
 
@@ -1443,6 +1457,29 @@ fn parse_zip<R: Read + std::io::Seek>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unlisted_note_separators_are_words_standard_one() {
+        let w = super::WML_NS;
+        let notes = format!(
+            r#"<w:footnotes xmlns:w="{w}"><w:footnote w:type="separator" w:id="-1"><w:p><w:pPr><w:spacing w:after="400"/></w:pPr><w:r><w:separator/></w:r></w:p></w:footnote></w:footnotes>"#
+        );
+        let body = format!(r#"<w:document xmlns:w="{w}"><w:body><w:p/></w:body></w:document>"#);
+        let listed = format!(
+            r#"<w:settings xmlns:w="{w}"><w:footnotePr><w:footnote w:id="-1"/></w:footnotePr></w:settings>"#
+        );
+        let after = |settings: Option<&str>| {
+            let mut parts = vec![
+                ("word/document.xml", body.as_str()),
+                ("word/footnotes.xml", &notes),
+            ];
+            parts.extend(settings.map(|s| ("word/settings.xml", s)));
+            let sep = super::parse_parts(&parts).footnote_separator.unwrap();
+            (sep.space_after, format!("{:?}", sep.line_spacing))
+        };
+        assert_eq!(after(Some(&listed)).0, 20.0);
+        assert_eq!(after(None), (0.0, "Some(Auto(1.0))".to_string()));
+    }
+
     #[test]
     fn border_styles_parse_and_size_their_bands() {
         use crate::model::BorderStyle;

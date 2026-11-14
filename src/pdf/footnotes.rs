@@ -38,17 +38,14 @@ fn substitute_ref_marks(runs: &[Run], display_num: &str) -> Vec<Run> {
 struct ParagraphLayout {
     font_size: f32,
     line_height: f32,
-    ascender_ratio: f32,
+    /// The first baseline below the paragraph's top.
+    ascent: f32,
     lines: Vec<TextLine>,
 }
 
 impl ParagraphLayout {
     fn height(&self) -> f32 {
-        lines_height(
-            &self.lines,
-            self.line_height,
-            (self.font_size * self.ascender_ratio, 0.0),
-        )
+        lines_height(&self.lines, self.line_height, (self.ascent, 0.0))
     }
 }
 
@@ -100,10 +97,22 @@ fn layout_paragraph(
     if lines.is_empty() {
         return None;
     }
+    // Exact and tall at-least lines sit in their box as in the body (an exact
+    // line's baseline 0.8 down it), not at the font's ascent.
+    let ascent = boxed_line_ascent(
+        line_spacing,
+        lh,
+        fs,
+        tallest_lhr,
+        tallest_ar,
+        runs,
+        ctx.fonts,
+    )
+    .unwrap_or(fs * ascender_ratio);
     Some(ParagraphLayout {
         font_size: fs,
         line_height: lh,
-        ascender_ratio,
+        ascent,
         lines,
     })
 }
@@ -373,7 +382,7 @@ fn render_notes_downward(
             fn_y -= np.gap_above;
 
             if let Some(layout) = &np.layout {
-                let baseline_y = fn_y - layout.font_size * layout.ascender_ratio;
+                let baseline_y = fn_y - layout.ascent;
                 let line_count = layout.lines.len();
 
                 let p = notes.tags.add(note, "P");
@@ -397,7 +406,7 @@ fn render_notes_downward(
                     baseline_y,
                     layout.line_height,
                     // Footnote lines carry no inline pictures, so no descent is needed.
-                    (layout.font_size * layout.ascender_ratio, 0.0),
+                    (layout.ascent, 0.0),
                     line_count,
                     notes.links,
                     np.hanging,

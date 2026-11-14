@@ -47,6 +47,11 @@ pub(super) struct DocumentSettings {
     /// squeezing the whole line (WordPerfect-style justification).
     pub wp_justification: bool,
     pub math: crate::model::MathSettings,
+    /// The ids `w:footnotePr` / `w:endnotePr` list as special notes. Word
+    /// draws footnotes.xml's separator only when its id is listed here, and
+    /// its own standard one otherwise.
+    pub footnote_specials: Vec<String>,
+    pub endnote_specials: Vec<String>,
 }
 
 pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> DocumentSettings {
@@ -90,6 +95,15 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
             .and_then(|n| n.attribute((WML_NS, "val")))
     };
 
+    let specials = |pr: &str, note: &str| -> Vec<String> {
+        wml(root, pr)
+            .into_iter()
+            .flat_map(|n| n.children())
+            .filter(|n| n.has_tag_name((WML_NS, note)))
+            .filter_map(|n| n.attribute((WML_NS, "id")).map(str::to_string))
+            .collect()
+    };
+
     DocumentSettings {
         even_and_odd_headers: wml_bool(root, "evenAndOddHeaders").unwrap_or(false),
         mirror_margins: wml_bool(root, "mirrorMargins").unwrap_or(false),
@@ -115,5 +129,7 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
         no_indent_as_num_tab: compat_flag("doNotUseIndentAsNumberingTabStop"),
         wp_justification: compat_flag("wpJustification"),
         math: super::math::parse_math_settings(root),
+        footnote_specials: specials("footnotePr", "footnote"),
+        endnote_specials: specials("endnotePr", "endnote"),
     }
 }
