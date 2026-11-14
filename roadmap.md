@@ -89,7 +89,7 @@ Leads from the 2026-11-07/08 triage round, still open:
   black 0.75pt stroked box 540 × 1.1pt (full text width), we a 0.5pt grey
   fill.
 - **o:hr drawing is unresolved** (Word online probe 2026-11-14, kit
-  `.worktrees/roadmap-top3/tests/output/probe_hr/`, `gen.py` → `hr.pdf`):
+  `tests/output/probe_hr/`, `gen.py` → `hr.pdf`):
   in a python-docx document Word draws every `o:hrstd` rule as a grey
   (#a0a0a0) 0.5pt band of two 0.25pt strips with 0.25pt end caps, 398.9pt
   of a 432pt column, centred, whatever its fillcolor (red too) or height
@@ -249,7 +249,7 @@ between lines. Open:
   (`NORMAL_TEMPLATE_DEFAULTS`) match desktop Word, not online (case135's
   cell line: desktop 633.22, us 633.20, online 633.70). A bare body
   paragraph in a docx without styles.xml matches Word online within 0.01pt
-  (2026-11-14, `probe_sep/f.docx` in the roadmap-top3 worktree), so look at
+  (2026-11-14, `tests/output/probe_sep/f.docx`), so look at
   the cell, not the defaults.
 
 **Older fixture leads:**
@@ -359,11 +359,11 @@ Open queue from the large-corpus and focus-fixture rounds:
   no line (no `Bar` variant in `TabAlignment`).
 - Underlines (`UnderlineStyle`, `line_render::thick_underline` /
   `wave_bands`; fixtures cases/underline-thick-heavy, -wave, -color; probe
-  kit `.worktrees/roadmap-top3/tests/output/probe_ustyle/`, `fine.txt` and
+  kit `tests/output/probe_ustyle/`, `fine.txt` and
   `wall.txt` hold Word's thick and wave geometry at 6–40pt in four fonts;
   `gen_*.py` build the probe documents, `measure*.py` read the lines from
   Word's PDFs, `cmp_deco.py` compares ours against them; the kit is
-  gitignored, so keep that worktree until these are chased).
+  gitignored and lives only in the main checkout).
   Open: the thick/wave model is exact on 105/140 (thick) and 115/140 (wave)
   probe lines and 0.25pt off on the rest (Arial 24 thick 2.25 vs Word 2.0);
   at 6–11pt Word lifts both lines towards the baseline (Arial 8–12, Times
@@ -373,7 +373,7 @@ Open queue from the large-corpus and focus-fixture rounds:
   `w:u` value; we draw single. A tab in a `words` run is still underlined
   (unprobed).
 - `w:beforeLines`/`w:afterLines` (Word probe kit
-  `.worktrees/roadmap-top3/tests/output/probe_lines/`) are read from the
+  `tests/output/probe_lines/`) are read from the
   paragraph and its style chain; docDefaults and table-style `w:spacing`
   still take only the twips. Notes count a line as 12pt whatever the grid.
 - `w:textAlignment`: top is laid out and center only centres list markers;
@@ -512,7 +512,7 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 - Footnotes that don't fit: Word splits a note across pages with a
   continuation separator (uk_commercial p17/18); we move the reference line.
-- Note separators (probe kit `.worktrees/roadmap-top3/tests/output/probe_sep/`,
+- Note separators (probe kit `tests/output/probe_sep/`,
   `gen.py`, letters a–v): the rule still sits 0.1–0.3pt above Word's
   (strikeout position), and an exact-line note's baseline 0.13pt above
   (357.60 vs 357.73; the note block may sit on the 0.25pt grid). Word's
