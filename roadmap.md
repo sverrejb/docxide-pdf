@@ -350,7 +350,10 @@ Open queue from the large-corpus and focus-fixture rounds:
 - Underlines (`UnderlineStyle`, `line_render::thick_underline` /
   `wave_bands`; fixtures cases/underline-thick-heavy, -wave, -color; probe
   kit `.worktrees/roadmap-top3/tests/output/probe_ustyle/`, `fine.txt` and
-  `wall.txt` hold Word's thick and wave geometry at 6–40pt in four fonts).
+  `wall.txt` hold Word's thick and wave geometry at 6–40pt in four fonts;
+  `gen_*.py` build the probe documents, `measure*.py` read the lines from
+  Word's PDFs, `cmp_deco.py` compares ours against them; the kit is
+  gitignored, so keep that worktree until these are chased).
   Open: the thick/wave model is exact on 105/140 (thick) and 115/140 (wave)
   probe lines and 0.25pt off on the rest (Arial 24 thick 2.25 vs Word 2.0);
   at 6–11pt Word lifts both lines towards the baseline (Arial 8–12, Times
