@@ -442,11 +442,9 @@ pub(super) fn render_paragraph_block(
                         }
                     } else if let Some(FieldCode::PageRef(ref bookmark)) = run.field_code {
                         let mut r = run.clone();
-                        // Word prints PAGEREF's cached result unless fields are updated
-                        // before printing; only an empty result needs our estimate.
-                        if r.text.trim().is_empty()
-                            && let Some(&(page_idx, _)) = state.bookmark_positions.get(bookmark)
-                        {
+                        // Word's export updates PAGEREF fields, so a stale cached page
+                        // (issue #164: a cached 9 printed as 2, 4, 4) never reaches the PDF.
+                        if let Some(&(page_idx, _)) = state.bookmark_positions.get(bookmark) {
                             r.text = ctx
                                 .page_labels
                                 .get(page_idx)

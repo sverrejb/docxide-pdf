@@ -625,11 +625,9 @@ Backlog (details in `current_focus/A11Y.md`):
   table "toc N" by 11pt × (N − 1) when the style is missing (unprobed); a
   table's cells count as its first page, so a split table's later rows
   point at the wrong page; a Word-written TOC spanning paragraphs is still
-  drawn as cached. A PAGEREF prints its cached result, yet Word's online
-  export recomputes it (issue #164 probe: cached 9s print as 2, 4, 4).
-  Printing live pages makes case49's TOC 12/12 (from 3/12) but costs
-  uk_commercial_lease_template 18 of 95 and carbon_farming_initiative_rule 5
-  of 160 entries to our own pagination; switch once those paginate like Word.
+  drawn as cached. PAGEREFs print the measured page, as Word's export does,
+  so TOC numbers in uk_commercial_lease_template (18 of 95) and
+  carbon_farming_initiative_rule (5 of 160) show where our pagination drifts.
 - Issue #147 follow-up: the "(1)" labels of `rust.docx` sat 12pt below
   Word's. Issue #164 traced the same 12pt to `textAlignment="center"` (a PNG
   of the equation's size reproduces it; baseline alignment matches the low

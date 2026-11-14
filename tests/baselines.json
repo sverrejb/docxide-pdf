@@ -2019,8 +2019,8 @@
     "a11y_text": 1.0
   },
   "cases/case49": {
-    "jaccard": 0.961,
-    "ssim": 0.9912,
+    "jaccard": 0.9625,
+    "ssim": 0.9927,
     "text_boundary": 0.9053,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10145,7 +10145,7 @@
     "a11y_text": 1.0
   },
   "scraped/carbon_farming_initiative_rule": {
-    "jaccard": 0.7178,
+    "jaccard": 0.7177,
     "ssim": 0.8297,
     "text_boundary": 0.9635,
     "ua_fail": 3,
@@ -11683,8 +11683,8 @@
     "a11y_text": 1.0
   },
   "scraped/uk_commercial_lease_template": {
-    "jaccard": 0.3464,
-    "ssim": 0.4702,
+    "jaccard": 0.3459,
+    "ssim": 0.4699,
     "text_boundary": 0.8106,
     "convert_ms": 326.3,
     "ua_fail": 0,

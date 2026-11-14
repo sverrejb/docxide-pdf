@@ -2016,10 +2016,7 @@ fn render_pass(
             .map(|&(n, fmt)| hf_fields::page_field_text(n, fmt))
             .collect(),
     );
-    // Only empty results print the page (cached ones print as they are), so
-    // only their targets are worth another pass.
     let moved_refs = body_runs(doc)
-        .filter(|r| r.text.trim().is_empty())
         .filter_map(|r| match &r.field_code {
             Some(FieldCode::PageRef(bm)) => Some(bm),
             _ => None,
