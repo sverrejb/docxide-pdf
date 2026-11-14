@@ -4505,8 +4505,14 @@
     "ssim": 0.9794
   },
   "cases/frame-clip-page-break": {
-    "jaccard": 0.6088,
-    "ssim": 0.7225
+    "jaccard": 0.8766,
+    "ssim": 0.9826,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.875,
+    "a11y_text": 1.0
   },
   "cases/frame-continuous-columns": {
     "jaccard": 0.9319,
@@ -5453,8 +5459,8 @@
     "a11y_text": 1.0
   },
   "cases/justify-mixed-script-footnote": {
-    "jaccard": 0.444,
-    "ssim": 0.8241,
+    "jaccard": 0.5034,
+    "ssim": 0.9191,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,

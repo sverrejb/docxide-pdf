@@ -90,8 +90,19 @@ Leads from the 2026-11-07/08 triage round, still open:
   lands 0.4pt low; Word draws the rule ~1.4pt lower relative to the table
   than we do, while body probes (`tests/output/koer/hr/` on branch
   koer-overlap, 2026-11-07) put our rule 0.45pt too LOW and show a rule-only
-  body line as tall as a text line. Word also draws o:hrstd rules ~0.75pt
-  thick, we 0.5.
+  body line as tall as a text line. Word draws isla's header o:hrstd as a
+  black 0.75pt stroked box 540 × 1.1pt (full text width), we a 0.5pt grey
+  fill.
+- **o:hr drawing is unresolved** (Word online probe 2026-11-14, kit
+  `.worktrees/roadmap-top3/tests/output/probe_hr/`, `gen.py` → `hr.pdf`):
+  in a python-docx document Word draws every `o:hrstd` rule as a grey
+  (#a0a0a0) 0.5pt band of two 0.25pt strips with 0.25pt end caps, 398.9pt
+  of a 432pt column, centred, whatever its fillcolor (red too) or height
+  (4pt too); a rule in a table cell lands 113pt left, off the page; and
+  `o:hrnoshade`, `o:hrpct` without hrstd and plain `o:hr` rules draw nothing.
+  advocacy's rules are such grey bands; isla's is a black stroked box and
+  croatian_grant has neither. Find what switches the rendering (compat
+  mode, the paragraph, the run) before changing `draw_horizontal_rule`.
 - `empty-margin-frame-long-prefix` (47.5): the frame's anchor is on page 2;
   `empty_frame_table_bands` only reserves the box on the first page. Word
   reserves it on the page where the anchor lands (2026-11-08), so the fix
@@ -244,8 +255,10 @@ between lines. Open:
   the rule (device grid? border band?) before adding a gap.
 - **Documents without styles.xml**: our built-in defaults
   (`NORMAL_TEMPLATE_DEFAULTS`) match desktop Word, not online (case135's
-  cell line: desktop 633.22, us 633.20, online 633.70). Probe Word online's
-  defaults for a docx without styles.xml.
+  cell line: desktop 633.22, us 633.20, online 633.70). A bare body
+  paragraph in a docx without styles.xml matches Word online within 0.01pt
+  (2026-11-14, `probe_sep/f.docx` in the roadmap-top3 worktree), so look at
+  the cell, not the defaults.
 
 **Older fixture leads:**
 - dutch_government: a page-anchored floating table moves the following body
@@ -507,17 +520,16 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 - Footnotes that don't fit: Word splits a note across pages with a
   continuation separator (uk_commercial p17/18); we move the reference line.
-- frame-clip-page-break (J 60.9, SSIM 72.2): body and frame match Word; the
-  footnote separator rule sits 10.4pt too high (ours 330.30, Word 340.73 from
-  the top). The docx has no styles.xml and the separator paragraph has no
-  pPr, so its line height falls back to defaults; suspect ours differ from
-  Word's (unverified). The near-empty page magnifies the miss in the scores.
+- Note separators (probe kit `.worktrees/roadmap-top3/tests/output/probe_sep/`,
+  `gen.py`, letters a–v): the rule still sits 0.1–0.3pt above Word's
+  (strikeout position), and an exact-line note's baseline 0.13pt above
+  (357.60 vs 357.73; the note block may sit on the 0.25pt grid). Word's
+  standard separator for a missing separator note and for continuation
+  separators is unprobed.
 - Footnote paragraphs other than numbered ones are hand-built in
   `parse_footnotes` (endnotes already use `build_paragraph`): borders,
   shading, `style_id`, contextual spacing missing; note tables are flattened
   to one paragraph per row (`Footnote { paragraphs }` should become blocks).
-  Footnote paragraphs place exact and at-least lines at the plain ascent
-  (`footnotes.rs`).
 - Inline endnotes are not paginated (`render_endnotes_inline` ponytail;
   erasmus' endnote block runs past page 3's margin); `endnotePr
   pos="sectEnd"` unsupported.
@@ -566,8 +578,6 @@ Open queue from the large-corpus and focus-fixture rounds:
   type), secondary axes; see `current_focus/3d_charts.md`.
 - WordArt level 5: VML gradient/pattern fills, VML shadow, shapetype →
   prstTxWarp mapping.
-- VML fill off check (`filled="f"`, `on="f|false|0"`) is spelled out in
-  images.rs, textbox.rs and wordart.rs; textbox.rs:1012 lacks `"0"`.
 
 ## RTL / BiDi
 
@@ -631,8 +641,12 @@ Backlog (details in `current_focus/A11Y.md`):
 - Body PAGE/NUMPAGES (issue #140): a PAGE in a paragraph that spans two pages
   shows the first page's number, and fields in table cells keep their cached
   result. `IF` over STYLEREF in the body prints its cache.
-- Pictures: 8-bit indexed PNG sources are written as RGB Flate where Word
-  keeps them Indexed (`decode_png_raw` returns None for Indexed).
+- Pictures: opaque palette PNGs stay Indexed only when not resampled
+  (`images.rs` `palette_png`). Word also keeps some at 288 ppi unresampled
+  (indigenous_innovation's 1889×9 strip, learning_cultures' 14×16 4-bit
+  icon) while it resamples dutch_government's 3072×2078 one to RGB; find
+  that threshold. Palette PNGs with tRNS go RGB + SMask in Word, always
+  Flate; ours pick JPEG when smaller (ut_koer, polish_municipal).
 - altChunk HTML: `ul`/`ol`/`li` are dropped by the converter.
 - `tblGrid`-less column inference (`row_widths`) doesn't add `gridBefore`
   columns (Word always writes a tblGrid).
