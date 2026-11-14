@@ -664,33 +664,58 @@ fn smartart_alt(diagrams: &[crate::model::SmartArtDiagram]) -> Option<String> {
     (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
+/// PAGEREF targets: bookmark → (page index, y from the bottom), and each
+/// page's label as its PAGE field shows it.
+type BookmarkPages = (HashMap<String, (usize, f32)>, Vec<String>);
+
+/// The page a PAGEREF to `bookmark` prints, as `render_paragraph_block` fills it.
+fn bookmark_page_label(pages: &BookmarkPages, bookmark: &str) -> Option<String> {
+    let &(idx, _) = pages.0.get(bookmark)?;
+    Some(
+        pages
+            .1
+            .get(idx)
+            .cloned()
+            .unwrap_or_else(|| (idx + 1).to_string()),
+    )
+}
+
 pub fn render(doc: &Document, options: &ConvertOptions) -> Result<Vec<u8>, Error> {
-    let (pdf, page_fields, valign_offsets) = render_pass(doc, None, &[], options)?;
+    let (pdf, page_fields, valign_offsets, moved_refs) =
+        render_pass(doc, None, &[], None, options)?;
     // Word shows body PAGE, NUMPAGES and SECTIONPAGES fields live, not their cached result,
     // and their values are known only once the document is paginated.
     let has_page_fields =
         body_runs(doc).any(|r| r.field_code.as_ref().is_some_and(FieldCode::is_page_count));
-    if !has_page_fields && !valign_offsets.iter().any(|&off| off > 0.0) {
+    if !has_page_fields && !valign_offsets.iter().any(|&off| off > 0.0) && moved_refs.is_none() {
         return Ok(pdf);
     }
     // The fields keep the first pass's numbers even where their new text
     // moves the pages (Word for Mac: NUMPAGES shows 3 on a page its own
     // shorter result pulled into a two-page document), but the vAlign offsets
     // the lines are rounded with must come from the pass they are drawn in.
+    // A PAGEREF printed before its target (a TOC) shows the page the pre-pass
+    // estimated; where the target landed elsewhere (issue #164: a 600pt table
+    // row the estimate counts as 14pt), the second pass prints where it is.
     let page_fields = has_page_fields.then_some(&page_fields);
-    let (pdf, _, measured) = render_pass(doc, page_fields, &valign_offsets, options)?;
+    let refs = moved_refs.as_ref();
+    let (pdf, _, measured, _) = render_pass(doc, page_fields, &valign_offsets, refs, options)?;
     if measured == valign_offsets {
         return Ok(pdf);
     }
-    render_pass(doc, page_fields, &measured, options).map(|(pdf, ..)| pdf)
+    render_pass(doc, page_fields, &measured, refs, options).map(|(pdf, ..)| pdf)
 }
 
+/// One layout of the document. Returns the PDF, the body page-field values,
+/// the measured vAlign offsets and, when a PAGEREF target landed on another
+/// page than the pass assumed, where the targets really are.
 fn render_pass(
     doc: &Document,
     page_fields: Option<&BodyPageFields>,
     valign_offsets: &[f32],
+    bookmark_pages: Option<&BookmarkPages>,
     options: &ConvertOptions,
-) -> Result<(Vec<u8>, BodyPageFields, Vec<f32>), Error> {
+) -> Result<(Vec<u8>, BodyPageFields, Vec<f32>, Option<BookmarkPages>), Error> {
     let debug_wrap = options.debug_wrap;
     let t0 = std::time::Instant::now();
     // Bars collected by a previous pass (headers, footers) must not leak in.
@@ -815,8 +840,12 @@ fn render_pass(
         hf_heights: Default::default(),
     };
 
-    let (bookmark_positions, page_labels) = compute_bookmark_positions(doc, &ctx);
-    ctx.page_labels = page_labels;
+    let planned: BookmarkPages = match bookmark_pages {
+        Some(pages) => pages.clone(),
+        None => compute_bookmark_positions(doc, &ctx),
+    };
+    let bookmark_positions = planned.0.clone();
+    ctx.page_labels = planned.1.clone();
 
     // Phase 2: build multi-page content streams (section-aware)
     let first_sp = &doc.sections[0].properties;
@@ -1980,6 +2009,23 @@ fn render_pass(
         (t_assembly - t_headers).as_secs_f64() * 1000.0,
     );
 
+    let measured_pages: BookmarkPages = (
+        state.bookmark_positions,
+        page_numbers
+            .iter()
+            .map(|&(n, fmt)| hf_fields::page_field_text(n, fmt))
+            .collect(),
+    );
+    // Only empty results print the page (cached ones print as they are), so
+    // only their targets are worth another pass.
+    let moved_refs = body_runs(doc)
+        .filter(|r| r.text.trim().is_empty())
+        .filter_map(|r| match &r.field_code {
+            Some(FieldCode::PageRef(bm)) => Some(bm),
+            _ => None,
+        })
+        .any(|bm| bookmark_page_label(&planned, bm) != bookmark_page_label(&measured_pages, bm))
+        .then_some(measured_pages);
     let page_fields = BodyPageFields {
         pages: page_numbers
             .into_iter()
@@ -1988,7 +2034,12 @@ fn render_pass(
         section_pages: section_page_counts,
         total: total_pages,
     };
-    Ok((objstm::pack(pdf.finish()), page_fields, valign_offsets))
+    Ok((
+        objstm::pack(pdf.finish()),
+        page_fields,
+        valign_offsets,
+        moved_refs,
+    ))
 }
 
 #[cfg(test)]
@@ -2025,7 +2076,7 @@ mod tests {
                 exact(break_twips)
             );
             let doc = crate::docx::parse_document_xml(&xml);
-            render_pass(&doc, None, &[], &ConvertOptions::default())
+            render_pass(&doc, None, &[], None, &ConvertOptions::default())
                 .unwrap()
                 .1
                 .total
