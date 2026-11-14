@@ -260,6 +260,45 @@ fn decode_png_raw(data: &[u8]) -> Option<image::DynamicImage> {
     })
 }
 
+/// An opaque palette PNG of 2 to 8 bits as stored: its RGB palette and its
+/// packed index rows (byte-aligned, as PDF reads them).
+struct PaletteImage {
+    palette: Vec<u8>,
+    bits: u8,
+    rows: Vec<u8>,
+    width: u32,
+    height: u32,
+}
+
+/// Word keeps an opaque palette PNG it does not resample as an Indexed image
+/// at the stored depth (bush_fires' 98×18 strip, learning_cultures' 850×520
+/// chart); one with tRNS becomes RGB plus an SMask, and 1-bit black-and-white
+/// ones go DeviceGray (`stored_one_bit`).
+fn palette_png(data: &[u8]) -> Option<PaletteImage> {
+    let mut reader = png::Decoder::new(std::io::Cursor::new(data))
+        .read_info()
+        .ok()?;
+    let info = reader.info();
+    if info.color_type != png::ColorType::Indexed
+        || info.trns.is_some()
+        || info.bit_depth == png::BitDepth::One
+    {
+        return None;
+    }
+    let palette = info.palette.as_deref()?.to_vec();
+    let bits = info.bit_depth as u8;
+    let (width, height) = (info.width, info.height);
+    let mut rows = vec![0u8; reader.output_buffer_size()?];
+    reader.next_frame(&mut rows).ok()?;
+    Some(PaletteImage {
+        palette,
+        bits,
+        rows,
+        width,
+        height,
+    })
+}
+
 /// Write an image XObject into the PDF with the given filter and data.
 /// Optionally attaches a soft mask (alpha channel) reference.
 /// Write an 8-bit image XObject, its color space picked from the component
@@ -501,6 +540,24 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 );
             }
             ImageFormat::Png | ImageFormat::Bmp => {
+                let untouched = target.is_none()
+                    && !img.recolored()
+                    && img.alpha.is_none()
+                    && img.soft_edge.is_none();
+                if let Some(p) = untouched.then(|| palette_png(&img.data)).flatten() {
+                    let data = miniz_oxide::deflate::compress_to_vec_zlib(&p.rows, 6);
+                    let mut xobj = self.pdf.image_xobject(xobj_ref, &data);
+                    xobj.filter(Filter::FlateDecode);
+                    xobj.width(p.width as i32);
+                    xobj.height(p.height as i32);
+                    xobj.color_space().indexed(
+                        Name(b"DeviceRGB"),
+                        (p.palette.len() / 3) as i32 - 1,
+                        &p.palette,
+                    );
+                    xobj.bits_per_component(p.bits as i32);
+                    return xobj_ref;
+                }
                 let img_fmt = match img.format {
                     ImageFormat::Bmp => image::ImageFormat::Bmp,
                     _ => image::ImageFormat::Png,
@@ -1110,7 +1167,7 @@ fn push_textbox<'a>(tb: &'a Textbox, out: &mut Vec<&'a Textbox>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_lum, crop_matrix, is_bilevel, pack_bilevel, stored_one_bit};
+    use super::{apply_lum, crop_matrix, is_bilevel, pack_bilevel, palette_png, stored_one_bit};
 
     #[test]
     fn mixed_cell_paragraph_pictures_are_embedded_in_all_table_stories() {
@@ -1243,6 +1300,34 @@ mod tests {
         assert!(stored_one_bit(&bmp(12, 1)));
         assert!(!stored_one_bit(&bmp(40, 24)));
         assert!(!stored_one_bit(b"GIF89a"));
+    }
+
+    #[test]
+    fn opaque_palette_pngs_keep_their_indices() {
+        let encode = |depth: png::BitDepth, trns: Option<Vec<u8>>, rows: &[u8]| {
+            let mut out = Vec::new();
+            let mut enc = png::Encoder::new(&mut out, 3, 2);
+            enc.set_color(png::ColorType::Indexed);
+            enc.set_depth(depth);
+            enc.set_palette(vec![255, 0, 0, 0, 0, 255, 9, 9, 9]);
+            if let Some(t) = trns {
+                enc.set_trns(t);
+            }
+            enc.write_header().unwrap().write_image_data(rows).unwrap();
+            out
+        };
+        // Three 4-bit pixels per row pack into two bytes.
+        let p = palette_png(&encode(
+            png::BitDepth::Four,
+            None,
+            &[0x01, 0x20, 0x21, 0x00],
+        ))
+        .unwrap();
+        assert_eq!((p.bits, p.width, p.height), (4, 3, 2));
+        assert_eq!(p.rows, [0x01, 0x20, 0x21, 0x00]);
+        assert_eq!(p.palette.len(), 9);
+        assert!(palette_png(&encode(png::BitDepth::Eight, Some(vec![0]), &[0; 6])).is_none());
+        assert!(palette_png(&encode(png::BitDepth::One, None, &[0, 0])).is_none());
     }
 
     #[test]
