@@ -90,7 +90,7 @@ fn layout_paragraph(
             lh,
             fs * ascender_ratio,
             1.0,
-            para.text_alignment == crate::model::TextAlignment::Top,
+            para.text_alignment,
         );
         super::size_tab_mark_line(&mut lines, para, line_spacing, tallest_lhr, ctx.fonts);
     }

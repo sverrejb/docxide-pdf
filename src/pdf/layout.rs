@@ -17,12 +17,12 @@ pub(super) use super::line_render::{
     underline_lines,
 };
 pub(super) use super::line_sizing::{
-    LineGrid, boxed_line_ascent, descender_ratio, east_asian_leading, first_drawn_baseline,
-    grid_baseline_offset, grid_cells, grid_snapped_line_h, inline_line_advance,
-    inserted_picture_descent, is_text_empty, line_h_with_picture, line_max_image_h,
-    line_own_advance, lines_height, mark_metrics, picture_line_bottom, position_stretch,
-    rule_on_grid, run_line_metrics, runs_max_image_h, size_grid_lines, size_lines_by_own_runs,
-    tallest_glyph_run_metrics, tallest_run_metrics, top_aligned_drop,
+    LineGrid, boxed_line_ascent, center_align_exact_lines, descender_ratio, east_asian_leading,
+    first_drawn_baseline, grid_baseline_offset, grid_cells, grid_snapped_line_h,
+    inline_line_advance, inserted_picture_descent, is_text_empty, line_h_with_picture,
+    line_max_image_h, line_own_advance, lines_height, mark_metrics, picture_line_bottom,
+    position_stretch, rule_on_grid, run_line_metrics, runs_max_image_h, size_grid_lines,
+    size_lines_by_own_runs, tallest_glyph_run_metrics, tallest_run_metrics, top_aligned_drop,
 };
 pub(super) use super::link_tagger::{LinkAnnotation, LinkTagger};
 
@@ -840,6 +840,10 @@ pub(super) struct TextLine {
     /// single: its runs' highest ascent to their deepest descent, without the
     /// leading.
     pub(super) text_box: Option<f32>,
+    /// A `w:textAlignment="center"` picture line: how far below the line top
+    /// its middle sits. Chunks are drawn relative to that middle and `pitch`
+    /// holds the line's advance (`center_align_line`).
+    pub(super) center_line: Option<f32>,
 }
 
 /// A run's share of the spaces a line ends in, drawn as its underline only
@@ -3921,7 +3925,7 @@ mod tests {
             14.0,
             10.0,
             1.0,
-            false,
+            crate::model::TextAlignment::Auto,
         );
         assert!((lines[0].pitch.unwrap() - 9.0).abs() < 0.001);
         assert!(

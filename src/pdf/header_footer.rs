@@ -330,7 +330,7 @@ fn wrapped_header_picture_height(para: &Paragraph, ctx: &RenderContext, width: f
             line_h,
             metrics.0,
             1.0,
-            para.text_alignment == crate::model::TextAlignment::Top,
+            para.text_alignment,
         );
         super::size_tab_mark_line(&mut lines, para, spacing, lhr, ctx.fonts);
     }
@@ -1718,7 +1718,7 @@ pub(super) fn render_header_footer(
                         line_h,
                         line_ascent,
                         1.0,
-                        para.text_alignment == crate::model::TextAlignment::Top,
+                        para.text_alignment,
                     );
                     super::size_tab_mark_line(
                         &mut lines,

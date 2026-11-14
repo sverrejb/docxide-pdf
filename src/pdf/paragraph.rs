@@ -1159,7 +1159,7 @@ pub(super) fn render_paragraph_block(
             line_h,
             para_ascent,
             ascent_scale,
-            para.text_alignment == crate::model::TextAlignment::Top,
+            para.text_alignment,
         );
         size_break_lines(&mut lines, &effective_runs, effective_ls, line_h, ctx.fonts);
         size_unsized_lines(
@@ -1171,6 +1171,8 @@ pub(super) fn render_paragraph_block(
             ctx.fonts,
         );
         size_tab_mark_line(&mut lines, para, effective_ls, tallest_lhr, ctx.fonts);
+    } else if !grid_snapped && para.text_alignment == crate::model::TextAlignment::Center {
+        layout::center_align_exact_lines(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent);
     } else if grid_snapped {
         layout::size_grid_lines(
             &mut lines,

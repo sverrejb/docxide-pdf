@@ -4,7 +4,7 @@ use pdf_writer::Content;
 
 use crate::model::{
     EmbeddedImage, ImageGlow, ImageReflection, LineSpacing, Paragraph, Run, SectionProperties,
-    ShapeFill, ShapeGeometry, Table, TextAlignment, TextAnchor, Textbox,
+    ShapeFill, ShapeGeometry, Table, TextAnchor, Textbox,
 };
 
 use super::color::{fill_rgb, set_fill_alpha, stroke_rgb};
@@ -276,7 +276,7 @@ fn layout_box_paragraph(
             line_h,
             text_ascent,
             1.0,
-            tp.text_alignment == TextAlignment::Top,
+            tp.text_alignment,
         );
         super::size_break_lines(&mut lines, runs, ls, line_h, ctx.fonts);
         super::size_unsized_lines(

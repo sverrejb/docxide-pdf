@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 
 use crate::fonts::{FontEntry, font_key_buf};
-use crate::model::{LineSpacing, Paragraph, Run};
+use crate::model::{LineSpacing, Paragraph, Run, TextAlignment};
 
-use super::layout::{TextLine, effective_font_size, is_break_space, math_box};
+use super::layout::{TextLine, WordChunk, effective_font_size, is_break_space, math_box};
 use super::line_render::quarter_pt;
 
 /// The faces registered for glyphs the document's own fonts lack
@@ -30,11 +30,16 @@ pub(super) fn size_lines_by_own_runs(
     para_pitch: f32,
     para_ascent: f32,
     ascent_scale: f32,
-    top_aligned: bool,
+    alignment: TextAlignment,
 ) {
+    let top_aligned = alignment == TextAlignment::Top;
     let by_pdf_name = super::fonts::by_pdf_name(fonts);
     let fallbacks = glyph_fallbacks(fonts);
     for line in lines.iter_mut() {
+        if alignment == TextAlignment::Center && !line.leading_space_wrap && !line.leading_tab_wrap
+        {
+            center_align_line(line, &by_pdf_name, line_spacing, para_pitch, para_ascent);
+        }
         if top_aligned {
             for c in line
                 .chunks
@@ -152,6 +157,105 @@ pub(super) fn size_lines_by_own_runs(
             line.text_box = matches!(line_spacing, LineSpacing::Auto(m) if m > 1.0)
                 .then_some(ascent + below + above_extra + below_extra);
         }
+    }
+}
+
+/// `w:textAlignment="center"`: Word lines up the middles of a line's runs and
+/// pictures. The tallest sets the middle (a picture's own; a text run's glyph
+/// box, its line gap left out) and the others centre on it, text by its line
+/// box (glyph box and the gap above it). A picture line spans the largest half
+/// above and below that middle, which takes the baseline's place under exact
+/// spacing; a multiple adds the text's extra leading below (Word online
+/// probes, issue #164: 12-60pt pictures beside 12-40pt Times New Roman and
+/// Arial at single, double, exact and at-least 40pt, 12pt beside 36pt text
+/// and Times New Roman beside Arial, SimSun and Verdana, all within 0.25pt).
+/// `center_align_line` for every line of an exact-spaced paragraph, which
+/// `size_lines_by_own_runs` leaves alone.
+pub(super) fn center_align_exact_lines(
+    lines: &mut [TextLine],
+    fonts: &HashMap<String, FontEntry>,
+    line_spacing: LineSpacing,
+    para_pitch: f32,
+    para_ascent: f32,
+) {
+    let by_pdf_name = super::fonts::by_pdf_name(fonts);
+    for line in lines {
+        center_align_line(line, &by_pdf_name, line_spacing, para_pitch, para_ascent);
+    }
+}
+
+fn center_align_line(
+    line: &mut TextLine,
+    by_pdf_name: &HashMap<&str, &FontEntry>,
+    line_spacing: LineSpacing,
+    para_pitch: f32,
+    para_ascent: f32,
+) {
+    // A text chunk's (line-box middle, glyph-box middle) above its baseline
+    // and half its line height.
+    let text_middles = |c: &WordChunk| -> Option<(f32, f32, f32)> {
+        if c.math.is_some() || c.inline_image_name.is_some() {
+            return None;
+        }
+        let e = by_pdf_name.get(c.pdf_font.as_str())?;
+        let (lhr, ar) = run_line_metrics(e, &c.text);
+        let (lhr, ar) = (lhr?, ar?);
+        let fs = c.line_font_size;
+        let line_box = fs * (ar - lhr / 2.0);
+        Some((
+            line_box,
+            line_box - fs * e.leading_ratio.unwrap_or(0.0) / 2.0,
+            fs * lhr / 2.0,
+        ))
+    };
+    let picture_half = line_max_image_h(line) / 2.0;
+    let tallest_text = line
+        .chunks
+        .iter()
+        .filter(|c| !c.text.trim().is_empty())
+        .filter_map(|c| Some((c, text_middles(c)?)))
+        .max_by(|a, b| a.1.2.total_cmp(&b.1.2));
+    match tallest_text {
+        Some((_, (_, glyph_mid, half))) if half > picture_half => {
+            for c in line.chunks.iter_mut() {
+                if c.inline_image_name.is_some() {
+                    c.y_offset += glyph_mid - c.inline_image_height / 2.0;
+                } else if let Some((line_mid, _, own_half)) = text_middles(c)
+                    // Runs as tall as the tallest share its baseline (Times
+                    // New Roman, Arial and SimSun 12pt, bold beside regular);
+                    // a taller face moves the others (Verdana 12pt lifts
+                    // Times New Roman 0.5pt).
+                    && half - own_half > 0.025
+                {
+                    c.y_offset += glyph_mid - line_mid;
+                }
+            }
+        }
+        _ if picture_half > 0.0 => {
+            let half = line
+                .chunks
+                .iter()
+                .filter_map(|c| text_middles(c).map(|m| m.2))
+                .fold(picture_half, f32::max);
+            for c in line.chunks.iter_mut() {
+                if c.inline_image_name.is_some() {
+                    c.y_offset -= c.inline_image_height / 2.0;
+                } else if let Some((line_mid, ..)) = text_middles(c) {
+                    c.y_offset -= line_mid;
+                }
+            }
+            let natural = 2.0 * half;
+            let (advance, middle) = match line_spacing {
+                LineSpacing::Auto(m) => (natural + para_pitch * (1.0 - 1.0 / m), half),
+                // The exact line's baseline already sits at 0.8 × its height.
+                LineSpacing::Exact(h) => (h, para_ascent),
+                LineSpacing::AtLeast(h) => (h.max(natural), half + (h - natural).max(0.0)),
+            };
+            line.pitch = Some(advance);
+            line.center_line = Some(middle);
+            line.ascent_shift = 0.0;
+        }
+        _ => {}
     }
 }
 
@@ -360,7 +464,10 @@ impl LineGrid {
 }
 
 pub(super) fn baseline_drop(line: &TextLine, ascent: f32) -> f32 {
-    line.ascent_shift + inline_image_line_extra(line, ascent)
+    match line.center_line {
+        Some(middle) => middle - ascent,
+        None => line.ascent_shift + inline_image_line_extra(line, ascent),
+    }
 }
 
 /// Where the first line's baseline is drawn, which its list label shares.
@@ -460,7 +567,7 @@ pub(super) fn line_own_advance(
 ) -> f32 {
     let line_pitch = line.pitch.unwrap_or(line_pitch);
     let img_h = line_max_image_h(line);
-    if img_h > ascent {
+    if img_h > ascent && line.center_line.is_none() {
         line_pitch.max(img_h + descent)
     } else {
         line_pitch

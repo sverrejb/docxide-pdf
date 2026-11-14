@@ -258,7 +258,6 @@ pub(super) fn first_line_reach(
         );
     let grid_snapped = p.snap_to_grid && sp.line_grid_pitch().is_some();
     let pitch = if !grid_snapped && let Some(first) = lines.first_mut() {
-        let top_aligned = p.text_alignment == crate::model::TextAlignment::Top;
         let ascent = fs * ar.unwrap_or(0.75);
         size_lines_by_own_runs(
             std::slice::from_mut(first),
@@ -267,7 +266,7 @@ pub(super) fn first_line_reach(
             line_h,
             ascent,
             auto_ascent_scale(ls),
-            top_aligned,
+            p.text_alignment,
         );
         first.pitch.unwrap_or(line_h)
     } else {

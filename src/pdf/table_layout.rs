@@ -991,7 +991,7 @@ pub(super) fn compute_row_layouts(
                                             line_h,
                                             font_size * ascender_ratio,
                                             super::helpers::auto_ascent_scale(effective_ls),
-                                            para.text_alignment == crate::model::TextAlignment::Top,
+                                            para.text_alignment,
                                         );
                                         super::size_mark_line(&mut lines, para, runs, effective_ls, tallest_lhr, ctx.fonts);
                                         super::size_tab_mark_line(&mut lines, para, effective_ls, tallest_lhr, ctx.fonts);
