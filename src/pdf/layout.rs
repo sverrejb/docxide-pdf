@@ -241,6 +241,29 @@ fn word_pair_rule(a: char, b: char) -> Option<bool> {
     if a == '.' && b == '№' {
         return Some(false);
     }
+    // LB30 keeps a letter or digit on an opening bracket only when the bracket
+    // is not full-width: Word breaks "57（3）", "ab（", "57【" and "57「" before
+    // the bracket and keeps "57(" (issue #163 probes).
+    if a.is_alphanumeric()
+        && !crate::docx::is_east_asian_char(a)
+        && matches!(
+            b,
+            '（' | '［'
+                | '｛'
+                | '｟'
+                | '「'
+                | '『'
+                | '【'
+                | '〔'
+                | '〈'
+                | '《'
+                | '〖'
+                | '〘'
+                | '〚'
+        )
+    {
+        return Some(true);
+    }
     // Word breaks after a hyphen-minus where UAX #14 does not: before another
     // hyphen (LB21 would make a dash run one unbreakable word; family_kinship's
     // 87-dash rules wrap into two columns of dashes) and before a digit (LB25
@@ -3154,15 +3177,23 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
 fn first_word_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
     let (mut w, mut least) = (0.0, f32::INFINITY);
     let mut key_buf = String::new();
+    let mut prev: Option<char> = None;
     'runs: for run in runs {
         if run.is_line_break || run.inline_image.is_some() {
             break;
         }
         let width = run_width(run, seen_fonts, &mut key_buf);
         for (spaces, piece) in split_preserving_spaces(&run.text) {
-            if spaces > 0 {
+            // East Asian text breaks without a space: Word keeps
+            // "[1]<tab>桥梁…" on a line too short for the whole clause.
+            let east_asian_break = prev.zip(piece.chars().next()).is_some_and(|(a, b)| {
+                breaks_between(a, b)
+                    && (crate::docx::is_east_asian_char(a) || crate::docx::is_east_asian_char(b))
+            });
+            if spaces > 0 || east_asian_break {
                 break 'runs;
             }
+            prev = piece.chars().last();
             let (pw, hyphen) = soft_piece(run, piece, width);
             if let Some(h) = hyphen {
                 least = least.min(w + pw + h);
@@ -3291,6 +3322,11 @@ pub(super) fn build_tabbed_line(
     // The width of the hyphen a soft hyphen showed at the end of the word
     // placed last (`shown_word`).
     let mut soft_tail: Option<f32> = None;
+    // The last character of the text placed last; None after a tab, picture
+    // or formula, whose following word stays glued to it.
+    let mut prev_last_char: Option<char> = None;
+    // Where the word the next glued run would continue starts in `all_chunks`.
+    let mut glued_from: Option<usize> = None;
     let line_max_at = |first: bool| {
         if first {
             max_width + first_line_hanging
@@ -3313,6 +3349,7 @@ pub(super) fn build_tabbed_line(
             // A tab is pure positioning here, but extraction must still see
             // the word boundary (Word's text reads "(2) If", not "(2)If").
             mark_space_after(&mut all_chunks);
+            prev_last_char = None;
             // A soft hyphen before the tab shows only if the tab wraps.
             let mut soft = soft_tail.take();
             current_x -= soft.unwrap_or(0.0);
@@ -3574,11 +3611,13 @@ pub(super) fn build_tabbed_line(
                 continue;
             }
 
-            if (run.inline_image.is_some() || run.math.is_some())
-                && let Some(w) = soft_tail.take()
-            {
-                drop_soft_hyphen(&mut all_chunks, Some(w));
-                current_x -= w;
+            if run.inline_image.is_some() || run.math.is_some() {
+                prev_last_char = None;
+                glued_from = None;
+                if let Some(w) = soft_tail.take() {
+                    drop_soft_hyphen(&mut all_chunks, Some(w));
+                    current_x -= w;
+                }
             }
             // Handle inline images (same pattern as build_paragraph_lines)
             if let Some(img) = &run.inline_image {
@@ -3682,9 +3721,16 @@ pub(super) fn build_tabbed_line(
                 // A word right after a soft hyphen on this line takes its
                 // hyphen back, as in `build_paragraph_lines`.
                 let soft = soft_tail.take();
-                // Word continues previous word across run boundary (no whitespace between)
-                let is_continuation =
-                    seg_first && !applied_space && !all_chunks.is_empty() && soft.is_none();
+                // Word continues previous word across run boundary (no whitespace
+                // between) unless the two characters could break inside one run:
+                // a font split between "，" and "57" is a break (issue #163).
+                let is_continuation = seg_first
+                    && !applied_space
+                    && !all_chunks.is_empty()
+                    && soft.is_none()
+                    && !prev_last_char
+                        .zip(shown.chars().next())
+                        .is_some_and(|(a, b)| breaks_between(a, b));
                 let cur_line_max = line_max_at(is_first_line);
                 let word_x = current_x - soft.unwrap_or(0.0);
                 let limit = cur_line_max.max(line_reach);
@@ -3720,7 +3766,18 @@ pub(super) fn build_tabbed_line(
                         squeezed_lines.push(result_lines.len());
                     }
                 }
-                if overflows {
+                // A word glued over runs moves whole, as on untabbed lines
+                // (Word wraps "ab"+"cdef" as "abcdef"); one that starts right
+                // after its tab stays with the tab.
+                let glued_start = glued_from
+                    .filter(|&g| {
+                        is_continuation
+                            && word_x + ww > limit
+                            && g > justify_from
+                            && g < all_chunks.len()
+                    })
+                    .map(|g| all_chunks.split_off(g));
+                if overflows || glued_start.is_some() {
                     wrap_tabbed_line(
                         &mut result_lines,
                         &mut all_chunks,
@@ -3736,9 +3793,21 @@ pub(super) fn build_tabbed_line(
                     // word's own end (Word keeps "Hub<tab>30<tab>$45" on the
                     // continuation line of a tab-separated inventory list).
                     tab_stop_pos = None;
+                    if let Some(moved) = glued_start {
+                        let shift = moved[0].x_offset;
+                        all_chunks.extend(moved.into_iter().map(|mut c| {
+                            c.x_offset -= shift;
+                            c
+                        }));
+                        current_x = word_x - shift;
+                        glued_from = Some(0);
+                    }
                 } else {
                     drop_soft_hyphen(&mut all_chunks, soft);
                     current_x = word_x;
+                }
+                if !is_continuation {
+                    glued_from = Some(all_chunks.len());
                 }
                 push_word_chunks(
                     &mut all_chunks,
@@ -3751,6 +3820,7 @@ pub(super) fn build_tabbed_line(
                     cjk.compress_punct,
                 );
                 current_x += ww;
+                prev_last_char = word.chars().last();
                 soft_tail = provisional_hyphen(source, word, width);
             }
             // Accumulate trailing whitespace for the next run (or the next tab stop)
@@ -4102,6 +4172,14 @@ mod tests {
             text_scale: 100.0,
             ..Run::default()
         }
+    }
+
+    #[test]
+    fn full_width_opener_breaks_after_latin() {
+        for (a, b) in [('7', '（'), ('b', '（'), ('7', '【'), ('7', '「')] {
+            assert!(breaks_between(a, b), "{a}{b}");
+        }
+        assert!(!breaks_between('7', '('));
     }
 
     #[test]

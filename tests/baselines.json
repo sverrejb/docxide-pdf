@@ -3440,6 +3440,14 @@
     "a11y_struct": 1.0,
     "a11y_text": 0.0
   },
+  "cases/cjk_fullwidth_opener_breaks": {
+    "jaccard": 0.5447,
+    "ssim": 0.9887
+  },
+  "cases/cjk_run_boundary_breaks": {
+    "jaccard": 0.4936,
+    "ssim": 0.8313
+  },
   "cases/clear-break-lines-one": {
     "jaccard": 0.9945,
     "ssim": 1.0,
@@ -8754,6 +8762,10 @@
     "a11y_struct": 0.5625,
     "a11y_text": 1.0
   },
+  "cases/tabbed_cjk_justify": {
+    "jaccard": 0.3975,
+    "ssim": 0.8501
+  },
   "cases/table-cell-shading-edges": {
     "jaccard": 0.9419,
     "ssim": 0.9721,
@@ -9997,8 +10009,8 @@
     "a11y_text": 0.9879
   },
   "scraped/australian_higher_education_guidelines": {
-    "jaccard": 0.7945,
-    "ssim": 0.877,
+    "jaccard": 0.7989,
+    "ssim": 0.8798,
     "text_boundary": 0.9844,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10078,8 +10090,8 @@
     "a11y_text": 0.8826
   },
   "scraped/bush_fires_act_comparison": {
-    "jaccard": 0.83,
-    "ssim": 0.9355,
+    "jaccard": 0.8367,
+    "ssim": 0.941,
     "text_boundary": 0.9906,
     "convert_ms": 248.6,
     "ua_fail": 2,
@@ -10407,8 +10419,8 @@
     "a11y_text": 1.0
   },
   "scraped/czech_wastewater_discharge_permit": {
-    "jaccard": 0.8154,
-    "ssim": 0.914,
+    "jaccard": 0.8276,
+    "ssim": 0.9221,
     "text_boundary": 0.9695,
     "ua_fail": 2,
     "a11y_missing": 0,

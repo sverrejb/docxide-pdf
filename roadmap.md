@@ -307,6 +307,11 @@ Open queue from the large-corpus and focus-fixture rounds:
   Word's squeezed spaces come in 0.25pt steps and it let the repro's final
   period hang 2.9pt where we squeeze the spaces fully; `Distribute` keeps
   the old per-character spread.
+- **Tabbed lines skip autoSpaceDE** (issue #163 probes, fixtures
+  cjk_run_boundary_breaks / cjk_fullwidth_opener_breaks): `build_tabbed_line`
+  never adds the ~0.25 em ideograph↔Latin gap that `build_paragraph_lines`
+  does, so tabbed lines ending "…会57" or "…会ab" sit 3pt left of Word and
+  justified ones spread that gap over the line instead. Breaks already match.
 - **`w:ind` character units** (issue #143, `apply_indent_chars`):
   numbering-level `*Chars` are not read (`docx/numbering.rs` reads only the
   twip values); headers and footnotes use no grid delta.
