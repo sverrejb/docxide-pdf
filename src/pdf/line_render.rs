@@ -804,6 +804,7 @@ pub(super) struct LineNumberArg<'a> {
     /// The registered face (PDF name) and size of the numbers; None falls
     /// back to the line's own font.
     pub font: Option<(String, f32)>,
+    pub color: Option<[u8; 3]>,
 }
 
 impl LineNumberArg<'_> {
@@ -837,7 +838,7 @@ impl LineNumberArg<'_> {
             content.save_state();
             content.set_char_spacing(0.0);
             content.set_horizontal_scaling(100.0);
-            fill_color_or_black(content, None);
+            fill_color_or_black(content, self.color);
             content.begin_text();
             content.set_font(Name(font.as_bytes()), fs);
             content.next_line(x, y);

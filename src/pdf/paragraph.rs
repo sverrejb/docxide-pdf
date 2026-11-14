@@ -189,9 +189,14 @@ pub(super) fn render_paragraph_block(
             .filter(|_| numbered)
             .and_then(|ln| {
                 ctx.fonts
-                    .get(&crate::fonts::font_key_for(&ln.font_name, false, false))
+                    .get(&crate::fonts::font_key_for(
+                        &ln.font_name,
+                        ln.bold,
+                        ln.italic,
+                    ))
                     .map(|e| (e.pdf_name.clone(), ln.font_size))
             });
+    let ln_color = sp.line_numbering.as_ref().and_then(|ln| ln.color);
     if para.frame_props.is_none() && para.runs.iter().any(|run| !run.text.trim().is_empty()) {
         if let Some(bottom) = state.pb.next_text_below_picture.take() {
             state.pb.slot_top = state.pb.slot_top.min(bottom);
@@ -1259,6 +1264,7 @@ pub(super) fn render_paragraph_block(
                     count_by,
                     right_x,
                     font: ln_font.clone(),
+                    color: ln_color,
                 }),
                 link_tags: Some(LinkTagger::new(&mut pb.tags, pb.all_contents.len(), tag)),
                 picture_clip: None,
@@ -3055,6 +3061,7 @@ pub(super) fn render_paragraph_block(
             count_by,
             right_x,
             font: ln_font.clone(),
+            color: ln_color,
         }
         .number(
             &mut state.pb.content,

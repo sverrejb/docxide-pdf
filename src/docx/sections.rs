@@ -186,6 +186,15 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
 
     // Word numbers lines only with a countBy of 1 or more: an lnNumType
     // without one (w:distance="0" alone) shows none (Word probe).
+    // Word finds the built-in style by its name, whatever its id (a Chinese
+    // Word's "a5" works, a "LineNumber" id under another name does not), and
+    // applies all of its run properties (issue #164 probes).
+    let ln_style = ctx
+        .styles
+        .style_id_to_name
+        .iter()
+        .find(|(_, name)| name.eq_ignore_ascii_case("line number"))
+        .and_then(|(id, _)| ctx.styles.character_styles.get(id));
     let line_numbering = wml(sect_node, "lnNumType").and_then(|n| {
         let count_by = n
             .attribute((WML_NS, "countBy"))
@@ -199,12 +208,18 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
                 .map(|s: i32| s + 1)
                 .unwrap_or(1),
             distance: twips_attr(n, "distance"),
-            // Word draws the numbers in the document's default run font, not
-            // the line's: a contract in 12pt Times New Roman numbered in its
-            // 10.5pt DengXian default. ponytail: a LineNumber style's own
-            // rPr is not applied yet.
-            font_name: ctx.styles.defaults.font_name.clone(),
-            font_size: ctx.styles.defaults.font_size,
+            // Without the style Word draws the numbers in the document's
+            // default run font, not the line's: a contract in 12pt Times New
+            // Roman numbered in its 10.5pt DengXian default.
+            font_name: ln_style
+                .and_then(|s| s.font_name.clone())
+                .unwrap_or_else(|| ctx.styles.defaults.font_name.clone()),
+            font_size: ln_style
+                .and_then(|s| s.font_size)
+                .unwrap_or(ctx.styles.defaults.font_size),
+            bold: ln_style.and_then(|s| s.bold).unwrap_or(false),
+            italic: ln_style.and_then(|s| s.italic).unwrap_or(false),
+            color: ln_style.and_then(|s| s.color),
             restart: match n.attribute((WML_NS, "restart")) {
                 Some("newSection") => LineNumberRestart::NewSection,
                 Some("continuous") => LineNumberRestart::Continuous,

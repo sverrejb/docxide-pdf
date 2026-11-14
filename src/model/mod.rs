@@ -179,9 +179,13 @@ pub struct LineNumbering {
     /// `@distance` (points) from the text margin to the numbers; `None` = Word's
     /// auto default of 0.25".
     pub distance: Option<f32>,
-    /// The face and size the numbers are drawn in: the document defaults.
+    /// How the numbers are drawn: the "line number" character style over the
+    /// document defaults.
     pub font_name: String,
     pub font_size: f32,
+    pub bold: bool,
+    pub italic: bool,
+    pub color: Option<[u8; 3]>,
     /// `@restart` — when the count goes back to `start`.
     pub restart: LineNumberRestart,
 }

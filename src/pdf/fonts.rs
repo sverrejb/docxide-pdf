@@ -112,9 +112,13 @@ fn collect_used_chars(
         .iter()
         .filter_map(|s| s.properties.line_numbering.as_ref())
     {
-        used.entry(crate::fonts::font_key_for(&ln.font_name, false, false))
-            .or_default()
-            .extend('0'..='9');
+        used.entry(crate::fonts::font_key_for(
+            &ln.font_name,
+            ln.bold,
+            ln.italic,
+        ))
+        .or_default()
+        .extend('0'..='9');
     }
     for run in all_runs {
         let key = font_key_buf(run, &mut key_buf);
