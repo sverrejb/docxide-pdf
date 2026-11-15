@@ -879,6 +879,10 @@ All are meant to keep output identical unless the entry says otherwise.
 - Library is single-threaded: font scanning, metrics, per-paragraph wrapping
   and XML parsing are candidates for parallelism.
 - Column balancing re-lays the region per trial (`trial_at`).
+- PAGEREFs print the measured page (70b1c8c3c), so a document whose TOC
+  targets land elsewhere than the pre-pass estimated renders twice:
+  carbon_farming_initiative_rule 0.19 -> 0.30 s, uk_commercial_lease_template
+  0.20 -> 0.31 s (release CLI, best of 3). A closer pre-pass estimate skips it.
 
 ## Test harness and tooling
 
@@ -895,3 +899,11 @@ All are meant to keep output identical unless the entry says otherwise.
   fixtures (mostly cases/ accepted visual-only, e.g. through-picture-*,
   ul-trail-space-*, identical-parts-and-fonts) have no text_boundary/a11y
   baselines.
+- Page-hash drift (2026-11-15): a full visual suite in a fresh worktree at
+  1617388ed plus the #164 commits flagged 146 fixtures as visually changed,
+  with score moves up to 0.2pp (case82 SSIM -0.2), although every one of
+  their PDFs was byte-identical to origin/main's CLI output. Not
+  investigated: the committed hashes may come from another rasterizer or
+  font set. The suite's generated.pdf for case30 and charts_ex also differed
+  from the CLI's with DOCXIDE_NO_FONT_CACHE=1 (each deterministic), which
+  points at the font-index cache. Accept only the fixtures a change touches.
