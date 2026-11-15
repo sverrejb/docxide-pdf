@@ -30,6 +30,15 @@ lines fall differently on the 150 dpi pixel grid.
   85.6 (27/27 exact), japanese_medical_consultation_form 64.9 → 62.2,
   isla_language_lesson_plan 69.5 → 67.4, polish_municipal_letter 77.8 → 76.2.
 
+**Stale baselines awaiting approval (2026-11-15):** five drops, none a
+layout change. bahamas, greensboro, sao_paulo and slovak_electoral lose
+0.01–0.04pp Jaccard from the 2026-11-10 file-size commits (34ce14746..
+c6495bfb9: the build before scores the baselines exactly, the one after
+today's numbers; glyphs move ≤0.0016pt and flip MuPDF's subpixel snap).
+wa_child's TxtBnd 98.6 → 98.2 is the 2026-11-09 TxtBnd grouping rewrite
+(a1c9eb15d), accepted 40 minutes before it; the 2026-11-09 build scores the
+same under today's metric.
+
 **Engine-gap list (CI comparison 2026-11-09, `git show
 origin/gh-pages:report.json`):** 48 fixtures where another engine beats us
 by ≥3pp J (120 on 2026-11-07), ours vs the best engine:
@@ -323,6 +332,11 @@ Open queue from the large-corpus and focus-fixture rounds:
 - **Paragraph shading in cells**: two consecutive same-fill paragraphs in
   a cell keep a white gap between them where the body closes it
   (unmeasured in cells).
+- **Highlight and shading heights** (sao_paulo_procurement_contract p1,
+  2026-11-15, one fixture, probe first): Word's yellow `w:highlight` boxes
+  span 286.85–300.35 (13.5pt), ours 287.64–300.29 (12.65pt, top 0.8pt
+  short); its F2F2F2 paragraph shading ends at 325.60, ours at 325.85
+  (0.25pt low). Neither is ink at luma < 200, so only SSIM sees them.
 - **Paragraph borders** (issue #145): table cell borders keep their own dash arrays and draw wave and thin/thick pairs
   as one line (`pdf::table::draw_border` has no Wave or ThinThick arm).
 - **Trailing punctuation**: Word never lets a Latin mark hang past the margin
