@@ -1,11 +1,23 @@
 {
   "cases/anchor-below-own-hanging-box": {
-    "jaccard": 0.9289,
-    "ssim": 0.9887
+    "jaccard": 0.93,
+    "ssim": 0.989,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/atleast-picture-line": {
     "jaccard": 0.9845,
-    "ssim": 0.996
+    "ssim": 0.996,
+    "text_boundary": 0.9902,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9533,
+    "a11y_text": 1.0
   },
   "cases/autofit-cell-widths": {
     "jaccard": 0.8561,
@@ -308,8 +320,8 @@
     "a11y_text": 1.0
   },
   "cases/band-gap-holds-line-and-space-after": {
-    "jaccard": 0.9361,
-    "ssim": 0.9868,
+    "jaccard": 0.9376,
+    "ssim": 0.9874,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -318,8 +330,8 @@
     "a11y_text": 1.0
   },
   "cases/band-gap-too-small-for-space-after": {
-    "jaccard": 0.936,
-    "ssim": 0.9873,
+    "jaccard": 0.9376,
+    "ssim": 0.9879,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -328,8 +340,8 @@
     "a11y_text": 1.0
   },
   "cases/band-keeps-own-space-before": {
-    "jaccard": 0.9369,
-    "ssim": 0.9868,
+    "jaccard": 0.9385,
+    "ssim": 0.9874,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -338,8 +350,8 @@
     "a11y_text": 1.0
   },
   "cases/band-para-relative-anchor-stays": {
-    "jaccard": 0.9402,
-    "ssim": 0.9871,
+    "jaccard": 0.9417,
+    "ssim": 0.9876,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -368,8 +380,8 @@
     "a11y_text": 1.0
   },
   "cases/border-group-between-rule-fill": {
-    "jaccard": 0.999,
-    "ssim": 0.9898,
+    "jaccard": 0.9991,
+    "ssim": 0.9901,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -470,8 +482,8 @@
     "a11y_text": 1.0
   },
   "cases/case11": {
-    "jaccard": 0.9437,
-    "ssim": 0.9848,
+    "jaccard": 0.9439,
+    "ssim": 0.9849,
     "text_boundary": 1.0,
     "convert_ms": 13.4,
     "ua_fail": 2,
@@ -1580,8 +1592,8 @@
     "a11y_text": 1.0
   },
   "cases/case21": {
-    "jaccard": 0.915,
-    "ssim": 0.9765,
+    "jaccard": 0.916,
+    "ssim": 0.9773,
     "text_boundary": 1.0,
     "convert_ms": 5.0,
     "ua_fail": 2,
@@ -1691,7 +1703,7 @@
     "a11y_text": 1.0
   },
   "cases/case22": {
-    "jaccard": 0.8811,
+    "jaccard": 0.881,
     "ssim": 0.975,
     "text_boundary": 1.0,
     "convert_ms": 9.5,
@@ -1722,7 +1734,7 @@
     "a11y_text": 0.563
   },
   "cases/case23": {
-    "jaccard": 0.93,
+    "jaccard": 0.9301,
     "ssim": 0.9722,
     "text_boundary": 1.0,
     "convert_ms": 6.3,
@@ -1744,8 +1756,8 @@
     "a11y_text": 1.0
   },
   "cases/case25": {
-    "jaccard": 0.8962,
-    "ssim": 0.9529,
+    "jaccard": 0.8969,
+    "ssim": 0.9531,
     "text_boundary": 1.0,
     "convert_ms": 8.3,
     "ua_fail": 2,
@@ -1755,8 +1767,8 @@
     "a11y_text": 1.0
   },
   "cases/case26": {
-    "jaccard": 0.936,
-    "ssim": 0.9778,
+    "jaccard": 0.9362,
+    "ssim": 0.9779,
     "text_boundary": 1.0,
     "convert_ms": 8.8,
     "ua_fail": 2,
@@ -1777,7 +1789,7 @@
     "a11y_text": 1.0
   },
   "cases/case28": {
-    "jaccard": 0.9321,
+    "jaccard": 0.9319,
     "ssim": 0.9786,
     "text_boundary": 1.0,
     "convert_ms": 10.0,
@@ -1832,8 +1844,8 @@
     "a11y_text": 1.0
   },
   "cases/case32": {
-    "jaccard": 0.9467,
-    "ssim": 0.9755,
+    "jaccard": 0.9468,
+    "ssim": 0.9756,
     "text_boundary": 1.0,
     "convert_ms": 5.2,
     "ua_fail": 2,
@@ -1929,8 +1941,8 @@
     "a11y_text": 1.0
   },
   "cases/case40": {
-    "jaccard": 0.8091,
-    "ssim": 0.919,
+    "jaccard": 0.8095,
+    "ssim": 0.9191,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1949,8 +1961,8 @@
     "a11y_text": 1.0
   },
   "cases/case42": {
-    "jaccard": 0.9408,
-    "ssim": 0.9533,
+    "jaccard": 0.9406,
+    "ssim": 0.9531,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1979,8 +1991,8 @@
     "a11y_text": 0.6202
   },
   "cases/case45": {
-    "jaccard": 0.6273,
-    "ssim": 0.7533,
+    "jaccard": 0.6274,
+    "ssim": 0.7534,
     "text_boundary": 0.9836,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1989,8 +2001,8 @@
     "a11y_text": 1.0
   },
   "cases/case46": {
-    "jaccard": 0.7631,
-    "ssim": 0.877,
+    "jaccard": 0.7635,
+    "ssim": 0.8773,
     "text_boundary": 0.9645,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1999,8 +2011,8 @@
     "a11y_text": 1.0
   },
   "cases/case47": {
-    "jaccard": 0.9287,
-    "ssim": 0.982,
+    "jaccard": 0.929,
+    "ssim": 0.9821,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -2021,7 +2033,7 @@
   "cases/case49": {
     "jaccard": 0.9625,
     "ssim": 0.9927,
-    "text_boundary": 0.9053,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2040,8 +2052,8 @@
     "a11y_text": 1.0
   },
   "cases/case50": {
-    "jaccard": 0.9289,
-    "ssim": 0.9773,
+    "jaccard": 0.9292,
+    "ssim": 0.9774,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2161,8 +2173,8 @@
     "a11y_text": 1.0
   },
   "cases/case62": {
-    "jaccard": 0.9115,
-    "ssim": 0.9611,
+    "jaccard": 0.9119,
+    "ssim": 0.9612,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2178,8 +2190,8 @@
     "a11y_missing": 0
   },
   "cases/case64": {
-    "jaccard": 0.7199,
-    "ssim": 0.8544,
+    "jaccard": 0.72,
+    "ssim": 0.8545,
     "text_boundary": 0.5625,
     "ua_fail": 2,
     "a11y_missing": 0
@@ -2325,8 +2337,8 @@
     "a11y_text": 1.0
   },
   "cases/case79": {
-    "jaccard": 0.7846,
-    "ssim": 0.9479,
+    "jaccard": 0.7841,
+    "ssim": 0.9477,
     "text_boundary": 0.9722,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2335,7 +2347,7 @@
     "a11y_text": 1.0
   },
   "cases/case8": {
-    "jaccard": 0.9468,
+    "jaccard": 0.9469,
     "ssim": 0.9641,
     "text_boundary": 1.0,
     "convert_ms": 37.8,
@@ -2346,7 +2358,7 @@
     "a11y_text": 1.0
   },
   "cases/case80": {
-    "jaccard": 0.7846,
+    "jaccard": 0.7847,
     "ssim": 0.8596,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -2356,8 +2368,8 @@
     "a11y_text": 1.0
   },
   "cases/case81": {
-    "jaccard": 0.8748,
-    "ssim": 0.9627,
+    "jaccard": 0.8753,
+    "ssim": 0.9629,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2366,9 +2378,9 @@
     "a11y_text": 1.0
   },
   "cases/case82": {
-    "jaccard": 0.2264,
-    "ssim": 0.3565,
-    "text_boundary": 0.3145,
+    "jaccard": 0.2277,
+    "ssim": 0.3549,
+    "text_boundary": 0.3016,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -3418,7 +3430,13 @@
   },
   "cases/char-scale-widths": {
     "jaccard": 0.8303,
-    "ssim": 0.9081
+    "ssim": 0.9081,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/charts_3d": {
     "jaccard": 0.8971,
@@ -3442,11 +3460,23 @@
   },
   "cases/cjk_fullwidth_opener_breaks": {
     "jaccard": 0.5447,
-    "ssim": 0.9887
+    "ssim": 0.9887,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/cjk_run_boundary_breaks": {
     "jaccard": 0.4936,
-    "ssim": 0.8313
+    "ssim": 0.8313,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/clear-break-lines-one": {
     "jaccard": 0.9945,
@@ -3490,7 +3520,13 @@
   },
   "cases/clear-break-mark-line": {
     "jaccard": 0.8842,
-    "ssim": 0.9721
+    "ssim": 0.9721,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5045,
+    "a11y_text": 1.0
   },
   "cases/connector-paragraph-anchor-0": {
     "jaccard": 0.8481,
@@ -4404,7 +4440,13 @@
   },
   "cases/empty-shape-wraps": {
     "jaccard": 0.9993,
-    "ssim": 1.0
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7857,
+    "a11y_text": 1.0
   },
   "cases/field-result-format-source": {
     "jaccard": 0.9572,
@@ -4478,31 +4520,73 @@
   },
   "cases/float-table-band-before": {
     "jaccard": 0.9264,
-    "ssim": 0.9892
+    "ssim": 0.9892,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9732,
+    "a11y_text": 1.0
   },
   "cases/float-table-page-offset": {
     "jaccard": 0.9602,
-    "ssim": 0.9914
+    "ssim": 0.9914,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6269,
+    "a11y_text": 1.0
   },
   "cases/floating-table-line-move": {
     "jaccard": 0.9791,
-    "ssim": 0.9944
+    "ssim": 0.9944,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9474,
+    "a11y_text": 1.0
   },
   "cases/floating-table-line-reach": {
     "jaccard": 0.9312,
-    "ssim": 0.9721
+    "ssim": 0.9721,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7353,
+    "a11y_text": 1.0
   },
   "cases/floating-table-stack": {
     "jaccard": 0.9912,
-    "ssim": 0.9899
+    "ssim": 0.9899,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7662,
+    "a11y_text": 1.0
   },
   "cases/frame-balanced-columns": {
     "jaccard": 1.0,
-    "ssim": 1.0
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.8837
   },
   "cases/frame-balanced-opens-column": {
     "jaccard": 0.9308,
-    "ssim": 0.9794
+    "ssim": 0.9794,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.9541
   },
   "cases/frame-clip-page-break": {
     "jaccard": 0.8766,
@@ -4516,15 +4600,33 @@
   },
   "cases/frame-continuous-columns": {
     "jaccard": 0.9319,
-    "ssim": 0.9874
+    "ssim": 0.9874,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.9164
   },
   "cases/frame-ends-with-page-break": {
     "jaccard": 1.0,
-    "ssim": 1.0
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.8214
   },
   "cases/frame-exact-box-overflows": {
     "jaccard": 0.9583,
-    "ssim": 0.997
+    "ssim": 0.997,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.9805
   },
   "cases/frame-float-clearance-f0-y400-h400": {
     "jaccard": 0.8633,
@@ -4608,43 +4710,103 @@
   },
   "cases/frame-keep-with-next": {
     "jaccard": 0.9722,
-    "ssim": 0.9979
+    "ssim": 0.9979,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.978
   },
   "cases/frame-moved-space-before": {
     "jaccard": 0.9763,
-    "ssim": 0.9983
+    "ssim": 0.9983,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.9773
   },
   "cases/frame-moves-exact-height": {
     "jaccard": 0.8177,
-    "ssim": 0.9309
+    "ssim": 0.9309,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.9456
   },
   "cases/frame-moves-no-offset": {
     "jaccard": 0.8162,
-    "ssim": 0.9303
+    "ssim": 0.9303,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.9456
   },
   "cases/frame-moves-picture-caption": {
     "jaccard": 0.9779,
-    "ssim": 0.9954
+    "ssim": 0.9954,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9259,
+    "a11y_text": 0.9676
   },
   "cases/frame-moves-shared-tall": {
     "jaccard": 0.9805,
-    "ssim": 0.9901
+    "ssim": 0.9901,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 16,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8333,
+    "a11y_text": 1.0
   },
   "cases/frame-moves-to-next-column": {
     "jaccard": 0.9351,
-    "ssim": 0.9876
+    "ssim": 0.9876,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.957
   },
   "cases/frame-not-beside-height": {
     "jaccard": 0.7903,
-    "ssim": 0.9288
+    "ssim": 0.9288,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.9456
   },
   "cases/frame-page-break-before": {
     "jaccard": 0.971,
-    "ssim": 0.9941
+    "ssim": 0.9941,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.9043
   },
   "cases/frame-page-break-opens-column": {
     "jaccard": 0.9351,
-    "ssim": 0.9874
+    "ssim": 0.9874,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.957
   },
   "cases/full-width-float-empty-anchor": {
     "jaccard": 0.9808,
@@ -4888,15 +5050,33 @@
   },
   "cases/hf-floating-table-band": {
     "jaccard": 0.8621,
-    "ssim": 0.939
+    "ssim": 0.939,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/hf-floating-table-band-flow": {
     "jaccard": 0.9257,
-    "ssim": 0.9695
+    "ssim": 0.9695,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/hf-table-band-even-page": {
     "jaccard": 0.9462,
-    "ssim": 0.9842
+    "ssim": 0.9842,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/hyphen-opening-guillemet-explicit-space": {
     "jaccard": 0.9093,
@@ -5009,8 +5189,8 @@
     "a11y_text": 1.0
   },
   "cases/hyphen-squeeze-single-letter": {
-    "jaccard": 0.8507,
-    "ssim": 0.9237,
+    "jaccard": 0.8505,
+    "ssim": 0.9235,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -5020,7 +5200,13 @@
   },
   "cases/identical-parts-and-fonts": {
     "jaccard": 0.9871,
-    "ssim": 0.9844
+    "ssim": 0.9844,
+    "text_boundary": 0.5,
+    "ua_fail": 3,
+    "a11y_missing": 3,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.6031
   },
   "cases/indent-chars-hanging": {
     "jaccard": 0.9427,
@@ -5306,7 +5492,13 @@
   },
   "cases/inline-picture-twips": {
     "jaccard": 0.9959,
-    "ssim": 0.9994
+    "ssim": 0.9994,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9856,
+    "a11y_text": 1.0
   },
   "cases/inline-shape-alternate0-hide0-height12.25": {
     "jaccard": 0.801,
@@ -5720,27 +5912,63 @@
   },
   "cases/line-anchor-follows-push": {
     "jaccard": 0.9248,
-    "ssim": 0.994
+    "ssim": 0.994,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9041,
+    "a11y_text": 1.0
   },
   "cases/line-anchor-overrides": {
     "jaccard": 0.7655,
-    "ssim": 0.9683
+    "ssim": 0.9683,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9895,
+    "a11y_text": 1.0
   },
   "cases/line-grid": {
-    "jaccard": 0.949,
-    "ssim": 0.983
+    "jaccard": 0.9487,
+    "ssim": 0.9829,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/line_number_style_by_name": {
     "jaccard": 0.9565,
-    "ssim": 0.987
+    "ssim": 0.987,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/line_number_style_id_only": {
     "jaccard": 0.9673,
-    "ssim": 0.9919
+    "ssim": 0.9919,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/line_number_style_props": {
     "jaccard": 0.9673,
-    "ssim": 0.9919
+    "ssim": 0.9919,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/line_numbering_restart": {
     "jaccard": 0.9388,
@@ -5954,11 +6182,23 @@
   },
   "cases/mixed-line-baseline": {
     "jaccard": 0.9553,
-    "ssim": 0.9827
+    "ssim": 0.9827,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/mixed-line-leading": {
     "jaccard": 0.9532,
-    "ssim": 0.9743
+    "ssim": 0.9743,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/modern-oversized-lines5-cant1-prefix0": {
     "jaccard": 0.9353,
@@ -6951,12 +7191,24 @@
     "a11y_text": 1.0
   },
   "cases/page-table-line-reach": {
-    "jaccard": 0.9799,
-    "ssim": 0.996
+    "jaccard": 0.9798,
+    "ssim": 0.996,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9884,
+    "a11y_text": 1.0
   },
   "cases/page-table-line-reach-compat14": {
-    "jaccard": 0.9672,
-    "ssim": 0.9932
+    "jaccard": 0.968,
+    "ssim": 0.9939,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/paragraph-border-indents": {
     "jaccard": 0.9599,
@@ -7009,8 +7261,8 @@
     "a11y_text": 0.72
   },
   "cases/paragraph-offset-frame-immediate-long": {
-    "jaccard": 0.9063,
-    "ssim": 0.96,
+    "jaccard": 0.9071,
+    "ssim": 0.9603,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7029,8 +7281,8 @@
     "a11y_text": 1.0
   },
   "cases/paragraph-relative-group": {
-    "jaccard": 0.8898,
-    "ssim": 0.9657,
+    "jaccard": 0.891,
+    "ssim": 0.9662,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7188,7 +7440,13 @@
   },
   "cases/picture-part-reuse": {
     "jaccard": 0.9942,
-    "ssim": 0.9806
+    "ssim": 0.9806,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/raised-empty-size12-position-7-count1": {
     "jaccard": 0.9974,
@@ -7511,8 +7769,8 @@
     "a11y_text": 1.0
   },
   "cases/relative-from-bottom-margin": {
-    "jaccard": 0.9771,
-    "ssim": 0.9767,
+    "jaccard": 0.9776,
+    "ssim": 0.9772,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -7521,8 +7779,8 @@
     "a11y_text": 1.0
   },
   "cases/relative-from-top-margin": {
-    "jaccard": 0.9802,
-    "ssim": 0.9788,
+    "jaccard": 0.9807,
+    "ssim": 0.9793,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -8001,8 +8259,8 @@
     "a11y_text": 1.0
   },
   "cases/section-pages-continuous": {
-    "jaccard": 0.9936,
-    "ssim": 0.9987,
+    "jaccard": 0.9937,
+    "ssim": 0.9988,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 1,
@@ -8071,8 +8329,8 @@
     "a11y_text": 1.0
   },
   "cases/shift-return-tabbed-noexpand": {
-    "jaccard": 0.904,
-    "ssim": 0.9577,
+    "jaccard": 0.9032,
+    "ssim": 0.9574,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8342,15 +8600,33 @@
   },
   "cases/soft-hyphen": {
     "jaccard": 0.9339,
-    "ssim": 0.9827
+    "ssim": 0.9825,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8182,
+    "a11y_text": 1.0
   },
   "cases/soft-hyphen-contexts": {
     "jaccard": 0.9453,
-    "ssim": 0.9833
+    "ssim": 0.9833,
+    "text_boundary": 0.8806,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/space-line-mark-font": {
     "jaccard": 0.973,
-    "ssim": 0.9947
+    "ssim": 0.9947,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/space-only-frame": {
     "jaccard": 0.7406,
@@ -8404,15 +8680,27 @@
   },
   "cases/squeeze-keep-slack": {
     "jaccard": 0.9185,
-    "ssim": 0.9786
+    "ssim": 0.9786,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/squeeze-lead-space": {
-    "jaccard": 0.8961,
-    "ssim": 0.9487
+    "jaccard": 0.896,
+    "ssim": 0.9487,
+    "text_boundary": 0.9649,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/squeeze-threshold-after-hyphen": {
-    "jaccard": 0.8815,
-    "ssim": 0.9367,
+    "jaccard": 0.8813,
+    "ssim": 0.9365,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8421,7 +8709,7 @@
     "a11y_text": 1.0
   },
   "cases/squeeze-threshold-after-space": {
-    "jaccard": 0.8485,
+    "jaccard": 0.8484,
     "ssim": 0.919,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -8751,8 +9039,8 @@
     "a11y_text": 1.0
   },
   "cases/tab-only-line-own-font": {
-    "jaccard": 0.8967,
-    "ssim": 0.987,
+    "jaccard": 0.897,
+    "ssim": 0.9871,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8782,7 +9070,13 @@
   },
   "cases/tabbed_cjk_justify": {
     "jaccard": 0.3975,
-    "ssim": 0.8501
+    "ssim": 0.8501,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/table-cell-shading-edges": {
     "jaccard": 0.9419,
@@ -8796,7 +9090,13 @@
   },
   "cases/table-row-split-lines": {
     "jaccard": 0.7796,
-    "ssim": 0.8875
+    "ssim": 0.8875,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.788,
+    "a11y_text": 0.3831
   },
   "cases/table-style-centered": {
     "jaccard": 0.7755,
@@ -9030,15 +9330,33 @@
   },
   "cases/text_align_center_fonts": {
     "jaccard": 0.9292,
-    "ssim": 0.9933
+    "ssim": 0.9933,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/text_align_center_mixed": {
     "jaccard": 0.8993,
-    "ssim": 0.9724
+    "ssim": 0.9724,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/text_align_center_picture": {
     "jaccard": 0.8362,
-    "ssim": 0.9856
+    "ssim": 0.9856,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/textbox-inline-image-text-clip": {
     "jaccard": 0.9552,
@@ -9101,8 +9419,8 @@
     "a11y_text": 0.9788
   },
   "cases/textbox-wrap-beside-compat14": {
-    "jaccard": 0.9395,
-    "ssim": 0.962,
+    "jaccard": 0.9396,
+    "ssim": 0.9621,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -9111,7 +9429,7 @@
     "a11y_text": 1.0
   },
   "cases/three-wrapping-floats-one-page": {
-    "jaccard": 0.9915,
+    "jaccard": 0.9913,
     "ssim": 0.9957,
     "text_boundary": 1.0,
     "ua_fail": 3,
@@ -9122,19 +9440,43 @@
   },
   "cases/through-picture-band": {
     "jaccard": 0.9839,
-    "ssim": 0.9852
+    "ssim": 0.9852,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/through-picture-columns": {
     "jaccard": 0.9537,
-    "ssim": 0.9796
+    "ssim": 0.9796,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/through-picture-moves": {
     "jaccard": 0.9832,
-    "ssim": 0.994
+    "ssim": 0.994,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/through-picture-wide-polygon": {
     "jaccard": 0.9579,
-    "ssim": 0.9842
+    "ssim": 0.9842,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/toc-placeholder": {
     "jaccard": 0.87,
@@ -9178,14 +9520,26 @@
   },
   "cases/toc_pageref_after_tall_table": {
     "jaccard": 0.5906,
-    "ssim": 0.7439
+    "ssim": 0.7439,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6846,
+    "a11y_text": 0.9252
   },
   "cases/top-aligned-lowered-run": {
     "jaccard": 0.9687,
-    "ssim": 0.9968
+    "ssim": 0.9968,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/torture_test": {
-    "jaccard": 0.8857,
+    "jaccard": 0.8859,
     "ssim": 0.9353,
     "text_boundary": 0.9821,
     "ua_fail": 3,
@@ -9195,8 +9549,8 @@
     "a11y_text": 0.9071
   },
   "cases/tracked-changes-inline": {
-    "jaccard": 0.7958,
-    "ssim": 0.8899,
+    "jaccard": 0.7956,
+    "ssim": 0.8898,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9205,8 +9559,8 @@
     "a11y_text": 1.0
   },
   "cases/tracked-changes-inline@markup": {
-    "jaccard": 0.7004,
-    "ssim": 0.8285
+    "jaccard": 0.7003,
+    "ssim": 0.8284
   },
   "cases/trailing-anchor-prefix0-offset80-behind0": {
     "jaccard": 0.998,
@@ -9339,8 +9693,8 @@
     "a11y_text": 1.0
   },
   "cases/ul-trail-space-bidi": {
-    "jaccard": 0.7496,
-    "ssim": 0.8286,
+    "jaccard": 0.7494,
+    "ssim": 0.8281,
     "text_boundary": 0.2105,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9350,35 +9704,83 @@
   },
   "cases/ul-trail-space-off": {
     "jaccard": 0.9129,
-    "ssim": 0.9716
+    "ssim": 0.9716,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/ul-trail-space-on": {
     "jaccard": 0.8948,
-    "ssim": 0.9565
+    "ssim": 0.9565,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/ul-trail-space-runs": {
     "jaccard": 0.9121,
-    "ssim": 0.9491
+    "ssim": 0.9491,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/underline-color": {
     "jaccard": 0.8919,
-    "ssim": 0.9607
+    "ssim": 0.9607,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/underline-thick-heavy": {
     "jaccard": 0.9088,
-    "ssim": 0.9614
+    "ssim": 0.9614,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/underline-wave": {
     "jaccard": 0.8905,
-    "ssim": 0.956
+    "ssim": 0.956,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/underlined-inline-picture": {
     "jaccard": 0.9917,
-    "ssim": 0.9922
+    "ssim": 0.9922,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/underlined-picture-places": {
     "jaccard": 0.9878,
-    "ssim": 0.9918
+    "ssim": 0.9918,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8929,
+    "a11y_text": 1.0
   },
   "cases/underlined-space-compat14-underline0-split0": {
     "jaccard": 0.8812,
@@ -9462,11 +9864,23 @@
   },
   "cases/vml-frame-fill-picture": {
     "jaccard": 0.9552,
-    "ssim": 0.9374
+    "ssim": 0.9374,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7273,
+    "a11y_text": 1.0
   },
   "cases/vml-frame-fill-textbox-group": {
     "jaccard": 0.9811,
-    "ssim": 0.9886
+    "ssim": 0.9886,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8824,
+    "a11y_text": 1.0
   },
   "cases/vml-front-rule-over-background": {
     "jaccard": 0.9337,
@@ -9785,8 +10199,8 @@
     "a11y_text": 1.0
   },
   "cases/wrap-top-bottom-one-float": {
-    "jaccard": 0.9356,
-    "ssim": 0.9868,
+    "jaccard": 0.9372,
+    "ssim": 0.9874,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9795,8 +10209,8 @@
     "a11y_text": 1.0
   },
   "cases/wrap-top-bottom-two-floats": {
-    "jaccard": 0.9364,
-    "ssim": 0.9873,
+    "jaccard": 0.938,
+    "ssim": 0.9878,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9952,7 +10366,7 @@
     "a11y_text": 0.5636
   },
   "scraped/CV": {
-    "jaccard": 0.9386,
+    "jaccard": 0.9387,
     "ssim": 0.9824,
     "text_boundary": 0.6038,
     "ua_fail": 3,
@@ -9993,7 +10407,7 @@
     "a11y_text": 1.0
   },
   "scraped/alpharetta_school_governance_council": {
-    "jaccard": 0.8631,
+    "jaccard": 0.8629,
     "ssim": 0.9547,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -10003,8 +10417,8 @@
     "a11y_text": 0.985
   },
   "scraped/americas_counter_terrorism_agenda": {
-    "jaccard": 0.8731,
-    "ssim": 0.9474,
+    "jaccard": 0.873,
+    "ssim": 0.9473,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 7,
@@ -10013,8 +10427,8 @@
     "a11y_text": 0.8895
   },
   "scraped/arabic_rice_benefits_article": {
-    "jaccard": 0.781,
-    "ssim": 0.8771,
+    "jaccard": 0.7812,
+    "ssim": 0.8772,
     "text_boundary": 0.0769,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10023,7 +10437,7 @@
     "a11y_text": 0.0
   },
   "scraped/arizona_physical_education_standards": {
-    "jaccard": 0.7623,
+    "jaccard": 0.7622,
     "ssim": 0.9125,
     "text_boundary": 1.0,
     "ua_fail": 3,
@@ -10034,7 +10448,7 @@
   },
   "scraped/auditor_regulatory_report_template": {
     "jaccard": 0.8715,
-    "ssim": 0.9382,
+    "ssim": 0.9381,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10045,7 +10459,7 @@
   "scraped/australian_higher_education_guidelines": {
     "jaccard": 0.7989,
     "ssim": 0.8798,
-    "text_boundary": 0.9844,
+    "text_boundary": 0.9853,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10053,7 +10467,7 @@
     "a11y_text": 0.9941
   },
   "scraped/bahamas_sustainable_development_hosting": {
-    "jaccard": 0.8649,
+    "jaccard": 0.8648,
     "ssim": 0.9354,
     "text_boundary": 0.9429,
     "ua_fail": 2,
@@ -10063,8 +10477,8 @@
     "a11y_text": 1.0
   },
   "scraped/belgian_youth_program_certificate": {
-    "jaccard": 0.7551,
-    "ssim": 0.9408,
+    "jaccard": 0.7552,
+    "ssim": 0.9409,
     "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -10093,7 +10507,7 @@
     "a11y_text": 0.9937
   },
   "scraped/brazilian_logistics_study": {
-    "jaccard": 0.8847,
+    "jaccard": 0.8848,
     "ssim": 0.9557,
     "text_boundary": 0.9939,
     "convert_ms": 744.0,
@@ -10104,8 +10518,8 @@
     "a11y_text": 0.9928
   },
   "scraped/bulgarian_farmland_allocation_order": {
-    "jaccard": 0.8708,
-    "ssim": 0.9386,
+    "jaccard": 0.8711,
+    "ssim": 0.9387,
     "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -10126,7 +10540,7 @@
   "scraped/bush_fires_act_comparison": {
     "jaccard": 0.8367,
     "ssim": 0.941,
-    "text_boundary": 0.9906,
+    "text_boundary": 0.993,
     "convert_ms": 248.6,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10147,7 +10561,7 @@
   "scraped/carbon_farming_initiative_rule": {
     "jaccard": 0.7177,
     "ssim": 0.8297,
-    "text_boundary": 0.9635,
+    "text_boundary": 0.9623,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10165,7 +10579,7 @@
     "a11y_text": 1.0
   },
   "scraped/centrifugal_water_chillers": {
-    "jaccard": 0.896,
+    "jaccard": 0.8961,
     "ssim": 0.962,
     "text_boundary": 1.0,
     "convert_ms": 40.9,
@@ -10188,7 +10602,7 @@
   "scraped/chinese_costume_design_course": {
     "jaccard": 0.3845,
     "ssim": 0.5898,
-    "text_boundary": 0.4699,
+    "text_boundary": 0.4578,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10229,7 +10643,7 @@
   "scraped/clean_energy_regulator_act": {
     "jaccard": 0.5826,
     "ssim": 0.7504,
-    "text_boundary": 0.9634,
+    "text_boundary": 0.959,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10257,7 +10671,7 @@
     "a11y_text": 0.9978
   },
   "scraped/cote_dazur_phd_grants_call": {
-    "jaccard": 0.7801,
+    "jaccard": 0.78,
     "ssim": 0.9021,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -10269,7 +10683,7 @@
   "scraped/covid_insomnia_mental_health": {
     "jaccard": 0.6386,
     "ssim": 0.7499,
-    "text_boundary": 0.6129,
+    "text_boundary": 0.6165,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10279,12 +10693,12 @@
   "scraped/croatian_grant_guidelines": {
     "jaccard": 0.8016,
     "ssim": 0.9374,
-    "text_boundary": 1.0,
+    "text_boundary": 0.9992,
     "convert_ms": 270.5,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.9117,
+    "a11y_struct": 0.9137,
     "a11y_text": 0.921
   },
   "scraped/croatian_military_burial_request": {
@@ -10319,7 +10733,7 @@
     "a11y_text": 1.0
   },
   "scraped/cyprus_ucits_marketing_registry": {
-    "jaccard": 0.8317,
+    "jaccard": 0.8318,
     "ssim": 0.9421,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -10339,7 +10753,7 @@
     "a11y_text": 1.0
   },
   "scraped/czech_cafeteria_notice": {
-    "jaccard": 0.8658,
+    "jaccard": 0.8657,
     "ssim": 0.9442,
     "text_boundary": 1.0,
     "convert_ms": 6.9,
@@ -10370,7 +10784,7 @@
     "a11y_text": 1.0
   },
   "scraped/czech_crisis_measure_notice": {
-    "jaccard": 0.8711,
+    "jaccard": 0.8712,
     "ssim": 0.9573,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -10455,7 +10869,7 @@
   "scraped/czech_wastewater_discharge_permit": {
     "jaccard": 0.8276,
     "ssim": 0.9221,
-    "text_boundary": 0.9695,
+    "text_boundary": 0.9878,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10463,8 +10877,8 @@
     "a11y_text": 0.9962
   },
   "scraped/czech_works_contract_proposal": {
-    "jaccard": 0.8187,
-    "ssim": 0.9256,
+    "jaccard": 0.8189,
+    "ssim": 0.9257,
     "text_boundary": 0.996,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10473,7 +10887,7 @@
     "a11y_text": 0.9083
   },
   "scraped/dental_amalgam_restoration_care": {
-    "jaccard": 0.8122,
+    "jaccard": 0.8121,
     "ssim": 0.9153,
     "text_boundary": 1.0,
     "ua_fail": 3,
@@ -10493,7 +10907,7 @@
     "a11y_text": 1.0
   },
   "scraped/dialysis_treatment_transition_guide": {
-    "jaccard": 0.9504,
+    "jaccard": 0.9501,
     "ssim": 0.9858,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -10540,8 +10954,8 @@
     "a11y_text": 0.9807
   },
   "scraped/dutch_school_evaluation_form": {
-    "jaccard": 0.8733,
-    "ssim": 0.9541,
+    "jaccard": 0.8736,
+    "ssim": 0.9542,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10571,7 +10985,7 @@
     "a11y_text": 1.0
   },
   "scraped/education_consultant_posting": {
-    "jaccard": 0.6546,
+    "jaccard": 0.6547,
     "ssim": 0.8872,
     "text_boundary": 0.9415,
     "convert_ms": 47.1,
@@ -10623,7 +11037,7 @@
   },
   "scraped/family_kinship_lesson_plan": {
     "jaccard": 0.8771,
-    "ssim": 0.9344,
+    "ssim": 0.9345,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10632,8 +11046,8 @@
     "a11y_text": 1.0
   },
   "scraped/federal_design_services_letter_interest": {
-    "jaccard": 0.8482,
-    "ssim": 0.9446,
+    "jaccard": 0.8483,
+    "ssim": 0.9447,
     "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -10642,9 +11056,9 @@
     "a11y_text": 1.0
   },
   "scraped/federal_procurement_terms": {
-    "jaccard": 0.8057,
+    "jaccard": 0.8056,
     "ssim": 0.9278,
-    "text_boundary": 0.9648,
+    "text_boundary": 0.9619,
     "convert_ms": 57.1,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -10684,7 +11098,7 @@
     "a11y_text": 1.0
   },
   "scraped/geneva_waste_facility_permit_request": {
-    "jaccard": 0.716,
+    "jaccard": 0.7161,
     "ssim": 0.8647,
     "text_boundary": 0.9474,
     "ua_fail": 2,
@@ -10726,8 +11140,8 @@
     "a11y_text": 1.0
   },
   "scraped/greensboro_partnership_brochure": {
-    "jaccard": 0.8876,
-    "ssim": 0.9513,
+    "jaccard": 0.8872,
+    "ssim": 0.9511,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10736,7 +11150,7 @@
     "a11y_text": 1.0
   },
   "scraped/handels_messiah_biblical_analysis": {
-    "jaccard": 0.8995,
+    "jaccard": 0.8996,
     "ssim": 0.9623,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -10756,7 +11170,7 @@
     "a11y_text": 0.8992
   },
   "scraped/indonesian_benchmarking_guide": {
-    "jaccard": 0.8607,
+    "jaccard": 0.8606,
     "ssim": 0.9311,
     "text_boundary": 0.9742,
     "convert_ms": 170.5,
@@ -10767,8 +11181,8 @@
     "a11y_text": 0.9994
   },
   "scraped/indonesian_school_admission_checklist": {
-    "jaccard": 0.8273,
-    "ssim": 0.9204,
+    "jaccard": 0.8274,
+    "ssim": 0.9205,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10787,8 +11201,8 @@
     "a11y_text": 0.994
   },
   "scraped/interview_question_guide": {
-    "jaccard": 0.9562,
-    "ssim": 0.9882,
+    "jaccard": 0.9563,
+    "ssim": 0.9883,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10827,8 +11241,8 @@
     "a11y_text": 0.7331
   },
   "scraped/italian_boat_hoist_association_notice": {
-    "jaccard": 0.8562,
-    "ssim": 0.9327,
+    "jaccard": 0.856,
+    "ssim": 0.9326,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10890,8 +11304,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_land_development_sign_form": {
-    "jaccard": 0.4471,
-    "ssim": 0.7767,
+    "jaccard": 0.4472,
+    "ssim": 0.7768,
     "text_boundary": 0.9259,
     "ua_fail": 4,
     "a11y_missing": 0,
@@ -10973,7 +11387,7 @@
     "a11y_text": 1.0
   },
   "scraped/lithuanian_public_information_law": {
-    "jaccard": 0.8769,
+    "jaccard": 0.877,
     "ssim": 0.9515,
     "text_boundary": 0.9825,
     "ua_fail": 2,
@@ -11015,7 +11429,7 @@
   "scraped/mandated_reporter_child_abuse": {
     "jaccard": 0.8606,
     "ssim": 0.9616,
-    "text_boundary": 0.9895,
+    "text_boundary": 0.9789,
     "convert_ms": 43.3,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11025,7 +11439,7 @@
   },
   "scraped/massachusetts_community_sanitation": {
     "jaccard": 0.9094,
-    "ssim": 0.9741,
+    "ssim": 0.9742,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -11040,7 +11454,7 @@
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.965,
+    "a11y_struct": 0.9612,
     "a11y_text": 1.0
   },
   "scraped/mongolian_human_rights_law": {
@@ -11066,7 +11480,7 @@
   },
   "scraped/oahu_burial_council_minutes": {
     "jaccard": 0.9236,
-    "ssim": 0.9713,
+    "ssim": 0.9714,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11116,8 +11530,8 @@
     "a11y_text": 0.9569
   },
   "scraped/physical_education_curriculum_map": {
-    "jaccard": 0.889,
-    "ssim": 0.9532,
+    "jaccard": 0.8888,
+    "ssim": 0.9531,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11179,9 +11593,9 @@
     "a11y_text": 0.9562
   },
   "scraped/polish_ministry_accessibility_report": {
-    "jaccard": 0.6833,
+    "jaccard": 0.6834,
     "ssim": 0.913,
-    "text_boundary": 0.9477,
+    "text_boundary": 0.9402,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -11189,7 +11603,7 @@
     "a11y_text": 0.9892
   },
   "scraped/polish_municipal_letter": {
-    "jaccard": 0.7618,
+    "jaccard": 0.7619,
     "ssim": 0.8918,
     "text_boundary": 1.0,
     "convert_ms": 11.8,
@@ -11200,7 +11614,7 @@
     "a11y_text": 1.0
   },
   "scraped/polish_procurement_statement": {
-    "jaccard": 0.8997,
+    "jaccard": 0.8996,
     "ssim": 0.9553,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -11211,7 +11625,7 @@
   },
   "scraped/polish_tender_declaration": {
     "jaccard": 0.8549,
-    "ssim": 0.925,
+    "ssim": 0.9251,
     "text_boundary": 1.0,
     "convert_ms": 19.0,
     "ua_fail": 2,
@@ -11241,7 +11655,7 @@
     "a11y_text": 0.9896
   },
   "scraped/primary_care_safeguarding_annual_review": {
-    "jaccard": 0.7536,
+    "jaccard": 0.7535,
     "ssim": 0.901,
     "text_boundary": 0.9936,
     "ua_fail": 2,
@@ -11251,8 +11665,8 @@
     "a11y_text": 0.9956
   },
   "scraped/radiographer_interventional_job_desc": {
-    "jaccard": 0.8707,
-    "ssim": 0.9313,
+    "jaccard": 0.8706,
+    "ssim": 0.9312,
     "text_boundary": 0.9917,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -11261,8 +11675,8 @@
     "a11y_text": 0.9645
   },
   "scraped/rehab_centre_physio_posting": {
-    "jaccard": 0.9238,
-    "ssim": 0.9772,
+    "jaccard": 0.9239,
+    "ssim": 0.9773,
     "text_boundary": 1.0,
     "convert_ms": 9.8,
     "ua_fail": 2,
@@ -11284,7 +11698,7 @@
   "scraped/romanian_candidate_declaration_form_f2": {
     "jaccard": 0.6555,
     "ssim": 0.9733,
-    "text_boundary": 0.993,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -11292,8 +11706,8 @@
     "a11y_text": 1.0
   },
   "scraped/romanian_quality_evaluation_strategy": {
-    "jaccard": 0.7619,
-    "ssim": 0.8394,
+    "jaccard": 0.762,
+    "ssim": 0.8395,
     "text_boundary": 0.9761,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11333,7 +11747,7 @@
   },
   "scraped/russian_municipal_council_draft": {
     "jaccard": 0.8538,
-    "ssim": 0.9378,
+    "ssim": 0.9377,
     "text_boundary": 0.9565,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11391,7 +11805,7 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
-    "a11y_text": 0.9918
+    "a11y_text": 1.0
   },
   "scraped/sample500kB": {
     "jaccard": 0.1302,
@@ -11405,7 +11819,7 @@
     "a11y_text": 1.0
   },
   "scraped/samtale": {
-    "jaccard": 0.8946,
+    "jaccard": 0.8944,
     "ssim": 0.9473,
     "text_boundary": 1.0,
     "convert_ms": 11.0,
@@ -11416,8 +11830,8 @@
     "a11y_text": 1.0
   },
   "scraped/sao_paulo_procurement_contract": {
-    "jaccard": 0.8486,
-    "ssim": 0.9291,
+    "jaccard": 0.8483,
+    "ssim": 0.9289,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11436,7 +11850,7 @@
     "a11y_text": 1.0
   },
   "scraped/scottish_fundraising_awards_campaign": {
-    "jaccard": 0.8308,
+    "jaccard": 0.8309,
     "ssim": 0.9267,
     "text_boundary": 0.9552,
     "ua_fail": 2,
@@ -11467,8 +11881,8 @@
     "a11y_text": 1.0
   },
   "scraped/slovak_electoral_campaign_amendment": {
-    "jaccard": 0.8724,
-    "ssim": 0.9367,
+    "jaccard": 0.8723,
+    "ssim": 0.9366,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11478,7 +11892,7 @@
   },
   "scraped/slovak_eu_directive_compliance_table": {
     "jaccard": 0.6926,
-    "ssim": 0.903,
+    "ssim": 0.9031,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11509,7 +11923,7 @@
   },
   "scraped/slovak_pedagogical_practice_agreement": {
     "jaccard": 0.2721,
-    "ssim": 0.9389,
+    "ssim": 0.939,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11539,7 +11953,7 @@
   },
   "scraped/stem_partnerships_guide": {
     "jaccard": 0.8289,
-    "ssim": 0.9307,
+    "ssim": 0.9306,
     "text_boundary": 0.9821,
     "convert_ms": 32.2,
     "ua_fail": 0,
@@ -11569,8 +11983,8 @@
     "a11y_text": 0.992
   },
   "scraped/streamnet_steering_committee_meeting": {
-    "jaccard": 0.8355,
-    "ssim": 0.9246,
+    "jaccard": 0.8353,
+    "ssim": 0.9245,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11579,7 +11993,7 @@
     "a11y_text": 0.8008
   },
   "scraped/swiss_materials_extraction_zone_guidance": {
-    "jaccard": 0.5886,
+    "jaccard": 0.5885,
     "ssim": 0.7954,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -11610,7 +12024,7 @@
   },
   "scraped/traditional_skills_job_form": {
     "jaccard": 0.5256,
-    "ssim": 0.8232,
+    "ssim": 0.8233,
     "text_boundary": 1.0,
     "convert_ms": 22.0,
     "ua_fail": 2,
@@ -11685,17 +12099,17 @@
   "scraped/uk_commercial_lease_template": {
     "jaccard": 0.3459,
     "ssim": 0.4699,
-    "text_boundary": 0.8106,
+    "text_boundary": 0.8046,
     "convert_ms": 326.3,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.8079,
-    "a11y_text": 0.7648
+    "a11y_text": 0.7627
   },
   "scraped/ukraine_humanitarian_aid": {
-    "jaccard": 0.8564,
-    "ssim": 0.9321,
+    "jaccard": 0.8563,
+    "ssim": 0.932,
     "text_boundary": 1.0,
     "convert_ms": 12.9,
     "ua_fail": 2,
@@ -11726,8 +12140,8 @@
     "a11y_text": 0.9579
   },
   "scraped/ut_koer_annual_meeting_minutes": {
-    "jaccard": 0.689,
-    "ssim": 0.8737,
+    "jaccard": 0.6888,
+    "ssim": 0.8736,
     "text_boundary": 0.9655,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -11749,7 +12163,7 @@
   "scraped/victorian_universal_design_policy": {
     "jaccard": 0.7996,
     "ssim": 0.8885,
-    "text_boundary": 0.9876,
+    "text_boundary": 0.9938,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -11759,7 +12173,7 @@
   "scraped/wa_child_services_regulations": {
     "jaccard": 0.7922,
     "ssim": 0.9106,
-    "text_boundary": 0.9863,
+    "text_boundary": 0.9825,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -11767,8 +12181,8 @@
     "a11y_text": 0.949
   },
   "scraped/waste_management_request": {
-    "jaccard": 0.9085,
-    "ssim": 0.9688,
+    "jaccard": 0.9086,
+    "ssim": 0.9689,
     "text_boundary": 1.0,
     "convert_ms": 5.6,
     "ua_fail": 2,
@@ -11798,8 +12212,8 @@
     "a11y_text": 0.9355
   },
   "scraped/who_prescribing_patterns_table": {
-    "jaccard": 0.8236,
-    "ssim": 0.9304,
+    "jaccard": 0.8238,
+    "ssim": 0.9305,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
