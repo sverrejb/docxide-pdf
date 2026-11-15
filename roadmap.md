@@ -30,15 +30,6 @@ lines fall differently on the 150 dpi pixel grid.
   85.6 (27/27 exact), japanese_medical_consultation_form 64.9 → 62.2,
   isla_language_lesson_plan 69.5 → 67.4, polish_municipal_letter 77.8 → 76.2.
 
-**Stale baselines awaiting approval (2026-11-15):** five drops, none a
-layout change. bahamas, greensboro, sao_paulo and slovak_electoral lose
-0.01–0.04pp Jaccard from the 2026-11-10 file-size commits (34ce14746..
-c6495bfb9: the build before scores the baselines exactly, the one after
-today's numbers; glyphs move ≤0.0016pt and flip MuPDF's subpixel snap).
-wa_child's TxtBnd 98.6 → 98.2 is the 2026-11-09 TxtBnd grouping rewrite
-(a1c9eb15d), accepted 40 minutes before it; the 2026-11-09 build scores the
-same under today's metric.
-
 **Engine-gap list (CI comparison 2026-11-09, `git show
 origin/gh-pages:report.json`):** 48 fixtures where another engine beats us
 by ≥3pp J (120 on 2026-11-07), ours vs the best engine:
