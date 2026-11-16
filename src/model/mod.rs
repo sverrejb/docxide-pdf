@@ -201,13 +201,14 @@ pub enum LineNumberRestart {
 
 /// §17.6.23 ST_VerticalJc — how the section's body content is positioned
 /// vertically within the text region of each page.
-/// `w:textAlignment`; baseline, bottom and auto lay out alike so far.
+/// `w:textAlignment`; baseline and auto lay out alike (Word online probes).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum TextAlignment {
     #[default]
     Auto,
     Top,
     Center,
+    Bottom,
 }
 
 impl TextAlignment {
@@ -215,6 +216,7 @@ impl TextAlignment {
         match val {
             "top" => Self::Top,
             "center" => Self::Center,
+            "bottom" => Self::Bottom,
             _ => Self::Auto,
         }
     }

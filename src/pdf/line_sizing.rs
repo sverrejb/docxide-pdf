@@ -36,9 +36,15 @@ pub(super) fn size_lines_by_own_runs(
     let by_pdf_name = super::fonts::by_pdf_name(fonts);
     let fallbacks = glyph_fallbacks(fonts);
     for line in lines.iter_mut() {
-        if alignment == TextAlignment::Center && !line.leading_space_wrap && !line.leading_tab_wrap
-        {
-            center_align_line(line, &by_pdf_name, line_spacing, para_pitch, para_ascent);
+        if !line.leading_space_wrap && !line.leading_tab_wrap {
+            align_line(
+                line,
+                &by_pdf_name,
+                alignment,
+                line_spacing,
+                (para_pitch, para_ascent),
+                None,
+            );
         }
         if top_aligned {
             for c in line
@@ -160,103 +166,243 @@ pub(super) fn size_lines_by_own_runs(
     }
 }
 
-/// `w:textAlignment="center"`: Word lines up the middles of a line's runs and
-/// pictures. The tallest sets the middle (a picture's own; a text run's glyph
-/// box, its line gap left out) and the others centre on it, text by its line
-/// box (glyph box and the gap above it). A picture line spans the largest half
-/// above and below that middle, which takes the baseline's place under exact
-/// spacing; a multiple adds the text's extra leading below (Word online
-/// probes, issue #164: 12-60pt pictures beside 12-40pt Times New Roman and
-/// Arial at single, double, exact and at-least 40pt, 12pt beside 36pt text
-/// and Times New Roman beside Arial, SimSun and Verdana, all within 0.25pt).
-/// `center_align_line` for every line of an exact-spaced paragraph, which
-/// `size_lines_by_own_runs` leaves alone.
-pub(super) fn center_align_exact_lines(
+/// `align_line` for every line of an exact-spaced or grid-snapped paragraph,
+/// which `size_lines_by_own_runs` leaves alone. `grid` is the line grid's
+/// pitch and the paragraph's first-baseline offset on it.
+pub(super) fn align_lines(
     lines: &mut [TextLine],
     fonts: &HashMap<String, FontEntry>,
+    alignment: TextAlignment,
     line_spacing: LineSpacing,
-    para_pitch: f32,
-    para_ascent: f32,
+    (para_pitch, para_ascent): (f32, f32),
+    grid: Option<(f32, f32)>,
 ) {
     let by_pdf_name = super::fonts::by_pdf_name(fonts);
     for line in lines {
-        center_align_line(line, &by_pdf_name, line_spacing, para_pitch, para_ascent);
+        align_line(
+            line,
+            &by_pdf_name,
+            alignment,
+            line_spacing,
+            (para_pitch, para_ascent),
+            grid,
+        );
     }
 }
 
-fn center_align_line(
+/// Where `w:textAlignment` puts a chunk: how far its baseline (a picture's
+/// bottom) sits below the line it aligns on, and how far it reaches above
+/// and below that line.
+#[derive(Clone, Copy)]
+struct Placed {
+    down: f32,
+    above: f32,
+    below: f32,
+}
+
+/// A text chunk's metrics for `w:textAlignment`: (ascent with the line gap,
+/// descent, line height, gap above the glyphs, gap below them). An East
+/// Asian face's gaps are half its 1.3× leading each; a Latin face has none
+/// below.
+fn align_metrics(c: &WordChunk, by_pdf_name: &HashMap<&str, &FontEntry>) -> Option<[f32; 5]> {
+    if c.math.is_some() || c.inline_image_name.is_some() {
+        return None;
+    }
+    let e = by_pdf_name.get(c.pdf_font.as_str())?;
+    let (lhr, ar) = run_line_metrics(e, &c.text);
+    let (lhr, ar) = (lhr?, ar?);
+    let fs = c.line_font_size;
+    let (gap, gap_below) = if east_asian_leading(e, &c.text) {
+        (lhr * 0.3 / 2.6, lhr * 0.3 / 2.6)
+    } else {
+        (e.leading_ratio.unwrap_or(0.0), 0.0)
+    };
+    Some([
+        fs * ar,
+        fs * (lhr - ar).max(0.0),
+        fs * lhr,
+        fs * gap,
+        fs * gap_below,
+    ])
+}
+
+/// Word lines up a line's runs and pictures on one line per
+/// `w:textAlignment` (Word online probes, issue #164 and its follow-up:
+/// 12-60pt pictures beside 12-40pt Times New Roman, Arial, Calibri, Courier
+/// New and SimSun, mixed text sizes, single, double, 1.5, exact 15-60pt and
+/// at-least 40pt spacing, with and without a 312-twip line grid; all within
+/// 0.3pt):
+/// - top: glyph tops (the ascent below the line gap) and picture tops; the
+///   largest gap stays above;
+/// - bottom: half a run's descent below its baseline, and picture bottoms;
+/// - center: middles. The tallest sets it (a picture's own; a text run's
+///   glyph box, its line gap left out) and the others centre on it, text by
+///   its line box (glyph box and the gap above it);
+/// - baseline: baselines and picture bottoms.
+///
+/// A picture line spans the furthest reach above and below that line, which
+/// sits where the baseline would under exact spacing (0.8 × the height). A
+/// multiple adds the text's extra leading below; an at-least minimum adds
+/// its slack above, under bottom alignment below. On a line grid the line
+/// takes the whole cells it needs (`picture_grid_cells`) with its content
+/// centred in them, whatever the alignment. Lines without a picture keep
+/// their box; only the shorter runs move.
+fn align_line(
     line: &mut TextLine,
     by_pdf_name: &HashMap<&str, &FontEntry>,
+    alignment: TextAlignment,
     line_spacing: LineSpacing,
-    para_pitch: f32,
-    para_ascent: f32,
+    (para_pitch, para_ascent): (f32, f32),
+    grid: Option<(f32, f32)>,
 ) {
-    // A text chunk's (line-box middle, glyph-box middle) above its baseline
-    // and half its line height.
-    let text_middles = |c: &WordChunk| -> Option<(f32, f32, f32)> {
-        if c.math.is_some() || c.inline_image_name.is_some() {
-            return None;
-        }
-        let e = by_pdf_name.get(c.pdf_font.as_str())?;
-        let (lhr, ar) = run_line_metrics(e, &c.text);
-        let (lhr, ar) = (lhr?, ar?);
-        let fs = c.line_font_size;
-        let line_box = fs * (ar - lhr / 2.0);
-        Some((
-            line_box,
-            line_box - fs * e.leading_ratio.unwrap_or(0.0) / 2.0,
-            fs * lhr / 2.0,
-        ))
-    };
-    let picture_half = line_max_image_h(line) / 2.0;
-    let tallest_text = line
-        .chunks
-        .iter()
-        .filter(|c| !c.text.trim().is_empty())
-        .filter_map(|c| Some((c, text_middles(c)?)))
-        .max_by(|a, b| a.1.2.total_cmp(&b.1.2));
-    match tallest_text {
-        Some((_, (_, glyph_mid, half))) if half > picture_half => {
-            for c in line.chunks.iter_mut() {
-                if c.inline_image_name.is_some() {
-                    c.y_offset += glyph_mid - c.inline_image_height / 2.0;
-                } else if let Some((line_mid, _, own_half)) = text_middles(c)
-                    // Runs as tall as the tallest share its baseline (Times
-                    // New Roman, Arial and SimSun 12pt, bold beside regular);
-                    // a taller face moves the others (Verdana 12pt lifts
-                    // Times New Roman 0.5pt).
-                    && half - own_half > 0.025
-                {
-                    c.y_offset += glyph_mid - line_mid;
-                }
-            }
-        }
-        _ if picture_half > 0.0 => {
-            let half = line
-                .chunks
-                .iter()
-                .filter_map(|c| text_middles(c).map(|m| m.2))
-                .fold(picture_half, f32::max);
-            for c in line.chunks.iter_mut() {
-                if c.inline_image_name.is_some() {
-                    c.y_offset -= c.inline_image_height / 2.0;
-                } else if let Some((line_mid, ..)) = text_middles(c) {
-                    c.y_offset -= line_mid;
-                }
-            }
-            let natural = 2.0 * half;
-            let (advance, middle) = match line_spacing {
-                LineSpacing::Auto(m) => (natural + para_pitch * (1.0 - 1.0 / m), half),
-                // The exact line's baseline already sits at 0.8 × its height.
-                LineSpacing::Exact(h) => (h, para_ascent),
-                LineSpacing::AtLeast(h) => (h.max(natural), half + (h - natural).max(0.0)),
-            };
-            line.pitch = Some(advance);
-            line.center_line = Some(middle);
-            line.ascent_shift = 0.0;
-        }
-        _ => {}
+    // ponytail: a math zone keeps its baseline; probe one beside a picture first.
+    if (alignment == TextAlignment::Auto && grid.is_none())
+        || line.chunks.iter().any(|c| c.math.is_some())
+    {
+        return;
     }
+    let picture_h = line_max_image_h(line);
+    let exact = matches!(line_spacing, LineSpacing::Exact(_));
+    let glyphs = || {
+        line.chunks
+            .iter()
+            .filter(|c| !c.text.trim().is_empty())
+            .filter_map(|c| align_metrics(c, by_pdf_name))
+    };
+    // A text run's glyph-box middle above its baseline.
+    let glyph_mid =
+        |[asc, _, lh, gap, gap_below]: [f32; 5]| asc - lh / 2.0 - (gap - gap_below) / 2.0;
+    let tallest = glyphs().max_by(|a, b| a[2].total_cmp(&b[2]));
+    let tallest_half = tallest.map_or(0.0, |m| m[2] / 2.0);
+    let text_led = tallest_half > picture_h / 2.0;
+    let placed = |m: [f32; 5]| {
+        let [asc, desc, lh, gap, _] = m;
+        match alignment {
+            TextAlignment::Top => Placed {
+                down: asc - gap,
+                above: gap,
+                below: asc - gap + desc,
+            },
+            TextAlignment::Bottom => Placed {
+                down: -desc / 2.0,
+                above: asc + desc / 2.0,
+                below: desc / 2.0,
+            },
+            TextAlignment::Center => {
+                // Runs as tall as the tallest share its baseline (Times New
+                // Roman, Arial and SimSun 12pt, bold beside regular); a taller
+                // face moves the others (Verdana 12pt lifts Times New Roman 0.5pt).
+                let leads = text_led && tallest_half - lh / 2.0 <= 0.025;
+                Placed {
+                    down: match tallest {
+                        Some(t) if leads => glyph_mid(t),
+                        _ => asc - lh / 2.0,
+                    },
+                    above: lh / 2.0,
+                    below: lh / 2.0,
+                }
+            }
+            TextAlignment::Auto => Placed {
+                down: 0.0,
+                above: asc,
+                below: desc,
+            },
+        }
+    };
+    let picture = |h: f32| match alignment {
+        TextAlignment::Top => Placed {
+            down: h,
+            above: 0.0,
+            below: h,
+        },
+        TextAlignment::Center => Placed {
+            down: h / 2.0,
+            above: h / 2.0,
+            below: h / 2.0,
+        },
+        _ => Placed {
+            down: 0.0,
+            above: h,
+            below: 0.0,
+        },
+    };
+    let laid_out = picture_h > 0.0
+        && match alignment {
+            TextAlignment::Top | TextAlignment::Bottom => true,
+            TextAlignment::Center => !text_led || exact,
+            TextAlignment::Auto => glyphs().all(|m| m[0] < picture_h),
+        };
+    if !laid_out {
+        // Text keeps its line: the shorter runs move onto the line the tallest
+        // sets, as do pictures beside text-led centred lines.
+        // The run that sets the line: the tallest under center, else the
+        // highest ascent.
+        let key = if alignment == TextAlignment::Center {
+            2
+        } else {
+            0
+        };
+        let lead = glyphs().max_by(|a, b| a[key].total_cmp(&b[key]));
+        let Some(lead) = lead
+            .filter(|_| alignment != TextAlignment::Auto)
+            .map(placed)
+        else {
+            return;
+        };
+        for c in line.chunks.iter_mut() {
+            if c.inline_image_name.is_some() {
+                c.y_offset += lead.down - picture(c.inline_image_height).down;
+            } else if let Some(m) = align_metrics(c, by_pdf_name) {
+                c.y_offset += lead.down - placed(m).down;
+            }
+        }
+        if picture_h > 0.0 {
+            // The picture stays inside the text's box.
+            line.ref_line = Some(para_ascent + line.ascent_shift);
+        }
+        return;
+    }
+    let (above, below) = glyphs()
+        .map(placed)
+        .chain(std::iter::once(picture(picture_h)))
+        .fold((0.0f32, 0.0f32), |(a, b), p| {
+            (a.max(p.above), b.max(p.below))
+        });
+    let natural = above + below;
+    let (advance, at) = match (grid, line_spacing) {
+        (Some((pitch, _)), ls) => {
+            let cells = picture_grid_cells(natural, pitch);
+            let advance = match ls {
+                LineSpacing::Auto(m) => cells.max(m * pitch),
+                _ => cells,
+            };
+            (advance, (advance - natural) / 2.0 + above)
+        }
+        (None, LineSpacing::Auto(m)) => (natural + para_pitch * (1.0 - 1.0 / m), above),
+        // The exact line's baseline already sits at 0.8 × its height.
+        (None, LineSpacing::Exact(h)) => (h, para_ascent),
+        (None, LineSpacing::AtLeast(h)) => {
+            let slack = (h - natural).max(0.0);
+            let above_slack = if alignment == TextAlignment::Bottom {
+                0.0
+            } else {
+                slack
+            };
+            (natural + slack, above + above_slack)
+        }
+    };
+    for c in line.chunks.iter_mut() {
+        if c.inline_image_name.is_some() {
+            c.y_offset -= picture(c.inline_image_height).down;
+        } else if let Some(m) = align_metrics(c, by_pdf_name) {
+            c.y_offset -= placed(m).down;
+        }
+    }
+    line.pitch = Some(advance);
+    // A grid paragraph's first baseline sits `first_baseline` down, not
+    // `para_ascent` (`baseline_drop`).
+    line.ref_line = Some(at + grid.map_or(0.0, |(_, first_baseline)| para_ascent - first_baseline));
+    line.ascent_shift = 0.0;
 }
 
 /// A run's (line_h_ratio, ascender_ratio) grown to the box of every fallback
@@ -464,7 +610,7 @@ impl LineGrid {
 }
 
 pub(super) fn baseline_drop(line: &TextLine, ascent: f32) -> f32 {
-    match line.center_line {
+    match line.ref_line {
         Some(middle) => middle - ascent,
         None => line.ascent_shift + inline_image_line_extra(line, ascent),
     }
@@ -567,7 +713,7 @@ pub(super) fn line_own_advance(
 ) -> f32 {
     let line_pitch = line.pitch.unwrap_or(line_pitch);
     let img_h = line_max_image_h(line);
-    if img_h > ascent && line.center_line.is_none() {
+    if img_h > ascent && line.ref_line.is_none() {
         line_pitch.max(img_h + descent)
     } else {
         line_pitch
@@ -864,6 +1010,13 @@ pub(super) fn grid_cells(h: f32, pitch: f32) -> f32 {
     ((h / pitch) - 0.02).ceil().max(1.0) * pitch
 }
 
+/// Whole docGrid cells for a picture line `h` tall: Word rounds up from
+/// 0.01pt over (online probes: 31.04pt takes two 15.6pt cells, 31.21pt
+/// three), where `grid_cells` lets text overshoot by a fiftieth of a cell.
+pub(super) fn picture_grid_cells(h: f32, pitch: f32) -> f32 {
+    ((h - 0.001) / pitch).ceil().max(1.0) * pitch
+}
+
 /// Word counts a grid-snapped paragraph's cells line by line, from the runs on
 /// each line: an English paper in a Chinese template (Times New Roman 12 under
 /// a 312-twip grid, DengXian for its one CJK word) takes two cells for the
@@ -1002,6 +1155,60 @@ mod tests {
         assert!((top_aligned_drop(&tnr, 24.0, -7.0) - 5.97).abs() < 0.01);
         assert!((top_aligned_drop(&calibri, 11.0, -0.5) - 0.4946).abs() < 0.001);
         assert_eq!(top_aligned_drop(&calibri, 11.0, 7.0), 0.0);
+    }
+
+    /// Word online probes (issue #164 follow-up): a 31.65pt picture beside
+    /// 12pt Times New Roman hangs from the glyph tops under top alignment,
+    /// sits half the descent below the baseline under bottom alignment, and
+    /// takes three whole 15.6pt grid cells, centred, under center alignment.
+    #[test]
+    fn picture_lines_align_on_their_textalignment_line() {
+        let tnr = FontEntry {
+            plain_line_h_ratio: Some(2355.0 / 2048.0),
+            plain_ascender_ratio: Some(1912.0 / 2048.0),
+            leading_ratio: Some(87.0 / 2048.0),
+            ..FontEntry::stub()
+        };
+        let by_pdf_name: HashMap<&str, &FontEntry> = [("F1", &tnr)].into_iter().collect();
+        let line = || {
+            let mut text = WordChunk::blank("F1".to_string(), 12.0, 0.0, 10.0);
+            text.text = "p1".to_string();
+            let mut picture = WordChunk::blank("F1".to_string(), 12.0, 20.0, 40.0);
+            picture.inline_image_name = Some("Im1".to_string());
+            picture.inline_image_height = 31.65;
+            TextLine {
+                chunks: vec![text, picture],
+                ..TextLine::default()
+            }
+        };
+        let laid = |alignment, grid| {
+            let mut l = line();
+            let ls = LineSpacing::Auto(1.0);
+            align_line(&mut l, &by_pdf_name, alignment, ls, (13.8, 11.2), grid);
+            (
+                l.pitch.unwrap(),
+                l.ref_line.unwrap(),
+                l.chunks[0].y_offset,
+                l.chunks[1].y_offset,
+            )
+        };
+        let close = |a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)| {
+            [(a.0, b.0), (a.1, b.1), (a.2, b.2), (a.3, b.3)]
+                .iter()
+                .all(|(x, y)| (x - y).abs() < 0.01)
+        };
+        // Top: the 0.51pt gap above, glyph tops (10.69pt ascent) on the line.
+        let top = laid(TextAlignment::Top, None);
+        assert!(close(top, (32.16, 0.51, -10.69, -31.65)), "{top:?}");
+        // Bottom: half the 2.6pt descent below the line.
+        let bottom = laid(TextAlignment::Bottom, None);
+        assert!(close(bottom, (32.95, 31.65, 1.30, 0.0)), "{bottom:?}");
+        // Center on the grid: three cells, the middle at 23.4pt; the ref line
+        // is measured as if the first baseline sat at 11.2pt, not 12.36pt.
+        let grid = laid(TextAlignment::Center, Some((15.6, 12.36)));
+        assert!(close(grid, (46.8, 23.4 - 1.16, -4.31, -15.825)), "{grid:?}");
+        assert!((picture_grid_cells(31.21, 15.6) - 46.8).abs() < 0.01);
+        assert!((picture_grid_cells(31.2, 15.6) - 31.2).abs() < 0.01);
     }
 
     /// Word's rules in paragraph-border-indents (Letter) and

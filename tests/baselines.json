@@ -9345,7 +9345,7 @@
     "a11y_text": 1.0
   },
   "cases/text_align_center_fonts": {
-    "jaccard": 0.9292,
+    "jaccard": 0.9316,
     "ssim": 0.9933,
     "text_boundary": 1.0,
     "ua_fail": 3,
@@ -9365,9 +9365,49 @@
     "a11y_text": 1.0
   },
   "cases/text_align_center_picture": {
-    "jaccard": 0.8362,
-    "ssim": 0.9856,
+    "jaccard": 0.9881,
+    "ssim": 0.9931,
     "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/text_align_fonts_order": {
+    "jaccard": 0.9617,
+    "ssim": 0.9954,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/text_align_grid_exact_lone": {
+    "jaccard": 0.9162,
+    "ssim": 0.9883,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/text_align_grid_picture": {
+    "jaccard": 0.7018,
+    "ssim": 0.8026,
+    "text_boundary": 0.9878,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/text_align_top_bottom_picture": {
+    "jaccard": 0.6679,
+    "ssim": 0.7669,
+    "text_boundary": 0.9862,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10841,8 +10881,8 @@
     "a11y_text": 0.9446
   },
   "scraped/czech_municipal_grant_form": {
-    "jaccard": 0.8797,
-    "ssim": 0.9563,
+    "jaccard": 0.8856,
+    "ssim": 0.9564,
     "text_boundary": 0.9808,
     "convert_ms": 34.9,
     "ua_fail": 2,

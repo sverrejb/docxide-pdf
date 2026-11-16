@@ -381,16 +381,24 @@ Open queue from the large-corpus and focus-fixture rounds:
   `tests/output/probe_lines/`) are read from the
   paragraph and its style chain; docDefaults and table-style `w:spacing`
   still take only the twips. Notes count a line as 12pt whatever the grid.
-- `w:textAlignment`: top and center are laid out; baseline, bottom and auto
-  parse as auto. Beside an inline picture, top and bottom are off (fixture
-  text_align_center_picture): Word hangs top-aligned text from the picture's
-  top (baseline 10.5pt below it, ours 22pt lower) and bottom-aligned text
-  sits 1.25pt higher than baseline-aligned text.
-  Center is skipped on a line grid (`docGrid type="lines"`), where a picture
-  line is already 4-25pt off at baseline alignment (issue #164 probe: a
-  31.65pt picture and tab-aligned "(1)" at linePitch 312), and exact-spaced
-  center lines are centred in body paragraphs only, not cells, headers or
-  text boxes.
+- `w:textAlignment` (all four laid out; probe kits in fixtures
+  text_align_*, generators in the main checkout's `tests/output/ta-probes/`).
+  Open: under exact spacing a picture taller than the line in a
+  baseline-aligned paragraph keeps Word's line at its exact height (picture
+  cut off), ours grows by the picture (last row of
+  text_align_top_bottom_picture and text_align_grid_picture). Single-probe
+  outliers: bottom + exact 40pt beside a tab put the content bottom-flush
+  (text_align_top_bottom_picture #34), and bottom + double at a grid page
+  top took five cells. Exact-spaced and grid lines are aligned in body
+  paragraphs only, not cells, headers or text boxes; math zones keep their
+  baseline; text-only exact lines under center are unprobed. The `bands.rs`
+  look-ahead (`line_h_with_picture`) still sizes a grid picture line as
+  picture + descent, where the drawing takes whole cells.
+- Line grid, text baselines: in a text-only line of several cells Word's
+  text sits higher than our cell-centre rule (36pt Times New Roman in three
+  15.6pt cells: 0.8pt, text_align_grid_picture #56); beside a picture under
+  baseline or bottom alignment it sits 0.4-0.5pt lower than ours while the
+  pictures match (#22, #25, #39), not explained by the 0.25pt rounding.
 - `w:mirrorMargins`: parsed (used for odd/even filler pages and the change-bar
   side), never applied to the margins. Do not just swap left/right on even
   pages: victorian_universal_design_policy sets it, yet Word online keeps

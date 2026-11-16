@@ -1176,16 +1176,24 @@ pub(super) fn render_paragraph_block(
             ctx.fonts,
         );
         size_tab_mark_line(&mut lines, para, effective_ls, tallest_lhr, ctx.fonts);
-    } else if !grid_snapped && para.text_alignment == crate::model::TextAlignment::Center {
-        layout::center_align_exact_lines(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent);
-    } else if grid_snapped {
-        layout::size_grid_lines(
+    } else {
+        if grid_snapped {
+            layout::size_grid_lines(
+                &mut lines,
+                ctx.fonts,
+                effective_ls,
+                line_h,
+                sp.line_pitch,
+                grid_baseline,
+            );
+        }
+        layout::align_lines(
             &mut lines,
             ctx.fonts,
+            para.text_alignment,
             effective_ls,
-            line_h,
-            sp.line_pitch,
-            grid_baseline,
+            (line_h, para_ascent),
+            grid_snapped.then_some((sp.line_pitch, grid_baseline)),
         );
     }
     // Only glyphs on a picture's own line hang a descent below it: when the
@@ -1340,7 +1348,7 @@ pub(super) fn render_paragraph_block(
         // logo in a Times New Roman 16 run (an 18.4pt line, two 18pt cells)
         // takes one cell in Word.
         let picture_h = if grid_snapped {
-            layout::grid_cells(image_height + inserted_descent, sp.line_pitch)
+            layout::picture_grid_cells(image_height + inserted_descent, sp.line_pitch)
         } else {
             picture_line_h(image_height)
         };
@@ -2805,7 +2813,13 @@ pub(super) fn render_paragraph_block(
                 (img.display_width + trim, img.display_height)
             };
             let image_height = box_h + img.layout_extra_height;
-            let bottom_depth = if image_height + inserted_descent > line_h {
+            let bottom_depth = if grid_snapped && image_height + inserted_descent > line_h {
+                // Centred in its cells, whatever the text alignment (online
+                // probes: 31.65pt and 60pt pictures in 15.6pt cells).
+                let cells =
+                    layout::picture_grid_cells(image_height + inserted_descent, sp.line_pitch);
+                (cells - image_height - inserted_descent) / 2.0 + img.layout_extra_top + box_h
+            } else if image_height + inserted_descent > line_h {
                 img.layout_extra_top + box_h
             } else {
                 // An at-least line's room above the picture stays above it.
