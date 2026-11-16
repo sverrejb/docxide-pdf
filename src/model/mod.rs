@@ -685,6 +685,9 @@ pub struct Paragraph {
     /// Diagrams drawn at their anchor over the text (`SmartArtDiagram::anchor`).
     pub floating_smartart: Vec<SmartArtDiagram>,
     pub horizontal_rule: Option<HorizontalRule>,
+    /// Run index of a `horizontal_rule` among text; the body parser puts
+    /// the rule on a paragraph of its own (`split_at_horizontal_rule`).
+    pub horizontal_rule_at: Option<usize>,
     /// The paragraph mark sits inside a field's code (hidden): the next
     /// paragraph's runs were merged into this one at parse time.
     pub field_code_mark: bool,

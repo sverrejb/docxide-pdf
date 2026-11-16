@@ -296,6 +296,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         smartart,
         floating_smartart,
         horizontal_rule: parsed.horizontal_rule,
+        horizontal_rule_at: parsed.horizontal_rule_at,
         field_code_mark: parsed.mark_in_field_code,
         toc_field: parsed.toc_instr,
         is_section_break: false,
@@ -365,7 +366,56 @@ pub(super) fn add_hanging_tab_stop(tab_stops: &mut Vec<TabStop>, indent_left: f3
 pub(super) fn split_at_page_break(para: &mut Paragraph) -> Option<Paragraph> {
     let at = para.page_break_at.take()?;
     let runs = para.runs.split_off(at);
-    let rest = Paragraph {
+    Some(continuation(para, runs))
+}
+
+/// Word lays an inline `o:hr` among text out as an object on a line of its
+/// own, the text before and after it on lines of their own, with no space
+/// between them (Word online probe, 12pt Aptos with 8pt after: text, rule
+/// and the next paragraph step 17, 17 + 8; the rule sits 0.9pt below its
+/// line's baseline, as on a rule-only paragraph). Split there into
+/// paragraphs, the rule's holding only its mark.
+pub(super) fn split_at_horizontal_rule(para: &mut Paragraph) -> Vec<Paragraph> {
+    let Some(at) = para.horizontal_rule_at.take() else {
+        return Vec::new();
+    };
+    let visible = |runs: &[Run]| {
+        runs.iter()
+            .any(|r| !r.vanish && (!r.text.trim().is_empty() || r.inline_image.is_some()))
+    };
+    let after = para.runs.split_off(at.min(para.runs.len()));
+    let (text_before, text_after) = (visible(&para.runs), visible(&after));
+    if !text_before && !text_after {
+        para.runs.extend(after);
+        return Vec::new();
+    }
+    let mark = |r: &Run| Run {
+        font_size: r.font_size,
+        font_size_from_default: r.font_size_from_default,
+        font_name_from_default: r.font_name_from_default,
+        font_name: r.font_name.clone(),
+        ..Run::default()
+    };
+    if !text_before {
+        let mark_run = mark(&after[0]);
+        para.runs = vec![mark_run];
+        return vec![continuation(para, after)];
+    }
+    let mark_run = mark(&para.runs[para.runs.len() - 1]);
+    let mut rule = continuation(para, vec![mark_run]);
+    rule.horizontal_rule = para.horizontal_rule.take();
+    if !text_after {
+        return vec![rule];
+    }
+    let rest = continuation(&mut rule, after);
+    vec![rule, rest]
+}
+
+/// The paragraph `runs` continue `para` with: its formatting without the
+/// list label, first-line indent or space before; the space after,
+/// keep-next and section break move to it.
+fn continuation(para: &mut Paragraph, runs: Vec<Run>) -> Paragraph {
+    Paragraph {
         runs,
         column_break_before: std::mem::take(&mut para.column_break_after),
         style_id: para.style_id.clone(),
@@ -395,8 +445,7 @@ pub(super) fn split_at_page_break(para: &mut Paragraph) -> Option<Paragraph> {
         auto_space_dn: para.auto_space_dn,
         bidi: para.bidi,
         ..Paragraph::default()
-    };
-    Some(rest)
+    }
 }
 
 /// The paragraph mark's `w:position`, from its own rPr or the paragraph style.

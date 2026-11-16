@@ -160,6 +160,7 @@ pub(super) struct ParsedRuns {
     pub(super) inline_chart: Option<InlineChart>,
     pub(super) smartart: Vec<SmartArtDiagram>,
     pub(super) horizontal_rule: Option<HorizontalRule>,
+    pub(super) horizontal_rule_at: Option<usize>,
     /// The paragraph mark lies inside a field's code: hidden, the next
     /// paragraph continues this one.
     pub(super) mark_in_field_code: bool,
@@ -1279,6 +1280,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let mut inline_chart: Option<InlineChart> = None;
     let mut smartart: Vec<SmartArtDiagram> = Vec::new();
     let mut horizontal_rule: Option<HorizontalRule> = None;
+    let mut horizontal_rule_at: Option<usize> = None;
     let mut has_page_break_after = false;
     let mut page_break_before_content = false;
     let mut page_break_at: Option<usize> = None;
@@ -1692,6 +1694,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             pending_text
                         );
                     } else if let Some(hr) = parse_vml_horizontal_rule(child) {
+                        flush_pending(&mut pending_text, &mut runs);
+                        horizontal_rule_at = Some(runs.len());
                         horizontal_rule = Some(hr);
                     } else if is_vml_picture(child) {
                         flush_pending(&mut pending_text, &mut runs);
@@ -1822,8 +1826,16 @@ pub(super) fn parse_runs<R: Read + Seek>(
     // Merge each side of a mid-paragraph page break on its own so the split
     // index stays valid; a break with nothing visible after it stays a plain
     // break after the paragraph.
+    let rule_tail = horizontal_rule_at
+        .filter(|_| page_break_at.is_none())
+        .map(|at| runs.split_off(at.min(runs.len())));
     let tail = page_break_at.map(|at| runs.split_off(at.min(runs.len())));
     let mut runs = merge_compatible_runs(runs);
+    let horizontal_rule_at = rule_tail.map(|tail| {
+        let at = runs.len();
+        runs.extend(merge_compatible_runs(tail));
+        at
+    });
     let page_break_at = tail.and_then(|tail| {
         let at = runs.len();
         let has_content = tail
@@ -1902,6 +1914,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
         inline_chart,
         smartart,
         horizontal_rule,
+        horizontal_rule_at,
     }
 }
 

@@ -1252,7 +1252,9 @@ fn parse_zip<R: Read + std::io::Seek>(
                 prev_list_num_id = num_id;
 
                 let continuation = paragraph::split_at_page_break(&mut para);
+                let rule_parts = paragraph::split_at_horizontal_rule(&mut para);
                 blocks.push(Block::Paragraph(para));
+                blocks.extend(rule_parts.into_iter().map(Block::Paragraph));
                 blocks.extend(continuation.map(Block::Paragraph));
                 paragraph::merge_field_code_paragraphs(&mut blocks);
 

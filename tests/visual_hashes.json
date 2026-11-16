@@ -1803,6 +1803,9 @@
     "4104432340a2396784c6e253f8a1bf81ffbb5aedd706ef403dadf989635f21ef",
     "86fa340a9adbb7d20ecc03d7672fae8fd4ab758a90caf5c46a9fe3ff6bee588d"
   ],
+  "cases/horizontal-rule-among-text-own-line": [
+    "668f662e2f431e6350afebf4354afe3689a60df6c7cfb2b74766c441c3eef6ce"
+  ],
   "cases/hyphen-opening-guillemet-explicit-space": [
     "b241e534e5213f652c1ae22d1f07b8937404aab8159de1a7dfcfca37c91a10ab"
   ],
