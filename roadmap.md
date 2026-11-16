@@ -6,16 +6,14 @@ Open work only. Finished rounds, their rules and evidence live in git history
 ## Open fixture leads
 
 **East Asian layout and float leads (2026-11-16):**
-- **east_asia_conference_form (13.5):** its text-anchored table
-  (`tblpY` 810, `tblOverlap never`) follows its anchor paragraph in the XML
-  yet Word sets that paragraph's single line in the 40.5pt above the table
-  and the date paragraph below it; we render the paragraph after the table,
-  so the date spills to page 2. See Floats.
 - compat-14 `compressPunctuation` past the marks: once each mark has given
   0.5 em, the autoSpaceDE gap before the pulled Latin word shrinks from
   0.25 em to about 0.16 em (SimSun/YaHei/KaiTi 9–16pt probes); not modelled.
-- advocacy_initiative_newsletter_2013: one line beside the page-2 picture
-  table ends 1.85pt past the cell's box where Word wraps its last word.
+- chinese_student_union_nomination_form (50.6): its first-row cell text
+  (14pt YaHei for FangSong_GB2312, at-least 0 spacing, docGrid lines,
+  vAlign center in a 38.2pt row) sits 1.74pt below Word's, exactly half of
+  the 3.5pt its old one-em baseline was above: the even-split baseline is
+  right, our line is ~3.5pt taller than Word's.
 - Body-level compat-14 floating tables wrap text at grid + rightFromText
   (`floating_table_band`), without the last cell's right margin that nested
   floats include; unprobed.
@@ -130,10 +128,14 @@ Leads from the 2026-11-07/08 triage round, still open:
   drift): Word's picture line is 1.13pt taller than ours.
 - candidate_reference_check_form: rows drift 0.6pt then 1.6pt; Word paints
   shaded cells in strips (its tcMar bands), not one rect.
-- slovak_pedagogical_practice (27.2, body +2.9pt): removing its header
-  o:hr run moves Word's body down 1.75pt and ours not at all; the run is
-  Cambria 13 under a Korinna BT (missing) mark, so the mark font's
-  substitute probably sets the empty line; a further 1.2pt residual.
+- slovak_pedagogical_practice (27.2, body +2.75pt): two header rules.
+  Korinna BT (missing, altName Cambria Math, which Word's PDF embeds) marks
+  set the hr paragraph and the empty one after it; replacing Korinna BT
+  with Cambria moves Word's body down 1.75pt, yet at 40pt Korinna, Cambria
+  and Cambria Math marks all give the same line (probes 2026-11-16).
+  The `o:hr` paragraph itself: Word's body
+  moves 1.75pt for a 10pt hr and 9.75pt more for 20pt (floor at 1.5pt);
+  ours is ~1pt taller than Word's with Cambria marks.
 - vaccines_history_chapter: page 1 fits one more line than Word (−14pt
   after); 2.6pt lost in the anchored-textbox timeline above the body, and the
   16pt subtitle is 11.5pt low.
@@ -228,11 +230,9 @@ between lines. Open:
   Bahnschrift Light) draw regular-weight in Word; page 6's table bottom
   border is solid grey in Word, dotted in ours; page 1's `›` bullet sits
   3pt low.
-- **advocacy_initiative_newsletter_2013 (36.7)**: our nested picture table is
-  1.4pt narrower than Word's grid, so the stories wrap a word earlier or later
-  and pages 2-3 end 24pt off; the standard `o:hr` draws 1.5pt, Word 0.5. Word
-  starts the text ~91pt right of the picture table's edge for both 1755tw
-  grids, we start at 89.5-90 (table width + rightFromText).
+- **advocacy_initiative_newsletter_2013 (53.8)**: the standard `o:hr`
+  draws 1.5pt, Word 0.5; the stories beside the picture tables start at
+  178.5, Word 178.6.
 - **cote_dazur (78.0)**: body text does not wrap around header floats (Word
   does, per line); only tables are pushed.
 
@@ -359,9 +359,6 @@ Open queue from the large-corpus and focus-fixture rounds:
   17.67 in ours, 15.12 in Word). Header/footer paragraphs are also measured
   twice (`compute_header_height` without line building, and
   `render_header_footer`); `layout::position_stretch` is a one-line estimate.
-- **Title → table transition** in the conference forms: a 7pt shortfall above
-  the table (measure on east_asia_conference_form; both still fit one page
-  where Word has two).
 - **NBSP stretch before compat 15** (tried, reverted): Word widens NBSPs with
   word spaces before compat 15, but not after one-letter words ("k
   dopracování" in czech_expert) and with uneven shares. Stretching all moved
@@ -494,14 +491,6 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Floats, frames and wrapping
 
-- Text-anchored floating table with a positive `tblpY`: Word lays the
-  anchor paragraph (the one after the table in the XML) from the anchor
-  point and the table `tblpY` lower, so the paragraph's lines that fit in
-  that gap sit above the table and the rest, with the following paragraphs,
-  below it (east_asia_conference_form: a 30pt title line above a 40.5pt
-  offset, the date line below; `tblOverlap never`, full-width table). We
-  render the anchor paragraph after the table (`flows_inline` in
-  `render_table`).
 - Bands (`Band`, full-width floats) live beside `FloatZone`; one mechanism
   with a full-width flag would be cleaner.
 - The page pre-scan estimates where the page ends from plain line counts and
@@ -545,17 +534,21 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Columns and sections
 
-- Footnote continuation across columns (case82 J 22.6): Word may continue a
-  note under the next column so more body text fits; needs a rule for how
-  much must stay with its reference.
+- Footnotes in a multi-column section (case82 J 22.8): Word sets a page's
+  notes as one flow through a note area split into the section's columns,
+  every column's notes starting at one top: p1's 5-line note 1 (referenced
+  in column 1) runs 3 lines under column 1 and 2 under column 2, p2's
+  4-line note 2 runs 2 + 2, and p3's notes 3 and 4 (referenced in columns 2
+  and 3) start under column 1, whose body ends early to make room. We put
+  each note whole under its reference's column. Needs a per-page relayout
+  (a later column's note shortens an earlier column); the line-range note
+  bookings (`book_footnote_part`) can carry a note into the next column.
 - case80's 4-column region: Word's separator runs one line (15pt) below
   column 1's last space after; unexplained. The table probe's region ends
   1.6pt off. Each balancing trial lays the region out again.
 
 ## Footnotes and endnotes
 
-- Footnotes that don't fit: Word splits a note across pages with a
-  continuation separator (uk_commercial p17/18); we move the reference line.
 - Note separators (probe kit `tests/output/probe_sep/`,
   `gen.py`, letters a–v): the rule still sits 0.1–0.3pt above Word's
   (strikeout position), and an exact-line note's baseline 0.13pt above
