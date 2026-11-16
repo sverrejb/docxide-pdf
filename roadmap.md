@@ -5,29 +5,20 @@ Open work only. Finished rounds, their rules and evidence live in git history
 
 ## Open fixture leads
 
-**Worst-10 round (2026-11-09, merged 2026-11-16):** dotted/dashed cell
-borders in Word's dash arrays (turkish_ancient_religions_plan); compat-14
-`compressPunctuation` caps a mark at 0.5 em like compat 15, cuts the pulled
-word's own closing mark too and pulls at exactly half an em free
-(chinese_costume_design_course, taiwanese); `balanceSingleByteDoubleByteWidth`
-sets every space beside an East Asian character to 0.5 em (japanese_land,
-japanese_medical); a floating table's box ends at its last cell's right
-margin before compat 15 (advocacy). Left open:
-- **east_asia_conference_form (dropped with the half-em spaces, which
-  match Word's 4.5/8.0/10.0pt there):** its text-anchored table
+**East Asian layout and float leads (2026-11-16):**
+- **east_asia_conference_form (13.5):** its text-anchored table
   (`tblpY` 810, `tblOverlap never`) follows its anchor paragraph in the XML
   yet Word sets that paragraph's single line in the 40.5pt above the table
   and the date paragraph below it; we render the paragraph after the table,
-  so with the last row now wrapping like Word's the date spills to page 2.
-  See Floats.
-- compat-14 compression past the marks: once each mark has given 0.5 em,
-  the autoSpaceDE gap before the pulled Latin word shrinks from 0.25 em to
-  about 0.16 em (SimSun/YaHei/KaiTi 9–16pt probes); not modelled.
-- advocacy: one line beside the page-2 picture table ends 1.85pt past the
-  cell's box where Word wraps its last word.
-- Body-level compat-14 floating tables still wrap text at grid +
-  rightFromText (`floating_table_band`), without the box margin nested
-  floats now use; unprobed.
+  so the date spills to page 2. See Floats.
+- compat-14 `compressPunctuation` past the marks: once each mark has given
+  0.5 em, the autoSpaceDE gap before the pulled Latin word shrinks from
+  0.25 em to about 0.16 em (SimSun/YaHei/KaiTi 9–16pt probes); not modelled.
+- advocacy_initiative_newsletter_2013: one line beside the page-2 picture
+  table ends 1.85pt past the cell's box where Word wraps its last word.
+- Body-level compat-14 floating tables wrap text at grid + rightFromText
+  (`floating_table_band`), without the last cell's right margin that nested
+  floats include; unprobed.
 
 **Regressions accepted with the PRs #154–#158 baselines (2026-11-09):** 827
 scores accepted (739 J up, 16 down, 39 new fixtures). The drops of 1pt J or
