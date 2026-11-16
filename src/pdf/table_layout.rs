@@ -824,14 +824,13 @@ pub(super) fn compute_row_layouts(
 
                                 // The first baseline sits this far (per em) below the
                                 // cell top: the ascent, line gap included, as in body
-                                // text; one em for an East Asian font, whose 1.3×
-                                // leading Word keeps out of the cell's top
-                                // (japanese_interlibrary: 11pt MS Mincho 11.0).
+                                // text; an East Asian font's half of its 1.3× leading
+                                // too (east_asia_conference_form: 13pt Malgun Gothic
+                                // 16.73, MS Mincho's 1.01 em looked like one em).
                                 let east_asian = metric_run
                                     .zip(metric_font)
                                     .is_some_and(|(r, e)| east_asian_leading(e, &r.text));
-                                let ascender_ratio =
-                                    if east_asian { 1.0 } else { tallest_ar.unwrap_or(0.75) };
+                                let ascender_ratio = tallest_ar.unwrap_or(0.75);
                                 // Win-path metrics identity: line_h_ratio −
                                 // ascender_ratio = usWinDescent/units. Fallback
                                 // 0.2 pairs with the 1.2 default line ratio so
