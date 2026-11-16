@@ -2098,7 +2098,9 @@ pub(super) fn render_paragraph_lines(
                 // The chunk box is the rotated frame's bounding box; draw the picture at
                 // its natural size centred in it, turned about that centre like Word.
                 let (w, h) = chunk.inline_image_size;
-                let x = box_x + (chunk.width - w - chunk.inline_image_trim) / 2.0;
+                let x = box_x
+                    + (chunk.width - w - chunk.inline_image_trim) / 2.0
+                    + chunk.inline_image_effect_left;
                 let img_bottom = box_bottom + (chunk.inline_image_height - h) / 2.0;
                 let thick = (chunk.font_size * 0.05).max(0.5);
                 let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str());

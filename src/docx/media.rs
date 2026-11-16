@@ -178,6 +178,7 @@ fn read_media_part<R: Read + Seek>(
         display_width: 0.0,
         display_height: 0.0,
         trimmed_width: 0.0,
+        effect_left: 0.0,
         jpeg_components: components,
         layout_extra_height: 0.0,
         layout_extra_top: 0.0,

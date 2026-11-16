@@ -430,6 +430,7 @@ pub(super) struct WordChunk {
     /// Natural (unrotated) size; `width`/`inline_image_height` hold the rotated box.
     pub(super) inline_image_size: (f32, f32),
     pub(super) inline_image_trim: f32,
+    pub(super) inline_image_effect_left: f32,
     /// Clockwise degrees (OOXML).
     pub(super) inline_image_rotation_deg: f32,
     /// The picture's `docPr@descr` and adec:decorative flag, for tagging.
@@ -567,6 +568,7 @@ impl WordChunk {
             inline_image_clip: None,
             inline_image_size: (0.0, 0.0),
             inline_image_trim: 0.0,
+            inline_image_effect_left: 0.0,
             inline_image_rotation_deg: 0.0,
             inline_image_alt: None,
             inline_image_decorative: false,
@@ -696,6 +698,7 @@ impl WordChunk {
             inline_image_clip: img.clip_geometry.clone(),
             inline_image_size: (img.display_width, img.display_height),
             inline_image_trim: img.trimmed_width,
+            inline_image_effect_left: img.effect_left,
             inline_image_rotation_deg: img.rotation_deg,
             inline_image_alt: img.alt.clone(),
             inline_image_decorative: img.decorative,

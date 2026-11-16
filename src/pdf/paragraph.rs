@@ -2913,7 +2913,7 @@ pub(super) fn render_paragraph_block(
             let start = para.indent_left + first;
             let room = col_w - start - para.indent_right - box_w;
             let box_x = col_x + start + align_offset(para.alignment, room.max(0.0));
-            let x = box_x + (box_w - trim - img.display_width) / 2.0;
+            let x = box_x + (box_w - trim - img.display_width) / 2.0 + if swap_axes { 0.0 } else { img.effect_left };
             let y_bottom = box_bottom + (box_h - img.display_height) / 2.0;
             if turned {
                 state.pb.content.save_state();

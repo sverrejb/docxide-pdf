@@ -437,7 +437,11 @@ fn inline_picture<R: Read + Seek>(
 ) -> Option<EmbeddedImage> {
     let (pic_w, pic_h) = inline_picture_extent(w, h);
     let mut img = blip_image(container, ctx, pic_w, pic_h)?;
-    img.trimmed_width = w - pic_w;
+    // The line also holds the effect extent's sides (advocacy_initiative's
+    // 74.5pt picture with r=0.5pt sizes its cell like the 75pt ones).
+    let ee = wpd(container, "effectExtent");
+    img.effect_left = ee.map_or(0.0, |n| emu_attr(n, "l"));
+    img.trimmed_width = w - pic_w + img.effect_left + ee.map_or(0.0, |n| emu_attr(n, "r"));
     (img.layout_extra_height, img.layout_extra_top) = inline_extra_height(container);
     apply_pic_props(&mut img, container, ctx.theme);
     Some(img)

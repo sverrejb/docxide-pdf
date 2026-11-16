@@ -1482,7 +1482,8 @@ pub(super) fn render_header_footer(
                         };
                         let y_bottom = cursor_y - bottom_depth;
                         let x = sp.margin_left
-                            + align_offset(para.alignment, (text_width - img.box_width()).max(0.0));
+                            + align_offset(para.alignment, (text_width - img.box_width()).max(0.0))
+                            + img.effect_left;
                         super::color::draw_image_halo(
                             content,
                             img.shadow.as_ref(),

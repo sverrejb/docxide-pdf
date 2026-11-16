@@ -37,6 +37,8 @@ pub struct EmbeddedImage {
     pub display_width: f32,
     pub display_height: f32,
     pub trimmed_width: f32,
+    /// effectExtent's left side: the picture sits this far into its box.
+    pub effect_left: f32,
     pub jpeg_components: u8,
     /// effectExtent + distT/distB combined (points)
     pub layout_extra_height: f32,
