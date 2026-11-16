@@ -1418,6 +1418,13 @@ fn parse_zip<R: Read + std::io::Seek>(
         comment_label_font,
         comment_body_font,
         comment_font_size,
+        // Word for Mac inline-markup references of documents with deleted
+        // cells and no comments (17 external corpus documents, three without
+        // comments at all) zoom every page beside the pane.
+        revision_pane: markup
+            && root
+                .descendants()
+                .any(|n| n.has_tag_name((WML_NS, "cellDel"))),
         font_table,
         even_and_odd_headers: settings.even_and_odd_headers,
         mirror_margins: settings.mirror_margins,

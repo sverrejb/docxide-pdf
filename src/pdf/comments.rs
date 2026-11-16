@@ -82,12 +82,6 @@ pub(super) fn render_comment_pane(
     // and its size before the zoom (`Document::comment_font_size`).
     (body_key, label_key, font_size): (&str, &str, f32),
 ) {
-    let (Some(body_entry), Some(label_entry)) =
-        (seen_fonts.get(body_key), seen_fonts.get(label_key))
-    else {
-        return;
-    };
-
     // The pane is the zoomed page's balloon area, as tall as the zoomed page:
     // 406.4-602.8 at case63's 90pt right margin, 411.0-603.1 at door_air's 72pt.
     let pane_x = tx + (sp.page_width - sp.margin_right + PANE_LEFT_GAP) * zoom;
@@ -102,6 +96,11 @@ pub(super) fn render_comment_pane(
     content.fill_nonzero();
     content.restore_state();
 
+    let (Some(body_entry), Some(label_entry)) =
+        (seen_fonts.get(body_key), seen_fonts.get(label_key))
+    else {
+        return;
+    };
     if anchors.is_empty() {
         return;
     }

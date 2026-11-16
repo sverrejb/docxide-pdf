@@ -155,8 +155,8 @@ pub(super) fn assemble_pdf_pages(
     let page_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
     let content_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
 
-    let has_any_comments =
-        !doc.comments.is_empty() && all_page_comment_anchors.iter().any(|p| !p.is_empty());
+    let has_any_comments = doc.revision_pane
+        || !doc.comments.is_empty() && all_page_comment_anchors.iter().any(|p| !p.is_empty());
     let comment_keys = has_any_comments.then(|| super::fonts::comment_pane_keys(doc));
 
     // (Link element, page, annotation) for the structure tree's OBJR kids; the

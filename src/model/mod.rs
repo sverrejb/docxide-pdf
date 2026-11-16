@@ -317,6 +317,9 @@ pub struct Document {
     pub comment_label_font: String,
     pub comment_body_font: String,
     pub comment_font_size: f32,
+    /// The markup view prints Word's balloon pane even without comments: a
+    /// deleted table cell (`w:cellDel`) gets a "Deleted Cells" balloon.
+    pub revision_pane: bool,
     pub font_table: FontTable,
     pub even_and_odd_headers: bool,
     /// `w:mirrorMargins`: like evenAndOddHeaders, makes odd/even section breaks

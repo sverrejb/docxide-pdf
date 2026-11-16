@@ -1309,6 +1309,12 @@
   "cases/continuous-context-frame1-same1-ctx1": [
     "2b18dfbd95566177b2ceef42f49661166d8f9f6ee6335c54aa97b6b68c3d05c9"
   ],
+  "cases/deleted-cell-opens-markup-pane": [
+    "755321a53551133aad591405bcb76adcd7d8b618af680c73dc2e6d0dcb49f29b"
+  ],
+  "cases/deleted-cell-opens-markup-pane@markup": [
+    "775d812db4bccbf4fecb0806f8f92cc8e730e8db034d9a369ae22015dd70e0d2"
+  ],
   "cases/displaced-anchor-narrow-compat12-overlap0-offset0": [
     "47704c7d4529a3cb5cbb0f19161285db3de9f8b1fc025e0d0b84c5195b3f56f4"
   ],

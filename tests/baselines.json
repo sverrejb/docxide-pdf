@@ -3758,6 +3758,14 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/deleted-cell-opens-markup-pane": {
+    "jaccard": 0.8787,
+    "ssim": 0.9463
+  },
+  "cases/deleted-cell-opens-markup-pane@markup": {
+    "jaccard": 0.2662,
+    "ssim": 0.862
+  },
   "cases/displaced-anchor-narrow-compat12-overlap0-offset0": {
     "jaccard": 0.8498,
     "ssim": 0.9789,
