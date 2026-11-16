@@ -6100,6 +6100,10 @@
     "a11y_struct": 0.375,
     "a11y_text": 1.0
   },
+  "cases/mce-choice-requires-understood": {
+    "jaccard": 0.8736,
+    "ssim": 0.9925
+  },
   "cases/min-width-run-spaces": {
     "jaccard": 0.9225,
     "ssim": 0.9709,

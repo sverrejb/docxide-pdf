@@ -2128,6 +2128,9 @@
   "cases/mark_small_cell_trailing_break": [
     "53ad7a994f7b1fff6dfe0cfeb4cc791efde9b8b60afdde77af6641f35fb0e1da"
   ],
+  "cases/mce-choice-requires-understood": [
+    "4c5f7782ffe0f97547a380b9b0f45d784eb405f903db0314fb4cde9d5c4414bd"
+  ],
   "cases/min-width-run-spaces": [
     "fc85f75e3408a2c19d8bcec4e79908ae7e5413564856a35e32954eec0e4d3b26"
   ],
