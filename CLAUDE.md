@@ -27,7 +27,8 @@ Python helpers in `tools/` (each has a docstring):
 - `engine_compare.py [--open] [--case NAME|glob]... [--html-only] [--shard i/n]`
   — Word | ours | LibreOffice | MiniPdf | rdocx | office2pdf | jubarte | dxpdf |
   WordCraft side by side → `comparison/index.html`; `deploy_comparison.sh`
-  publishes it; CI does both on every push to main (`.github/workflows/comparison.yml`).
+  publishes it; CI does both on pushes to main that touch src, fixtures or the site generator
+  (`.github/workflows/comparison.yml`).
 - `word_export.py <docx|dir>... [--preset online|print]` — unattended Word for
   Mac export (default online = tagged, Windows metrics); `--check` preflight;
   needs the sandbox off.
