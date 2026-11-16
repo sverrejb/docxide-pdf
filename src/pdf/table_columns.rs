@@ -479,37 +479,59 @@ fn cell_min_content_width(
         // A word continued from the previous run adds to its width.
         let mut joined_width = 0.0f32;
         let mut prev_char = None;
+        // Spaces since the last word, across runs.
+        let mut gap_w = 0.0f32;
         // Deleted text (`Paragraph::deleted_text`) is measured after the
         // printed runs, as words of its own.
         let deleted_from = para.runs.len();
         for (i, run) in para.runs.iter().chain(&para.deleted_text).enumerate() {
-            if run.is_tab || run.is_line_break || i == deleted_from {
+            if i == deleted_from {
                 prev_char = None;
+                gap_w = 0.0;
+            }
+            if run.is_tab || run.is_line_break {
+                prev_char = None;
+                gap_w = 0.0;
             }
             let key = font_key_buf(run, &mut key_buf);
             let Some(entry) = fonts.get(key) else {
                 prev_char = None;
+                gap_w = 0.0;
                 continue;
             };
             let text = super::layout::caps_word(run, &run.text);
             let fs = run.font_size;
+            let space_w = word_width_for_run(entry, run, " ", fs);
+            let words = super::layout::split_preserving_spaces(&text);
             // Same break opportunities as line layout: a CJK sentence holds
-            // no spaces but may wrap after any ideograph.
-            for (spaces, word) in super::layout::split_preserving_spaces(&text) {
+            // no spaces but may wrap after any ideograph, and spaces beside a
+            // no-break space never break (Word probe 2026-11-16: a cell of
+            // "aaaaaaaaaa\u{a0} bbbbbbbbbb\u{a0} cccccccccc" widens to the whole
+            // string; a redline's "partenaire\u{a0}\u{a0}\u{a0} Intermédiaire\u{a0}\u{a0}\u{a0} 48"
+            // set its column to 192.5pt).
+            for &(spaces, word) in &words {
+                let gap = gap_w + spaces as f32 * space_w;
                 let ww = word_width_for_run(entry, run, word, fs);
+                let nbsp_bridge =
+                    gap > 0.0 && (prev_char == Some('\u{a0}') || word.starts_with('\u{a0}'));
                 let continues = !table.fixed_layout
-                    && spaces == 0
-                    && prev_char
-                        .zip(word.chars().next())
-                        .is_some_and(|(a, b)| !super::layout::breaks_between(a, b));
-                joined_width = if continues { joined_width + ww } else { ww };
+                    && (nbsp_bridge
+                        || gap == 0.0
+                            && prev_char
+                                .zip(word.chars().next())
+                                .is_some_and(|(a, b)| !super::layout::breaks_between(a, b)));
+                joined_width = if continues { joined_width + gap + ww } else { ww };
+                gap_w = 0.0;
                 prev_char = word.chars().last();
                 let required = (joined_width + inset).max(h_pad);
                 min = min.max(required);
             }
-            if run.text.ends_with(char::is_whitespace) {
-                prev_char = None;
-            }
+            let trailing = text
+                .chars()
+                .rev()
+                .take_while(|&c| super::layout::is_break_space(c))
+                .count();
+            gap_w = if words.is_empty() { gap_w } else { 0.0 } + trailing as f32 * space_w;
         }
     }
     min
@@ -1161,6 +1183,13 @@ mod tests {
             assert_eq!(whole, measure(&["abc", "def"], indent));
             assert!(measure(&["abc ", "def"], indent) < whole);
             assert!(measure(&["abc", " def"], indent) < whole);
+            // Spaces beside a no-break space hold the words together, within
+            // a run and across runs.
+            let split = measure(&["abc def"], indent);
+            for glued in [&["abc\u{a0} def"][..], &["abc \u{a0}def"], &["abc\u{a0}\u{a0}\u{a0} ", "def"]] {
+                assert!(measure(glued, indent) > whole, "{glued:?}");
+            }
+            assert!(split < whole);
         }
     }
 
