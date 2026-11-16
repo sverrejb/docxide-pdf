@@ -251,8 +251,7 @@ fn registration_table_extent(table: &Table, cell_text_w: f32, ctx: &RenderContex
     }
     let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None, 0.0);
     apply_nested_pct_width(table, &mut widths, cell_text_w);
-    let strip =
-        cell_text_w - x - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
+    let strip = cell_text_w - x - table.float_reach(&widths, ctx.compat_mode) - pos.left_from_text;
     if strip < MIN_NESTED_FLOAT_STRIP {
         return None;
     }
@@ -455,7 +454,7 @@ fn plain_text_fits_nested_strip(
     if p.runs.iter().any(|r| r.caps) {
         return false;
     }
-    let strip = cell_text_w - widths.iter().sum::<f32>() - pos.right_from_text;
+    let strip = cell_text_w - table.float_reach(widths, ctx.compat_mode);
     let Some(line_w) = plain_line_width(p, ctx.fonts) else {
         return false;
     };
@@ -1274,7 +1273,7 @@ pub(super) fn compute_row_layouts(
                                 // The room a float leaves on its right.
                                 let gap_beside = nested_table.position.as_ref().map_or(0.0, |pos| {
                                     let float_x = match pos.h_position { HorizontalPosition::Offset(x) => x, _ => 0.0 };
-                                    cell_text_w - float_x - nested_cw.iter().sum::<f32>() - pos.right_from_text
+                                    cell_text_w - float_x - nested_table.float_reach(&nested_cw, ctx.compat_mode)
                                 });
                                 let blank = |p: &crate::model::Paragraph| {
                                     p.runs.iter().all(|r| r.text.trim().is_empty()
@@ -1348,7 +1347,7 @@ pub(super) fn compute_row_layouts(
                                     if auto_left_float {
                                         left_float_bottom = total_h + space_before + offset + nested_h;
                                         left_float_top = total_h + space_before + offset;
-                                        left_float_indent = if plain_side_text { nested_cw.iter().sum::<f32>() + nested_table.position.as_ref().unwrap().right_from_text } else { 0.0 };
+                                        left_float_indent = if plain_side_text { nested_table.float_reach(&nested_cw, ctx.compat_mode) } else { 0.0 };
                                         first_positive_float = block_idx == 0 && nested_table.position.as_ref().is_some_and(|p| p.v_offset_pt >= 0.0);
                                         left_float_right_gap = gap_beside;
                                     }

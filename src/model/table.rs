@@ -242,7 +242,29 @@ impl Table {
         } else {
             0.0
         };
-        outdent + self.last_cell_right_margin()
+        outdent + self.float_box_right_margin(compat_mode)
+    }
+
+    /// How far a floating table's box reaches past its grid on the right:
+    /// before compat 15 by its last cell's right margin (case40/45's
+    /// right-aligned floats overhang by it; advocacy_initiative_newsletter's
+    /// stories start a 15tw margin further from its picture tables than the
+    /// grid plus rightFromText), nothing from Word 2013 on.
+    pub fn float_box_right_margin(&self, compat_mode: u32) -> f32 {
+        if compat_mode < 15 {
+            self.last_cell_right_margin()
+        } else {
+            0.0
+        }
+    }
+
+    /// How far a floating table laid out at `widths` reaches right of its
+    /// left edge before text may start beside it: grid, box margin and its
+    /// `rightFromText`.
+    pub fn float_reach(&self, widths: &[f32], compat_mode: u32) -> f32 {
+        widths.iter().sum::<f32>()
+            + self.float_box_right_margin(compat_mode)
+            + self.position.as_ref().map_or(0.0, |p| p.right_from_text)
     }
 
     /// The left margin of the first row's first cell, its own or the table's:

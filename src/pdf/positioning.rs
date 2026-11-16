@@ -1419,7 +1419,7 @@ impl FloatingTablePos {
         let x = match pos.h_position {
             Offset(_) if ctx.compat_mode < 15 => x - table.first_cell_left_margin(),
             Offset(_) => x + table::word2013_border_shift(table),
-            AlignRight if ctx.compat_mode < 15 => x + table.last_cell_right_margin(),
+            AlignRight => x + table.float_box_right_margin(ctx.compat_mode),
             _ => x,
         };
         // Word puts a page or margin anchored table one twip above a
