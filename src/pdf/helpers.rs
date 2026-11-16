@@ -6,6 +6,13 @@ use crate::model::{
 
 use super::color::fill_rgb;
 
+/// Points in whole twips, for comparisons Word makes in its own units: a
+/// 8616.99-twip picture fits an 8617-twip column, exactly half an em free
+/// pulls a word under compressPunctuation.
+pub(super) fn twips(pt: f32) -> f32 {
+    (pt * 20.0).round()
+}
+
 /// How far an object `slack` narrower than its box moves to follow the
 /// paragraph alignment: centred takes half of it, right-aligned all of it.
 pub(super) fn align_offset(alignment: Alignment, slack: f32) -> f32 {

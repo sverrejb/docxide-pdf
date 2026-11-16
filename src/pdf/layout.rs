@@ -2637,7 +2637,10 @@ pub(super) fn build_paragraph_lines(
                 && !in_right_region
                 && right_region_for(lines.len()).is_none()
                 && cur_max - current_x >= cjk.punct_pull_free_ratio * cur_max
-                && cur_max - proposed_x >= cjk.punct_pull_free_em * eff_fs
+                // Word compares in whole twips, so exactly half an em free
+                // pulls (chinese_costume_design_course: 4.5pt free at 9pt).
+                && super::helpers::twips(cur_max - proposed_x)
+                    >= super::helpers::twips(cjk.punct_pull_free_em * eff_fs)
                 && compress_punctuation(
                     &mut current_chunks,
                     proposed_x + ww - cur_max,

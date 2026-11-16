@@ -1359,7 +1359,6 @@ pub(super) fn render_paragraph_block(
         // the mark beside a column-wide picture in a right-indented paragraph.
         // Compared in whole twips: a picture sized to the column (8616.99
         // twips from its EMU extent against an 8617 twip column) fits.
-        let twips = |pt: f32| (pt * 20.0).round();
         // A line break after the picture leaves the mark on a line of its own
         // too, sized by the mark's rPr like any trailing break's empty line
         // (a corpus logo paragraph: 7pt mark under a 16pt break run, Word's
@@ -1374,7 +1373,7 @@ pub(super) fn render_paragraph_block(
             picture_h
                 + mark_line_h(para, effective_ls, tallest_lhr, ctx.fonts)
                     .unwrap_or_else(|| mark_line().0)
-        } else if img.is_ole_preview && twips(img.layout_size().0) > twips(col_w) {
+        } else if img.is_ole_preview && super::helpers::twips(img.layout_size().0) > super::helpers::twips(col_w) {
             picture_h + mark_line().0
         } else {
             picture_h
