@@ -340,6 +340,9 @@ pub struct Document {
     pub additive_paragraph_spacing: bool,
     /// Word's `adjustLineHeightInTable` (see `docx::settings`).
     pub adjust_line_height_in_table: bool,
+    /// `w:compat/w:balanceSingleByteDoubleByteWidth`: a space beside an East
+    /// Asian character is half an em wide (see `docx::settings`).
+    pub balance_sbdb_width: bool,
     /// Document-level Office Math properties (`m:mathPr`).
     pub math: MathSettings,
 }

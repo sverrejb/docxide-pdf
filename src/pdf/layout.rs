@@ -1634,6 +1634,12 @@ pub(super) struct CjkLayout {
     /// `w:characterSpacingControl compressPunctuation`: squeeze full-width
     /// punctuation to keep one more character on the line.
     pub(super) compress_punct: bool,
+    /// `w:balanceSingleByteDoubleByteWidth`: a space beside an East Asian
+    /// character on either side is half an em wide, whatever its font's space
+    /// glyph (Word online probes 2026-11-09: 6.0pt at 12pt and 5.25 at 10.5
+    /// with the flag, the Latin 3.0 / 2.73 without; Yu Mincho, SimSun and
+    /// Times New Roman alike; japanese_land_development_sign_form).
+    pub(super) balance_sbdb: bool,
     /// Whether this paragraph pulls a word up by squeezing (see `CjkLayout`
     /// construction: the 2013+ layout only when justified).
     pub(super) punct_pull: bool,
@@ -2401,8 +2407,21 @@ pub(super) fn build_paragraph_lines(
             let literal_spaces = pending_space_count;
             let prev_soft_tail = soft_tail.take();
             let mut shown = shown_word(run, source);
-            let space_w =
+            let mut space_w =
                 space_count as f32 * word_space_width(run, entry, eff_fs, source, &mut prev_char);
+            // balanceSingleByteDoubleByteWidth: spaces beside an East Asian
+            // character are half an em each, including those carried over
+            // from the previous run's end.
+            if cjk.balance_sbdb
+                && (shown.starts_with(crate::docx::is_east_asian_char)
+                    || prev_last_char.is_some_and(crate::docx::is_east_asian_char))
+            {
+                if space_count > 0 {
+                    space_w = space_count as f32 * 0.5 * eff_fs;
+                } else if pending_space_w > 0.0 {
+                    pending_space_w = pending_space_count as f32 * 0.5 * eff_fs;
+                }
+            }
             if space_count > 0 {
                 push_pending_space(
                     &mut pending_spaces,
@@ -3968,6 +3987,7 @@ mod tests {
             compress_punct: false,
             punct_pull: false,
             punct_cut_last: false,
+            balance_sbdb: false,
             punct_pull_free_ratio: 0.0,
             punct_pull_free_em: 0.0,
             squeeze_spaces,
@@ -4015,6 +4035,7 @@ mod tests {
                     compress_punct: false,
                     punct_pull: false,
                     punct_cut_last: false,
+            balance_sbdb: false,
                     punct_pull_free_ratio: 0.0,
                     punct_pull_free_em: 0.0,
                     squeeze_spaces: true,

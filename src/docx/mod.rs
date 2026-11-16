@@ -1442,6 +1442,7 @@ fn parse_zip<R: Read + std::io::Seek>(
         wp_justification: settings.wp_justification,
         additive_paragraph_spacing: settings.no_html_auto_spacing,
         adjust_line_height_in_table: settings.adjust_line_height_in_table,
+        balance_sbdb_width: settings.balance_sbdb_width,
         math: settings.math,
     };
     // Captions get their numbers before a STYLEREF quotes them.

@@ -169,6 +169,8 @@ pub(super) struct RenderContext<'a> {
     pub(super) chart_font_name: &'a str,
     /// Word's `compressPunctuation` setting (see `docx::settings`).
     pub(super) compress_punctuation: bool,
+    /// `Document::balance_sbdb_width`.
+    pub(super) balance_sbdb_width: bool,
     /// Display numbers of footnote and endnote reference marks, by note id.
     pub(super) footnote_marks: &'a HashMap<u32, String>,
     pub(super) endnote_marks: &'a HashMap<u32, String>,
@@ -250,6 +252,7 @@ impl RenderContext<'_> {
             // 2010 layout squeezes any alignment, a little less (Word online
             // probes 2026-10-27, see `PUNCT_SQUEEZE`).
             compress_punct: self.compress_punctuation,
+            balance_sbdb: self.balance_sbdb_width,
             punct_pull: self.compat_mode < 15
                 || matches!(
                     para.alignment,
@@ -800,6 +803,7 @@ fn render_pass(
         textbox_image_names: &images.textbox_image_names,
         chart_font_name: &doc.theme_minor_font,
         compress_punctuation: doc.compress_punctuation,
+        balance_sbdb_width: doc.balance_sbdb_width,
         footnote_marks: &footnote_display_order,
         endnote_marks: &endnote_display_order,
         body_page_fields: page_fields,
