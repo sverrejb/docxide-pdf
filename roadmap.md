@@ -101,6 +101,8 @@ an inline o:hr among text. Open, diagnosed:
 - A 21pt Yu Mincho title with `w:spacing w:val="7"` starts 6.6pt right of
   Word's and steps 21.35 per glyph (Word 21.73).
 - Section-level vertical text (`textDirection tbRl`) is not supported.
+- A VML text box (an mc:Fallback) with `mso-position-horizontal:center` and
+  `-relative:text` sits at the column's left; Word centres it in the column.
 - CJK fallback: Chinese text in a Calibri run, or in a font no system has
   (楷體-繁 / Kaiti TC), prints in Microsoft JhengHei in Word online (some
   characters Yu Gothic or MS Mincho); ours takes SimSun, YaHei or 新細明體.
