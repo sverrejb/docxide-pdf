@@ -442,13 +442,11 @@ pub(super) fn step_below_bands(
         {
             state.pb.frame_bands.retain(|&b| b != own);
         }
-        step_below_existing_bands(state, block, sp, col, retry_first, ctx);
+        step_below_existing_bands(state, block, sp, col, retry_first, &[], ctx);
         return;
     };
-    add_bands(
-        &mut state.pb.frame_bands,
-        paragraph_bands(p, sp, col, text_width, ctx),
-    );
+    let own = paragraph_bands(p, sp, col, text_width, ctx);
+    add_bands(&mut state.pb.frame_bands, own.clone());
     let retried = retry_first.is_some();
     let pending = state.pb.float_anchor_for(block_idx);
     let anchor_y = pending.map_or(
@@ -461,7 +459,7 @@ pub(super) fn step_below_bands(
         |a| a.top,
     );
     let slot_before = state.pb.slot_top;
-    step_below_existing_bands(state, block, sp, col, retry_first, ctx);
+    step_below_existing_bands(state, block, sp, col, retry_first, &own, ctx);
     let flowed = state.pb.slot_top - if retried { 0.0 } else { state.prev_space_after };
     // A line-relative box hangs from where the paragraph went (`ParaAnchor::drawing_top`).
     let line_y = pending
@@ -485,7 +483,7 @@ pub(super) fn step_below_bands(
         .collect();
     add_bands(&mut state.pb.frame_bands, hanging);
     if state.pb.slot_top != slot_before {
-        step_below_existing_bands(state, block, sp, col, retry_first, ctx);
+        step_below_existing_bands(state, block, sp, col, retry_first, &own, ctx);
     }
 }
 
@@ -751,6 +749,7 @@ pub(super) fn step_below_existing_bands(
     sp: &SectionProperties,
     col: (f32, f32),
     retry_first: Option<f32>,
+    own: &[Band],
     ctx: &RenderContext,
 ) {
     let top = sp.page_height - state.pb.slot_top;
@@ -787,7 +786,31 @@ pub(super) fn step_below_existing_bands(
             laid_out_gap - own,
         )
     };
-    let below = below_bands(line_top, need, line_h, &state.pb.frame_bands, col);
+    // The anchor's own first line stays above its own floats when its
+    // single-spaced height fits there; its line spacing and space after
+    // don't count (Word online probes: Aptos 12 at 1.16 lines with 8pt
+    // after keeps its line over a full-width box 14.9pt below the margin,
+    // not 13.9pt; Arial 11 with 6pt after over one 13pt below, not 12pt;
+    // square and topAndBottom alike).
+    // Only where no other float moves the line: under another one it goes
+    // below all of them (fixture three-wrapping-floats-one-page: two empty
+    // anchors whose boxes sit low on the page stack under a third box above).
+    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+    let single_h = lhr.map_or(line_h, |r| fs * r);
+    let others: Vec<Band> = (state.pb.frame_bands.iter())
+        .filter(|b| !own.contains(b))
+        .copied()
+        .collect();
+    let own_clear = retry_first.is_none()
+        && !own.is_empty()
+        && below_bands(line_top, single_h, single_h, own, col) == line_top
+        && below_bands(line_top, need, line_h, &others, col) == line_top;
+    let bands = if own_clear {
+        &others[..]
+    } else {
+        &state.pb.frame_bands[..]
+    };
+    let below = below_bands(line_top, need, line_h, bands, col);
     if below != line_top {
         // Its floating paragraph-relative drawings still hang from where the
         // paragraph stood (example: a wrapNone box at offset 0 in a paragraph

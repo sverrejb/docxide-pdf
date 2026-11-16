@@ -2468,6 +2468,16 @@
   "cases/numeric-suffix-split-final": [
     "20ac010a3aa8e6eed1a9eab55c911d9646f9e88cdda131f69a7b13d0b05f6290"
   ],
+  "cases/own-float-anchor-line-fits-above": [
+    "b268be0a79086c398c26acb2a98b53fdad7c2996e12b1d221a9034ef3a201b96"
+  ],
+  "cases/own-float-anchor-line-too-tall": [
+    "cb45f484344c83bda71473a80d9c32adef2d6cb6057e09f67e840f92a9f6b985"
+  ],
+  "cases/own-float-full-page-anchor-line-above": [
+    "75433c406200150878a5e72422d4e13eddf65925737f5a5b01473f5b0dd2b7b7",
+    "cffeff789bb5c005c74bbf389b8f66153078439e15f982b291168b75699d6630"
+  ],
   "cases/page-header-frame-marker": [
     "bf774c2678d9fa248d3ffdefa6a9890b4bafa4a142aa7458736b52f499e588a9"
   ],

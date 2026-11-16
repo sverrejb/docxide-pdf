@@ -7174,6 +7174,18 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/own-float-anchor-line-fits-above": {
+    "jaccard": 1.0,
+    "ssim": 1.0
+  },
+  "cases/own-float-anchor-line-too-tall": {
+    "jaccard": 1.0,
+    "ssim": 1.0
+  },
+  "cases/own-float-full-page-anchor-line-above": {
+    "jaccard": 0.9987,
+    "ssim": 1.0
+  },
   "cases/page-header-frame-marker": {
     "jaccard": 0.9981,
     "ssim": 1.0,

@@ -1301,7 +1301,7 @@ fn render_pass(
                 // a later frame band. Recheck the existing bands at that cursor.
                 if frame.is_none() && state.pb.slot_top != before_float_clearance {
                     let col = col_geometry[state.current_col];
-                    step_below_existing_bands(state, block, sp, col, None, &ctx);
+                    step_below_existing_bands(state, block, sp, col, None, &[], &ctx);
                 }
 
                 match block {
