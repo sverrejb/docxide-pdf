@@ -334,11 +334,24 @@ alone: thin red strokes fall under the ink threshold where 394146 does
 not); DejaVu Sans Mono in this Mac's user fonts for the altName-Verdana
 family; Roboto Bold and Ubuntu missing here (Office's cloud cache has
 Roboto Regular/Light/Medium only); Palatino is Mac-only and Word for Mac
-uses its hhea box (1.10em) where we use win (1.66em). Open: an auto-width
-AutoFit table whose saved grid (3851/5211) disagrees with its tcW
-(2745/6068): Word draws the grid, we the tcW (acd3595c3a, 13.9 vs 69.8);
-a reference printed with an empty markup pane and no comments, the only
-document in the sample with `w:cellDel` (3890d0a960).
+uses its hhea box (1.10em) where we use win (1.66em).
+2026-11-16, the two round-5 gaps closed (probes in `tests/output/r5/probe/`:
+`grid_gen.py`, `fit_gen.py`, `minw_gen.py`, `nbsp_gen.py`, `pane_gen.py`,
+bisect copies of acd3595c3a in `probe/acd/`):
+- acd3595c3a's column was not the saved grid: Word recomputes AutoFit on
+  open (any saved grid gives the same columns) and measures the cell's
+  deleted text even in the final view, where it prints none. That text,
+  "partenaire\u{a0}\u{a0}\u{a0} Intermédiaire\u{a0}\u{a0}\u{a0} 48", is one unbreakable
+  word to Word, which never breaks at a space beside a no-break space;
+  192.5pt with indent and margins. Simple tables with short or long text
+  keep their tcW in Word as in ours (compat 14 and 15 alike).
+- `w:cellDel` / `w:cellIns` open the markup pane on their own, with a white
+  "Deleted Cells" / "Inserted Cells" balloon by the cell; a cell property
+  change, a cell merge or text revisions alone do not. Drawn as labelled
+  comment balloons (`docx::cell_revision_balloons`).
+The corpus has since been trimmed to 1741 tracked documents in the main
+checkout's `tests/output/corpus-src/neurotic_docx_bench/`; 148 of the 487
+sample documents remain (`tests/output/r5/s2`, labels `s2-*`).
 
 The competitor's current release, rescored locally with the same scorer and
 Word's markup palette (`--revisions word --compress`), reads Word's own font
