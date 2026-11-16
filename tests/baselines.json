@@ -10432,8 +10432,8 @@
     "a11y_text": 1.0
   },
   "scraped/advocacy_initiative_newsletter_2013": {
-    "jaccard": 0.3672,
-    "ssim": 0.3929,
+    "jaccard": 0.3845,
+    "ssim": 0.4459,
     "text_boundary": 0.881,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10656,8 +10656,8 @@
     "a11y_text": 1.0
   },
   "scraped/chinese_costume_design_course": {
-    "jaccard": 0.3845,
-    "ssim": 0.5898,
+    "jaccard": 0.597,
+    "ssim": 0.8559,
     "text_boundary": 0.4578,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10666,8 +10666,8 @@
     "a11y_text": 0.7054
   },
   "scraped/chinese_student_union_nomination_form": {
-    "jaccard": 0.5056,
-    "ssim": 0.8961,
+    "jaccard": 0.5226,
+    "ssim": 0.9127,
     "text_boundary": 0.9344,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11020,8 +11020,8 @@
     "a11y_text": 1.0
   },
   "scraped/east_asia_conference_form": {
-    "jaccard": 0.5529,
-    "ssim": 0.7083,
+    "jaccard": 0.1351,
+    "ssim": 0.3517,
     "text_boundary": 0.7143,
     "convert_ms": 22.0,
     "ua_fail": 2,
@@ -11154,8 +11154,8 @@
     "a11y_text": 1.0
   },
   "scraped/geneva_waste_facility_permit_request": {
-    "jaccard": 0.7161,
-    "ssim": 0.8647,
+    "jaccard": 0.7165,
+    "ssim": 0.8731,
     "text_boundary": 0.9474,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11339,8 +11339,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_hr_consultation_application": {
-    "jaccard": 0.6901,
-    "ssim": 0.7859,
+    "jaccard": 0.6967,
+    "ssim": 0.7929,
     "text_boundary": 0.7556,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -11360,8 +11360,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_land_development_sign_form": {
-    "jaccard": 0.4472,
-    "ssim": 0.7768,
+    "jaccard": 0.5325,
+    "ssim": 0.8654,
     "text_boundary": 0.9259,
     "ua_fail": 4,
     "a11y_missing": 0,
@@ -11370,8 +11370,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_medical_consultation_form": {
-    "jaccard": 0.6217,
-    "ssim": 0.8639,
+    "jaccard": 0.7181,
+    "ssim": 0.9386,
     "text_boundary": 0.878,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11504,8 +11504,8 @@
     "a11y_text": 1.0
   },
   "scraped/master_thesis_learning_agreement": {
-    "jaccard": 0.7843,
-    "ssim": 0.9216,
+    "jaccard": 0.7866,
+    "ssim": 0.9231,
     "text_boundary": 0.9773,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11649,7 +11649,7 @@
     "a11y_text": 0.9562
   },
   "scraped/polish_ministry_accessibility_report": {
-    "jaccard": 0.6834,
+    "jaccard": 0.6824,
     "ssim": 0.913,
     "text_boundary": 0.9402,
     "ua_fail": 2,
@@ -12049,8 +12049,8 @@
     "a11y_text": 0.8008
   },
   "scraped/swiss_materials_extraction_zone_guidance": {
-    "jaccard": 0.5885,
-    "ssim": 0.7954,
+    "jaccard": 0.5908,
+    "ssim": 0.8024,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -12059,8 +12059,8 @@
     "a11y_text": 0.9487
   },
   "scraped/taiwanese_education_fraud_ruling": {
-    "jaccard": 0.7613,
-    "ssim": 0.8516,
+    "jaccard": 0.8643,
+    "ssim": 0.9135,
     "text_boundary": 0.8125,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -12069,8 +12069,8 @@
     "a11y_text": 1.0
   },
   "scraped/tokyo_welfare_infrastructure_briefing": {
-    "jaccard": 0.5738,
-    "ssim": 0.7704,
+    "jaccard": 0.5793,
+    "ssim": 0.7824,
     "text_boundary": 0.9091,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -12101,8 +12101,8 @@
     "a11y_text": 0.8991
   },
   "scraped/turkish_ancient_religions_plan": {
-    "jaccard": 0.4593,
-    "ssim": 0.651,
+    "jaccard": 0.4626,
+    "ssim": 0.7471,
     "text_boundary": 1.0,
     "convert_ms": 4.2,
     "ua_fail": 3,
@@ -12268,8 +12268,8 @@
     "a11y_text": 0.9355
   },
   "scraped/who_prescribing_patterns_table": {
-    "jaccard": 0.8238,
-    "ssim": 0.9305,
+    "jaccard": 0.8263,
+    "ssim": 0.935,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
