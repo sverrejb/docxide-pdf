@@ -263,6 +263,13 @@ pub(super) fn render_paragraph_block(
     // page when the explicit break follows a section break. The
     // `<w:pageBreakBefore/>` style property is idempotent and skipped
     // when already at the top.
+    // Before compatibility mode 15 a page break before keeps the paragraph's
+    // space before at the new page top, less the space after that stayed
+    // behind (Word probes: 48pt before keeps 48pt, 24pt with 24pt after above
+    // the break, none with 72pt; also already at a page top). Mode 15 and
+    // breaks in an earlier paragraph drop it.
+    let break_space_after =
+        (para.page_break_before && ctx.compat_mode < 15).then_some(state.prev_space_after);
     if para.page_break_before {
         if !state.page_break_taken {
             take_page_break_before(state, para, sect_idx, sp, ctx);
@@ -2429,6 +2436,9 @@ pub(super) fn render_paragraph_block(
         .pb
         .page_top_gap(sp, effective_space_before, state.prev_space_after)
     {
+        let gap = break_space_after.map_or(gap, |after| {
+            gap.max(own_space_before(effective_space_before, after))
+        });
         state.pb.top_suppressed = (effective_space_before - gap).max(0.0);
         inter_gap = gap;
     }

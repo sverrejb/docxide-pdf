@@ -633,10 +633,6 @@ Backlog (details in `current_focus/A11Y.md`):
   drawn as cached. PAGEREFs print the measured page, as Word's export does,
   so TOC numbers in uk_commercial_lease_template (18 of 95) and
   carbon_farming_initiative_rule (5 of 160) show where our pagination drifts.
-- Issue #164's control `03-page-break-before-control.docx` (no settings.xml):
-  a Heading1 with `pageBreakBefore` and `spacing before="960"` keeps its 48pt
-  space at the top of page 2 in Word (text top 120.5pt from the page top);
-  we drop it (72.6pt).
 - Issue #147 follow-up: the "(1)" labels of `rust.docx` sat 12pt below
   Word's. Issue #164 traced the same 12pt to `textAlignment="center"` (a PNG
   of the equation's size reproduces it; baseline alignment matches the low

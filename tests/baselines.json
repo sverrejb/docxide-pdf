@@ -7210,6 +7210,22 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/page_break_before_space_at_top_compat14": {
+    "jaccard": 0.9656,
+    "ssim": 0.9909
+  },
+  "cases/page_break_before_space_compat14": {
+    "jaccard": 0.7909,
+    "ssim": 1.0
+  },
+  "cases/page_break_before_space_compat15": {
+    "jaccard": 0.5805,
+    "ssim": 1.0
+  },
+  "cases/page_break_run_space_compat14": {
+    "jaccard": 0.7909,
+    "ssim": 1.0
+  },
   "cases/paragraph-border-indents": {
     "jaccard": 0.9599,
     "ssim": 0.9839,
@@ -10641,8 +10657,8 @@
     "a11y_text": 1.0
   },
   "scraped/clean_energy_regulator_act": {
-    "jaccard": 0.5826,
-    "ssim": 0.7504,
+    "jaccard": 0.7828,
+    "ssim": 0.9374,
     "text_boundary": 0.959,
     "ua_fail": 2,
     "a11y_missing": 0,
