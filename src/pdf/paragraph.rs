@@ -1904,6 +1904,52 @@ pub(super) fn render_paragraph_block(
         } else {
             0.0
         };
+    // A paragraph none of whose lines fit beside their whole notes, or one
+    // kept with the next, keeps its last note's first lines on this page and
+    // continues the rest at the top of the next page's notes, at least two
+    // lines on each side whatever the note's widow control (Word:
+    // uk_commercial_lease's "Uninsured Risk" keeps 5 of note 37's 7 lines on
+    // p17 although 6 would fit; zimbabwe_gold_mining moves a paragraph with
+    // its 2-line note). Any other paragraph splits instead, its notes whole
+    // (brazilian_logistics p10: one line and note 4 stay).
+    let fits_with_notes = |fn_h: f32| {
+        state.pb.slot_top - needed_with_floats - keep_next_extra + last_line_lead
+            >= state.effective_margin_bottom + fn_h + notes_after
+    };
+    let body_splits = || {
+        let room = state.pb.slot_top - inter_gap - text_drop - state.effective_margin_bottom;
+        let mut fit = fit_in(&lines, &line_fn_extra, room, state.pb.col_fn_reserved > 0.0)
+            .min(lines.len());
+        if para.widow_control && lines.len() - fit < 2 {
+            fit = lines.len().saturating_sub(2);
+        }
+        fit >= if para.widow_control { 2 } else { 1 }
+    };
+    let split_note = if para_fn_extra > 0.0
+        && !fits_with_notes(para_fn_extra)
+        && (keep_next_extra > 0.0 || !body_splits())
+    {
+        run_refs
+            .iter()
+            .rev()
+            .find(|id| !state.pb.footnote_ids_set.contains(id))
+            .and_then(|&id| {
+                let keep = 2;
+                let heights = super::footnotes::footnote_line_heights(
+                    id,
+                    &doc.footnotes,
+                    ctx,
+                    col_geometry[state.current_col].1,
+                );
+                let whole: f32 = heights.iter().sum();
+                let head: f32 = heights.iter().take(keep).sum();
+                (heights.len() >= 2 * keep && fits_with_notes(para_fn_extra - whole + head))
+                    .then_some((id, heights, keep, para_fn_extra - whole + head))
+            })
+    } else {
+        None
+    };
+    let para_fn_fit = split_note.as_ref().map_or(para_fn_extra, |s| s.3);
     // A frame in the flow never splits: `FlowFrame` has placed it, and it
     // runs past the bottom if it must (Word example, fixture
     // frame-moves-shared-tall: the next block opens the next page).
@@ -1913,7 +1959,7 @@ pub(super) fn render_paragraph_block(
         && (!at_page_top || lines.len() > 1)
         && (moved
             || state.pb.slot_top - needed_with_floats - keep_next_extra + last_line_lead
-                < state.effective_margin_bottom + para_fn_extra + notes_after)
+                < state.effective_margin_bottom + para_fn_fit + notes_after)
     {
         if moved {
             let col = col_geometry[state.current_col];
@@ -3145,7 +3191,42 @@ pub(super) fn render_paragraph_block(
 
     // Track footnotes referenced on this page
     for run in para.runs.iter() {
-        if let Some(id) = run.footnote_id {
+        if let Some((id, heights, keep, _)) =
+            split_note.as_ref().filter(|s| run.footnote_id == Some(s.0))
+        {
+            // The head takes what the paragraph and its kept successors leave.
+            let col = col_geometry[state.current_col];
+            let sep = ctx.note_separator.height;
+            let opens = if state.pb.col_fn_reserved == 0.0 {
+                sep
+            } else {
+                0.0
+            };
+            let after = if keep_next_extra > 0.0 {
+                keep_next_extra
+            } else {
+                notes_after
+            };
+            let room = state.pb.slot_top - after - state.effective_margin_bottom - opens;
+            let mut head_lines = *keep;
+            let mut head: f32 = heights[..*keep].iter().sum();
+            while head_lines + keep < heights.len() && head + heights[head_lines] <= room {
+                head += heights[head_lines];
+                head_lines += 1;
+            }
+            let tail: f32 = heights[head_lines..].iter().sum();
+            state.pb.book_footnote_part(
+                *id,
+                col,
+                Some(head),
+                sep,
+                &mut state.effective_margin_bottom,
+                0..head_lines,
+            );
+            state
+                .pb
+                .carry_footnote(*id, col, Some(tail), sep, head_lines..usize::MAX);
+        } else if let Some(id) = run.footnote_id {
             track_page_footnote(state, doc, ctx, col_geometry[state.current_col], id);
         }
         if let Some(id) = run.endnote_id {

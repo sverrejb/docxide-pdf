@@ -1980,7 +1980,13 @@ pub(super) fn render_table(
                     effective_margin_bottom,
                 );
             } else {
-                pb.carry_footnote(fn_id, area, fn_h, ctx.note_separator.height);
+                pb.carry_footnote(
+                    fn_id,
+                    area,
+                    fn_h,
+                    ctx.note_separator.height,
+                    super::footnotes::WHOLE_NOTE,
+                );
             }
         }
 

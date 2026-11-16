@@ -1,6 +1,7 @@
 //! Page state: the page being filled, float anchors, layout state and page numbering.
 
 use super::*;
+use std::ops::Range;
 
 /// A one-shot override of where the next paragraph's drawings hang from.
 #[derive(Clone, Copy)]
@@ -237,11 +238,16 @@ pub(super) struct PageBuilder {
     /// that cites them, in its width.
     footnote_cols: Vec<(f32, f32)>,
     pub(super) all_footnote_cols: Vec<Vec<(f32, f32)>>,
+    /// The lines of each booked footnote this page shows, parallel to
+    /// `footnote_ids`: a note Word splits shows its head here, its tail on
+    /// the next page.
+    footnote_parts: Vec<Range<usize>>,
+    pub(super) all_footnote_parts: Vec<Vec<Range<usize>>>,
     /// Footnote space booked in the current column.
     pub(super) col_fn_reserved: f32,
     /// Footnotes (id, column, height, separator) cited on this page with no
     /// room left for them: the next page books them.
-    carried_footnotes: Vec<(u32, (f32, f32), Option<f32>, f32)>,
+    carried_footnotes: Vec<(u32, (f32, f32), Option<f32>, f32, Range<usize>)>,
     /// §17.6.8 body line-number counter (0-based count of lines seen).
     pub(super) line_number_counter: u32,
     /// The current section's `lnNumType restart` is newPage (the default):
@@ -357,6 +363,8 @@ impl PageBuilder {
             all_footnote_ids: Vec::new(),
             footnote_cols: Vec::new(),
             all_footnote_cols: Vec::new(),
+            footnote_parts: Vec::new(),
+            all_footnote_parts: Vec::new(),
             col_fn_reserved: 0.0,
             carried_footnotes: Vec::new(),
             line_number_counter: 0,
@@ -495,14 +503,16 @@ impl PageBuilder {
             .push(std::mem::take(&mut self.footnote_ids));
         self.all_footnote_cols
             .push(std::mem::take(&mut self.footnote_cols));
+        self.all_footnote_parts
+            .push(std::mem::take(&mut self.footnote_parts));
         self.col_fn_reserved = 0.0;
         if self.line_numbers_restart_each_page {
             self.line_number_counter = 0;
         }
         self.footnote_ids_set.clear();
         let mut reserved = 0.0;
-        for (id, col, height, separator_h) in std::mem::take(&mut self.carried_footnotes) {
-            self.book_footnote(id, col, height, separator_h, &mut reserved);
+        for (id, col, height, separator_h, part) in std::mem::take(&mut self.carried_footnotes) {
+            self.book_footnote_part(id, col, height, separator_h, &mut reserved, part);
         }
         self.all_alpha_states
             .push(std::mem::take(&mut self.alpha_states));
@@ -541,6 +551,7 @@ impl PageBuilder {
         self.all_comment_anchors.push(Vec::new());
         self.all_footnote_ids.push(Vec::new());
         self.all_footnote_cols.push(Vec::new());
+        self.all_footnote_parts.push(Vec::new());
         self.all_alpha_states.push(HashSet::new());
         self.all_gradient_specs.push(Vec::new());
         self.page_section_indices
@@ -575,11 +586,32 @@ impl PageBuilder {
         separator_h: f32,
         effective_margin_bottom: &mut f32,
     ) {
+        self.book_footnote_part(
+            id,
+            col,
+            height,
+            separator_h,
+            effective_margin_bottom,
+            super::footnotes::WHOLE_NOTE,
+        );
+    }
+
+    /// `book_footnote` for the lines `part` of the note, `height` tall.
+    pub(super) fn book_footnote_part(
+        &mut self,
+        id: u32,
+        col: (f32, f32),
+        height: Option<f32>,
+        separator_h: f32,
+        effective_margin_bottom: &mut f32,
+        part: Range<usize>,
+    ) {
         if !self.footnote_ids_set.insert(id) {
             return;
         }
         self.footnote_ids.push(id);
         self.footnote_cols.push(col);
+        self.footnote_parts.push(part);
         if let Some(h) = height {
             let sep = if self.col_fn_reserved == 0.0 {
                 separator_h
@@ -598,9 +630,11 @@ impl PageBuilder {
         col: (f32, f32),
         height: Option<f32>,
         separator_h: f32,
+        part: Range<usize>,
     ) {
-        if !self.footnote_ids_set.contains(&id) {
-            self.carried_footnotes.push((id, col, height, separator_h));
+        if !self.footnote_ids_set.contains(&id) || part.start > 0 {
+            self.carried_footnotes
+                .push((id, col, height, separator_h, part));
         }
     }
 

@@ -1711,6 +1711,7 @@ fn render_pass(
         // One block per column, at its foot and in its width.
         let ids = &state.pb.all_footnote_ids[page_idx];
         let cols = &state.pb.all_footnote_cols[page_idx];
+        let parts = &state.pb.all_footnote_parts[page_idx];
         let mut tops = Vec::new();
         let mut done: Vec<(f32, f32)> = Vec::new();
         for &col in cols {
@@ -1718,11 +1719,12 @@ fn render_pass(
                 continue;
             }
             done.push(col);
-            let col_ids: Vec<u32> = ids
+            let col_ids: Vec<(u32, std::ops::Range<usize>)> = ids
                 .iter()
                 .zip(cols)
-                .filter(|&(_, &c)| c == col)
-                .map(|(&id, _)| id)
+                .zip(parts)
+                .filter(|&((_, &c), _)| c == col)
+                .map(|((&id, _), part)| (id, part.clone()))
                 .collect();
             tops.extend(render_page_footnotes(
                 content,
