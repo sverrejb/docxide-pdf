@@ -1,5 +1,5 @@
 {
-  "next_id": 274,
+  "next_id": 275,
   "annotations": [
     {
       "id": 208,
@@ -966,6 +966,17 @@
       "x_pt": 168.24297,
       "y_pt": 759.7038,
       "note": "List seem too indented or something? Poor visual match to the word reference.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 274,
+      "case": "scraped/german_mezzo_soprano_bio",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 284.0141,
+      "y_pt": 518.4584,
+      "note": "We slice off the last text line here. The \"Und: ...\" line is not visible, apart from the very top of some letters",
       "fixed": false,
       "cleared": false
     }
