@@ -234,6 +234,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     Paragraph {
         kashida_reserve: ctx.text_width * super::runs::paragraph_kashida(ppr, para_style),
         runs,
+        deleted_text: parsed.deleted_text,
         mark_deleted,
         mark_revised,
         style_id: Some(para_style_id.to_string()),

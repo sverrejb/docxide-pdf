@@ -479,8 +479,11 @@ fn cell_min_content_width(
         // A word continued from the previous run adds to its width.
         let mut joined_width = 0.0f32;
         let mut prev_char = None;
-        for run in &para.runs {
-            if run.is_tab || run.is_line_break {
+        // Deleted text (`Paragraph::deleted_text`) is measured after the
+        // printed runs, as words of its own.
+        let deleted_from = para.runs.len();
+        for (i, run) in para.runs.iter().chain(&para.deleted_text).enumerate() {
+            if run.is_tab || run.is_line_break || i == deleted_from {
                 prev_char = None;
             }
             let key = font_key_buf(run, &mut key_buf);

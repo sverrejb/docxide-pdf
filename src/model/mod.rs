@@ -564,6 +564,9 @@ pub struct LabelRevision {
 #[derive(Default)]
 pub struct Paragraph {
     pub runs: Vec<Run>,
+    /// Final view: the text of the paragraph's tracked deletions, never
+    /// printed; AutoFit still sizes table columns by it.
+    pub deleted_text: Vec<Run>,
     /// The paragraph mark is a tracked deletion (`w:pPr/w:rPr/w:del`): the
     /// final view joins this paragraph to the next.
     pub mark_deleted: bool,

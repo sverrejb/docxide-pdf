@@ -154,6 +154,8 @@ fn mc_choice_or_fallback<'a>(node: roxmltree::Node<'a, 'a>) -> Option<roxmltree:
 
 pub(super) struct ParsedRuns {
     pub(super) runs: Vec<Run>,
+    /// `Paragraph::deleted_text`.
+    pub(super) deleted_text: Vec<Run>,
     /// True only when the break came from `<w:br w:type="page"/>` at the
     /// start of the paragraph, not from the `<w:pageBreakBefore/>` style
     /// property. The renderer treats these differently — see
@@ -1870,9 +1872,42 @@ pub(super) fn parse_runs<R: Read + Seek>(
     }
     let mark_in_field_code = !fields_visible(&field_stack);
     ctx.fields.frames = field_stack;
+    // Word sizes AutoFit columns by deleted text even where it prints none
+    // (online export of a redline: a cell's deleted "partenaire\u{a0}\u{a0}\u{a0}
+    // Intermédiaire\u{a0}\u{a0}\u{a0} 48" widens its column to 192.5pt; the
+    // same document without it keeps the cells' 137.25pt).
+    let deleted_text = if ctx.revisions.markup {
+        Vec::new()
+    } else {
+        para_node
+            .descendants()
+            .filter(|n| {
+                n.has_tag_name((WML_NS, "r"))
+                    && n.ancestors().take_while(|a| *a != para_node).any(|a| {
+                        a.has_tag_name((WML_NS, "del")) || a.has_tag_name((WML_NS, "moveFrom"))
+                    })
+            })
+            .filter_map(|r| {
+                let text: String = r
+                    .children()
+                    .filter(|c| c.has_tag_name((WML_NS, "delText")) || c.has_tag_name((WML_NS, "t")))
+                    .filter_map(|c| c.text())
+                    .collect();
+                if text.is_empty() {
+                    return None;
+                }
+                let rpr = wml(r, "rPr");
+                let style_id = rpr.and_then(|n| wml_attr(n, "rStyle"));
+                let char_style = style_id.and_then(|id| ctx.styles.character_styles.get(id));
+                let fmt = defaults.resolve_run_format(rpr, char_style, style_id, ctx.theme);
+                Some(fmt.text_run(text, None))
+            })
+            .collect()
+    };
 
     ParsedRuns {
         runs,
+        deleted_text,
         mark_in_field_code,
         toc_instr,
         has_explicit_page_break_before: page_break_before_content,

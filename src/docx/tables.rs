@@ -795,6 +795,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     };
                     let tab_stops = super::resolve_tab_stops(ppr, para_style);
                     cell_blocks.push(Block::Paragraph(Paragraph {
+                        deleted_text: parsed.deleted_text,
                         widow_control: super::paragraph::widow_control(
                             ppr,
                             para_style,
