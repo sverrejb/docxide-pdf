@@ -3760,11 +3760,17 @@
   },
   "cases/deleted-cell-opens-markup-pane": {
     "jaccard": 0.8787,
-    "ssim": 0.9463
+    "ssim": 0.9463,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/deleted-cell-opens-markup-pane@markup": {
-    "jaccard": 0.2662,
-    "ssim": 0.862
+    "jaccard": 0.2632,
+    "ssim": 0.9151
   },
   "cases/displaced-anchor-narrow-compat12-overlap0-offset0": {
     "jaccard": 0.8498,
@@ -4528,7 +4534,13 @@
   },
   "cases/float-band-over-earlier-lines-moves-anchor": {
     "jaccard": 0.9884,
-    "ssim": 0.9909
+    "ssim": 0.9909,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9091,
+    "a11y_text": 1.0
   },
   "cases/float-table-band-before": {
     "jaccard": 0.9264,
@@ -4870,6 +4882,16 @@
     "a11y_struct": 0.4444,
     "a11y_text": 1.0
   },
+  "cases/grid-at-least-zero-keeps-natural-height": {
+    "jaccard": 0.6165,
+    "ssim": 0.8747,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "cases/group-align-right": {
     "jaccard": 0.8556,
     "ssim": 0.9707,
@@ -5092,7 +5114,13 @@
   },
   "cases/horizontal-rule-among-text-own-line": {
     "jaccard": 0.388,
-    "ssim": 0.9871
+    "ssim": 0.9871,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6364,
+    "a11y_text": 1.0
   },
   "cases/hyphen-opening-guillemet-explicit-space": {
     "jaccard": 0.9093,
@@ -6118,7 +6146,13 @@
   },
   "cases/mce-choice-requires-understood": {
     "jaccard": 0.8736,
-    "ssim": 0.9925
+    "ssim": 0.9925,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 10,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/min-width-run-spaces": {
     "jaccard": 0.9225,
@@ -7192,15 +7226,33 @@
   },
   "cases/own-float-anchor-line-fits-above": {
     "jaccard": 1.0,
-    "ssim": 1.0
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8333,
+    "a11y_text": 1.0
   },
   "cases/own-float-anchor-line-too-tall": {
     "jaccard": 1.0,
-    "ssim": 1.0
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8333,
+    "a11y_text": 1.0
   },
   "cases/own-float-full-page-anchor-line-above": {
     "jaccard": 0.9987,
-    "ssim": 1.0
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8333,
+    "a11y_text": 1.0
   },
   "cases/page-header-frame-marker": {
     "jaccard": 0.9981,
@@ -7244,19 +7296,43 @@
   },
   "cases/page_break_before_space_at_top_compat14": {
     "jaccard": 0.9656,
-    "ssim": 0.9909
+    "ssim": 0.9909,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/page_break_before_space_compat14": {
     "jaccard": 0.7909,
-    "ssim": 1.0
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/page_break_before_space_compat15": {
     "jaccard": 0.5805,
-    "ssim": 1.0
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/page_break_run_space_compat14": {
     "jaccard": 0.7909,
-    "ssim": 1.0
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/paragraph-border-indents": {
     "jaccard": 0.9599,
@@ -8088,7 +8164,13 @@
   },
   "cases/run-default-without-font-is-times": {
     "jaccard": 0.6918,
-    "ssim": 0.8344
+    "ssim": 0.8344,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/section-clear-mark-continuous": {
     "jaccard": 0.7525,
@@ -10470,7 +10552,7 @@
   "scraped/advocacy_initiative_newsletter_2013": {
     "jaccard": 0.538,
     "ssim": 0.6546,
-    "text_boundary": 0.881,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10694,7 +10776,7 @@
   "scraped/chinese_costume_design_course": {
     "jaccard": 0.597,
     "ssim": 0.8559,
-    "text_boundary": 0.4578,
+    "text_boundary": 0.8193,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10702,9 +10784,9 @@
     "a11y_text": 0.7054
   },
   "scraped/chinese_student_union_nomination_form": {
-    "jaccard": 0.5058,
-    "ssim": 0.9119,
-    "text_boundary": 0.9344,
+    "jaccard": 0.6204,
+    "ssim": 0.9127,
+    "text_boundary": 0.9672,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10735,7 +10817,7 @@
   "scraped/clean_energy_regulator_act": {
     "jaccard": 0.7828,
     "ssim": 0.9374,
-    "text_boundary": 0.959,
+    "text_boundary": 0.9636,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -11058,7 +11140,7 @@
   "scraped/east_asia_conference_form": {
     "jaccard": 0.7195,
     "ssim": 0.8299,
-    "text_boundary": 0.7143,
+    "text_boundary": 0.7727,
     "convert_ms": 22.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11398,7 +11480,7 @@
   "scraped/japanese_land_development_sign_form": {
     "jaccard": 0.6936,
     "ssim": 0.8668,
-    "text_boundary": 0.9259,
+    "text_boundary": 1.0,
     "ua_fail": 4,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -12097,7 +12179,7 @@
   "scraped/taiwanese_education_fraud_ruling": {
     "jaccard": 0.8643,
     "ssim": 0.9135,
-    "text_boundary": 0.8125,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -12191,13 +12273,13 @@
   "scraped/uk_commercial_lease_template": {
     "jaccard": 0.8214,
     "ssim": 0.9291,
-    "text_boundary": 0.8046,
+    "text_boundary": 0.9934,
     "convert_ms": 326.3,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.8079,
-    "a11y_text": 0.7627
+    "a11y_struct": 0.8083,
+    "a11y_text": 0.7725
   },
   "scraped/ukraine_humanitarian_aid": {
     "jaccard": 0.8563,

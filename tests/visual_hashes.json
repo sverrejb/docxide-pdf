@@ -1313,7 +1313,7 @@
     "755321a53551133aad591405bcb76adcd7d8b618af680c73dc2e6d0dcb49f29b"
   ],
   "cases/deleted-cell-opens-markup-pane@markup": [
-    "775d812db4bccbf4fecb0806f8f92cc8e730e8db034d9a369ae22015dd70e0d2"
+    "3604b9494599b8c4053be89bb426b07b59395493711294cde1affc5aa8afddbf"
   ],
   "cases/displaced-anchor-narrow-compat12-overlap0-offset0": [
     "47704c7d4529a3cb5cbb0f19161285db3de9f8b1fc025e0d0b84c5195b3f56f4"
@@ -1703,6 +1703,9 @@
   ],
   "cases/fullwidth-float-empty-clear": [
     "4f105cdd6aa256a8cddafc79e809eee4de191bd778cb883cc8625e7e72c70249"
+  ],
+  "cases/grid-at-least-zero-keeps-natural-height": [
+    "a74fe28f5667b73ae3deb5cb33cfb61cab1b17e17ceb7bd126915cbf457cb808"
   ],
   "cases/group-align-right": [
     "9adf239680f92047323cb446aac6692b4e17855a70003f52c0a6485e0df58aff"
@@ -4091,7 +4094,7 @@
   "scraped/chinese_student_union_nomination_form": [
     "ff9e85324782e1f250637ff160e57ba053c6341a64d2a02c0c6a12702584914b",
     "f2c048a7ba18c7f157f9f6e40f0def02b5fb0fb0540471e8279d582a74c560a8",
-    "fd281c79ca94a1b3b27f759f50ab6dcd05fa67de59add17d5c8c59465f9b03fa",
+    "18e52efbed3290015144d48818f1b3db3a17d92146d907bf1f5de617286bcfcb",
     "453b86260e89e1c73825246a393ecbfb16761ccde64181210649cd5f3b929109",
     "5dbdfa0dc91c780cf71709c093cb05f34fed596d21771ef2d5aca9a718bd09aa",
     "04862c6ec9f3effbb25b08cdeb919ba5bda1ace55f573143c18b9423bcebc9c0"
