@@ -39,6 +39,7 @@ pub(super) fn parse_comments<R: Read + Seek>(
                 initials,
                 text,
                 display_index,
+                label: None,
             },
         );
     }

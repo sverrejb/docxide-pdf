@@ -873,6 +873,13 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 cell_margins: per_cell_margins,
                 text_direction,
                 hide_mark,
+                revision_label: tc_pr.and_then(|pr| {
+                    if wml(pr, "cellDel").is_some() {
+                        Some("Deleted Cells")
+                    } else {
+                        wml(pr, "cellIns").map(|_| "Inserted Cells")
+                    }
+                }),
             });
             grid_col += grid_span as usize;
         }

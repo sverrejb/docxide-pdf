@@ -344,6 +344,9 @@ pub struct TableCell {
     pub text_direction: TextDirection,
     pub cell_margins: Option<CellMargins>,
     pub hide_mark: bool,
+    /// Markup view: the cell is a tracked insertion or deletion
+    /// (`w:cellIns` / `w:cellDel`), its balloon's label.
+    pub revision_label: Option<&'static str>,
 }
 
 impl TableCell {

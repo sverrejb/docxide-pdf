@@ -735,6 +735,7 @@ fn convert_table(
                     }
                 }),
                 hide_mark: false,
+                revision_label: None,
             });
         }
 

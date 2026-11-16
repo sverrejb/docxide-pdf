@@ -1363,6 +1363,12 @@ fn parse_zip<R: Read + std::io::Seek>(
         }
     }
 
+    if revisions.markup {
+        for section in &mut sections {
+            cell_revision_balloons(&mut section.blocks, &mut comments);
+        }
+    }
+
     // Word's PDF export scales the body content via a wrapping `cm` operator
     // when comments are present, so glyphs render at ~76% and a column opens
     // up on the right for the comment pane. We apply the same scaling at
@@ -1862,5 +1868,50 @@ mod tests {
         assert_eq!(resolve_theme_color_key("accent6"), "accent6");
         assert_eq!(resolve_theme_color_key("bg1"), "lt1");
         assert_eq!(resolve_theme_color_key("bg2"), "lt2");
+    }
+}
+
+/// Markup view: a deleted or inserted table cell gets a balloon of its own,
+/// which opens the markup pane like a comment (Word for Mac probe
+/// 2026-11-16: a lone `w:cellDel` zooms the page to the pane and prints
+/// "Deleted Cells" by the cell; `w:cellIns` "Inserted Cells"; a cell property
+/// change, a cell merge or text revisions alone print no pane).
+fn cell_revision_balloons(
+    blocks: &mut [crate::model::Block],
+    comments: &mut HashMap<u32, crate::model::Comment>,
+) {
+    use crate::model::{Block, Comment, Run};
+    for block in blocks {
+        let Block::Table(table) = block else {
+            continue;
+        };
+        for cell in table.rows.iter_mut().flat_map(|r| r.cells.iter_mut()) {
+            if let Some(label) = cell.revision_label {
+                let id = (0xC000_0000u32..).find(|id| !comments.contains_key(id)).unwrap();
+                comments.insert(
+                    id,
+                    Comment {
+                        initials: String::new(),
+                        text: String::new(),
+                        display_index: 0,
+                        label: Some(label),
+                    },
+                );
+                let para = cell.content.iter_mut().find_map(|b| match b {
+                    Block::Paragraph(p) => Some(p),
+                    _ => None,
+                });
+                if let Some(para) = para {
+                    match para.runs.first_mut() {
+                        Some(run) => run.comment_anchor_ids.push(id),
+                        None => para.runs.push(Run {
+                            comment_anchor_ids: vec![id],
+                            ..Run::default()
+                        }),
+                    }
+                }
+            }
+            cell_revision_balloons(&mut cell.content, comments);
+        }
     }
 }

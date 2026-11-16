@@ -164,7 +164,7 @@ pub(super) fn render_comment_pane(
         next_top = top - h - BALLOON_GAP * zoom;
     }
 
-    for (_cid, top, h, lines) in &placements {
+    for (cid, top, h, lines) in &placements {
         draw_rounded_rect(
             content,
             inner_x,
@@ -174,7 +174,9 @@ pub(super) fn render_comment_pane(
             CALLOUT_RADIUS * zoom,
         );
         content.save_state();
-        fill_rgb(content, CALLOUT_FILL);
+        // A revision's balloon is white, a comment's tinted (probe: "Deleted Cells").
+        let revision = comments.get(cid).is_some_and(|c| c.label.is_some());
+        fill_rgb(content, if revision { [255, 255, 255] } else { CALLOUT_FILL });
         stroke_rgb(content, CALLOUT_STROKE);
         content.set_line_width(BALLOON_BORDER * zoom);
         content.fill_even_odd_and_stroke();
@@ -229,6 +231,9 @@ pub(super) fn render_comment_pane(
 }
 
 pub(super) fn format_label(c: &Comment) -> String {
+    if let Some(label) = c.label {
+        return label.to_string();
+    }
     let initials = if c.initials.is_empty() {
         "?".to_string()
     } else {

@@ -70,6 +70,8 @@ pub struct Comment {
     /// 1-based ordinal in document encounter order. Word renumbers densely
     /// for display ("[R1]", "[R2]", …) regardless of the raw `w:id`.
     pub display_index: u32,
+    /// A revision's balloon ("Deleted Cells"): this label, no "Commented" prefix.
+    pub label: Option<&'static str>,
 }
 
 #[derive(Clone, Copy, Debug)]

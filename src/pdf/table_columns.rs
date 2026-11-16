@@ -1250,6 +1250,7 @@ mod tests {
                         text_direction: Default::default(),
                         cell_margins: None,
                         hide_mark: false,
+                        revision_label: None,
                     })
                     .collect(),
                 grid_before: 0,
