@@ -9345,7 +9345,7 @@
     "a11y_text": 1.0
   },
   "cases/text_align_center_fonts": {
-    "jaccard": 0.9316,
+    "jaccard": 0.9292,
     "ssim": 0.9933,
     "text_boundary": 1.0,
     "ua_fail": 3,
@@ -9395,9 +9395,9 @@
     "a11y_text": 1.0
   },
   "cases/text_align_grid_picture": {
-    "jaccard": 0.7018,
-    "ssim": 0.8026,
-    "text_boundary": 0.9878,
+    "jaccard": 0.9091,
+    "ssim": 0.9722,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -9405,9 +9405,9 @@
     "a11y_text": 1.0
   },
   "cases/text_align_top_bottom_picture": {
-    "jaccard": 0.6679,
-    "ssim": 0.7669,
-    "text_boundary": 0.9862,
+    "jaccard": 0.8963,
+    "ssim": 0.9621,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
