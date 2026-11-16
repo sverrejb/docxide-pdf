@@ -513,6 +513,12 @@ pub(super) fn math_box<'f>(
 pub(super) const COMMENT_HIGHLIGHT_RGB: [u8; 3] = [251, 220, 217];
 
 impl WordChunk {
+    /// Take `cut` off the closing mark this chunk ends in (compressPunctuation).
+    pub(super) fn squeeze_mark(&mut self, cut: f32) {
+        self.width -= cut;
+        self.punct_compressed += cut;
+    }
+
     /// The note this chunk is the reference mark of: (endnote, id).
     pub(super) fn note(&self) -> Option<(bool, u32)> {
         self.footnote_id
@@ -1631,8 +1637,10 @@ pub(super) struct CjkLayout {
     /// Whether this paragraph pulls a word up by squeezing (see `CjkLayout`
     /// construction: the 2013+ layout only when justified).
     pub(super) punct_pull: bool,
-    /// The most each mark gives, as a share of its em (`PUNCT_SQUEEZE`).
-    pub(super) punct_cap: f32,
+    /// The 2010 layout (compatibilityMode 14) squeezes the closing mark of
+    /// the word being pulled up as well (chinese_costume_design_course: its
+    /// line-final 。 and the comma before it both give 0.5 em).
+    pub(super) punct_cut_last: bool,
     /// A word is pulled up only while this share of the measure is free
     /// before it, and this many ems of its font free before it including
     /// its autoSpaceDE gap (one of the two is 0 per compatibility mode, see
@@ -1796,7 +1804,9 @@ fn hinted_opening(c: char) -> bool {
 /// #139): 12pt KaiTi lines with 2 to 8 commas or curly quotes before a Latin
 /// word, 10.5 to 22pt, word widths of 1 to 4.5 em; 3 marks take 6.0pt each
 /// and refuse 6.65pt. The 2010 layout (compatibilityMode 14) squeezes any
-/// alignment but stops at 0.4 em (16pt YaHei takes 6.26pt and refuses 7.26).
+/// alignment and stops at the same half (probes 2026-11-09: SimSun, YaHei and
+/// KaiTi commas at 9-16pt; the earlier 0.4 em read the autoSpaceDE gap's
+/// share, which shrinks next, as the mark's).
 pub(super) const PUNCT_SQUEEZE: f32 = 0.5;
 
 /// Word 2013+ pulls a word up by squeezing marks only when the line before it
@@ -1814,7 +1824,11 @@ pub(super) const PUNCT_PULL_FREE: f32 = 0.012;
 /// in compressible punctuation, the same amount off every mark (counting what
 /// earlier words on the line already took) and at most `cap` of the em.
 /// Returns false and touches nothing when that is not enough.
-fn compress_punctuation(chunks: &mut [WordChunk], needed: f32, cap: f32) -> bool {
+/// `incoming` is the font size of the word being placed when its own closing
+/// mark joins in (the 2010 layout: chinese_costume_design_course's "…使用。"
+/// gives 0.5 em on its comma and on that final mark). Returns that word's cut
+/// (0 without one), or None, touching nothing, when the marks cannot give enough.
+fn compress_punctuation(chunks: &mut [WordChunk], needed: f32, incoming: Option<f32>) -> Option<f32> {
     // (chunk, squeezes at its end, squeezes at its start)
     let marks: Vec<(usize, f32, bool)> = chunks
         .iter()
@@ -1831,20 +1845,20 @@ fn compress_punctuation(chunks: &mut [WordChunk], needed: f32, cap: f32) -> bool
         })
         .filter(|&(_, sides, _)| sides > 0.0)
         .collect();
-    let sides_total: f32 = marks.iter().map(|&(_, sides, _)| sides).sum();
+    let sides_total: f32 =
+        marks.iter().map(|&(_, sides, _)| sides).sum::<f32>() + incoming.is_some() as u8 as f32;
     if needed <= 0.0 || sides_total == 0.0 {
-        return false;
+        return None;
     }
     let taken: f32 = marks
         .iter()
         .map(|&(i, _, _)| chunks[i].punct_compressed)
         .sum();
     let level = (taken + needed) / sides_total;
-    if marks
-        .iter()
-        .any(|&(i, _, _)| level > chunks[i].font_size * cap + 0.01)
+    let over_cap = |fs: f32| level > fs * PUNCT_SQUEEZE + 0.01;
+    if marks.iter().any(|&(i, _, _)| over_cap(chunks[i].font_size)) || incoming.is_some_and(over_cap)
     {
-        return false;
+        return None;
     }
     let mut shift = 0.0;
     let mut k = 0;
@@ -1864,7 +1878,7 @@ fn compress_punctuation(chunks: &mut [WordChunk], needed: f32, cap: f32) -> bool
             k += 1;
         }
     }
-    true
+    Some(incoming.map_or(0.0, |_| level))
 }
 
 /// Dual-region geometry for bothSides wrapping: (left_x, left_w, right_x, right_w).
@@ -2550,8 +2564,7 @@ pub(super) fn build_paragraph_lines(
                 && last.text.chars().last().is_some_and(is_compressible_punct)
             {
                 let cut = last.font_size * 0.5;
-                last.width -= cut;
-                last.punct_compressed += cut;
+                last.squeeze_mark(cut);
                 current_x -= cut;
             }
 
@@ -2629,8 +2642,10 @@ pub(super) fn build_paragraph_lines(
             }
 
             // compressPunctuation: before wrapping, make room for this word by
-            // squeezing the full-width punctuation already on the line.
-            let (proposed_x, overflows) = if overflows
+            // squeezing the full-width punctuation already on the line (and,
+            // under the 2010 layout, the word's own closing mark, whose cut
+            // comes off its chunk once pushed).
+            let (proposed_x, overflows, own_mark_cut) = if overflows
                 && cjk.compress_punct
                 && cjk.punct_pull
                 && !current_chunks.is_empty()
@@ -2641,11 +2656,13 @@ pub(super) fn build_paragraph_lines(
                 // pulls (chinese_costume_design_course: 4.5pt free at 9pt).
                 && super::helpers::twips(cur_max - proposed_x)
                     >= super::helpers::twips(cjk.punct_pull_free_em * eff_fs)
-                && compress_punctuation(
+                && let Some(cut) = compress_punctuation(
                     &mut current_chunks,
                     proposed_x + ww - cur_max,
-                    cjk.punct_cap,
-                ) {
+                    (cjk.punct_cut_last && word.ends_with(is_compressible_punct))
+                        .then_some(eff_fs),
+                )
+            {
                 current_x = current_chunks.last().map_or(0.0, |c| c.x_offset + c.width);
                 (
                     if need_space {
@@ -2654,9 +2671,10 @@ pub(super) fn build_paragraph_lines(
                         current_x
                     },
                     false,
+                    cut,
                 )
             } else {
-                (proposed_x, overflows)
+                (proposed_x, overflows, 0.0)
             };
 
             // When leading spaces push the first word past the line width,
@@ -2963,7 +2981,12 @@ pub(super) fn build_paragraph_lines(
             {
                 c.preceding_spaces = literal_spaces;
             }
-            current_x += ww;
+            if own_mark_cut > 0.0
+                && let Some(last) = current_chunks.last_mut()
+            {
+                last.squeeze_mark(own_mark_cut);
+            }
+            current_x += ww - own_mark_cut;
         }
 
         // Accumulate trailing whitespace for the next run
@@ -3944,7 +3967,7 @@ mod tests {
             auto_space: false,
             compress_punct: false,
             punct_pull: false,
-            punct_cap: PUNCT_SQUEEZE,
+            punct_cut_last: false,
             punct_pull_free_ratio: 0.0,
             punct_pull_free_em: 0.0,
             squeeze_spaces,
@@ -3991,7 +4014,7 @@ mod tests {
                     auto_space: false,
                     compress_punct: false,
                     punct_pull: false,
-                    punct_cap: PUNCT_SQUEEZE,
+                    punct_cut_last: false,
                     punct_pull_free_ratio: 0.0,
                     punct_pull_free_em: 0.0,
                     squeeze_spaces: true,
@@ -4075,22 +4098,28 @@ mod tests {
             chunk("事、", 64.0),
             chunk("公", 96.0),
         ];
-        assert!(compress_punctuation(&mut chunks, 4.0, PUNCT_SQUEEZE));
+        assert_eq!(compress_punctuation(&mut chunks, 4.0, None), Some(0.0));
         // 2pt off each mark; everything after a mark slides left
         assert!((chunks[0].width - 30.0).abs() < 1e-4 && (chunks[2].width - 30.0).abs() < 1e-4);
         assert!((chunks[1].x_offset - 30.0).abs() < 1e-4);
         assert!((chunks[2].x_offset - 62.0).abs() < 1e-4);
         assert!((chunks[3].x_offset - 92.0).abs() < 1e-4);
         // The next word raises the same level on every mark: 2.5pt more each.
-        assert!(compress_punctuation(&mut chunks, 5.0, PUNCT_SQUEEZE));
+        assert_eq!(compress_punctuation(&mut chunks, 5.0, None), Some(0.0));
         assert!((chunks[0].width - 27.5).abs() < 1e-4 && (chunks[2].width - 27.5).abs() < 1e-4);
         assert!((chunks[3].x_offset - 87.0).abs() < 1e-4);
         // Past PUNCT_SQUEEZE of the em (8pt at 16pt) the word wraps instead:
         // 8 more would need 8.5 per mark, so nothing moves.
-        assert!(!compress_punctuation(&mut chunks, 8.0, PUNCT_SQUEEZE));
+        assert_eq!(compress_punctuation(&mut chunks, 8.0, None), None);
         assert!((chunks[0].width - 27.5).abs() < 1e-4);
+        // The incoming word's own mark shares the level: 6 over three marks is
+        // 2 each, the third cut handed back for the caller to take off that word.
+        let mut fresh = vec![chunk("任，", 0.0), chunk("事、", 32.0), chunk("公", 64.0)];
+        let cut = compress_punctuation(&mut fresh, 6.0, Some(16.0)).unwrap();
+        assert!((cut - 2.0).abs() < 1e-4 && (fresh[1].width - 30.0).abs() < 1e-4);
+        assert!((fresh[2].x_offset - 60.0).abs() < 1e-4);
         let mut plain = vec![chunk("任負", 0.0)];
-        assert!(!compress_punctuation(&mut plain, 1.0, PUNCT_SQUEEZE));
+        assert_eq!(compress_punctuation(&mut plain, 1.0, None), None);
     }
 
     #[test]
