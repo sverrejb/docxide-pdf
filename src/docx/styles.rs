@@ -653,7 +653,10 @@ pub(super) fn parse_styles<R: Read + Seek>(
         if let Some(rpr) = wml(doc_defaults, "rPrDefault").and_then(|n| wml(n, "rPr")) {
             let r = parse_run_props(rpr, theme);
             defaults.font_size = r.font_size.unwrap_or(defaults.font_size);
-            defaults.font_name = r.font_name.unwrap_or_else(|| theme.minor.clone());
+            // A run default naming no font is Times New Roman, not the theme's
+            // minor font (Word online probe: an empty rPrDefault prints Times
+            // New Roman with the theme part present or removed).
+            defaults.font_name = r.font_name.unwrap_or_else(|| "Times New Roman".into());
             defaults.east_asia_font = r.east_asia_font;
             defaults.cs_font = r.cs_font;
             defaults.kern_threshold = r.kern_threshold;

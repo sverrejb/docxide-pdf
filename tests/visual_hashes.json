@@ -2777,6 +2777,9 @@
   "cases/row-margin-hide1-top-top75": [
     "a4c1850862c89e2ac045aa2f53506c723cb42b51b0be12e519a782c91b69a4f3"
   ],
+  "cases/run-default-without-font-is-times": [
+    "aeab2987f26e8fcbd14eef035e1858a3c741c8ab1f5d70e2767061628b864c1c"
+  ],
   "cases/section-clear-mark-continuous": [
     "161eac060da57f862e60b37b1a90f8c7db5ce64dcccdff684fe96617e0594915"
   ],

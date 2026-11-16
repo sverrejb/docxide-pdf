@@ -8082,6 +8082,10 @@
     "a11y_struct": 0.5,
     "a11y_text": 1.0
   },
+  "cases/run-default-without-font-is-times": {
+    "jaccard": 0.6918,
+    "ssim": 0.8344
+  },
   "cases/section-clear-mark-continuous": {
     "jaccard": 0.7525,
     "ssim": 0.9948,
