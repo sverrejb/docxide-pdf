@@ -35,6 +35,18 @@ name: Engine comparison
 on:
   push:
     branches: [main]
+    # Docs, roadmap and annotation commits change nothing on the site; skip the ~15 min rebuild.
+    paths:
+      - src/**
+      - tests/fixtures/**
+      - Cargo.toml
+      - Cargo.lock
+      - tools/engine_compare.py
+      - tools/engine_compare.html
+      - tools/ci_report.py
+      - tools/restore_mtime.py
+      - tools/deploy_comparison.sh
+      - .github/workflows/comparison.yml
   workflow_dispatch:
 permissions:
   contents: write   # force-push gh-pages
