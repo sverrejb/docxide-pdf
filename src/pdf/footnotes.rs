@@ -40,12 +40,14 @@ struct ParagraphLayout {
     line_height: f32,
     /// The first baseline below the paragraph's top.
     ascent: f32,
+    /// How far a tall list label lowers the first baseline (in `ascent`).
+    label_boost: f32,
     lines: Vec<TextLine>,
 }
 
 impl ParagraphLayout {
     fn height(&self) -> f32 {
-        lines_height(&self.lines, self.line_height, (self.ascent, 0.0))
+        lines_height(&self.lines, self.line_height, (self.ascent, 0.0)) + self.label_boost
     }
 }
 
@@ -109,10 +111,23 @@ fn layout_paragraph(
         ctx.fonts,
     )
     .unwrap_or(fs * ascender_ratio);
+    // A bullet taller than the text raises the first line as in the body
+    // (uk_commercial_lease's note 16 bullets step 9.75 over 8pt Arial's 9.2).
+    let label_boost = (super::label_boosted_line_h(
+        para,
+        ctx.fonts,
+        lh,
+        line_spacing,
+        fs,
+        tallest_lhr,
+        tallest_ar,
+    ) - lh)
+        .max(0.0);
     Some(ParagraphLayout {
         font_size: fs,
         line_height: lh,
-        ascent,
+        ascent: ascent + label_boost,
+        label_boost,
         lines,
     })
 }

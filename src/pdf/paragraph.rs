@@ -1373,7 +1373,9 @@ pub(super) fn render_paragraph_block(
             picture_h
                 + mark_line_h(para, effective_ls, tallest_lhr, ctx.fonts)
                     .unwrap_or_else(|| mark_line().0)
-        } else if img.is_ole_preview && super::helpers::twips(img.layout_size().0) > super::helpers::twips(col_w) {
+        } else if img.is_ole_preview
+            && super::helpers::twips(img.layout_size().0) > super::helpers::twips(col_w)
+        {
             picture_h + mark_line().0
         } else {
             picture_h
@@ -1729,6 +1731,7 @@ pub(super) fn render_paragraph_block(
         let mut chain_notes: Vec<u32> = Vec::new();
         let mut prev_sa = effective_space_after;
         let mut first_link: Option<f32> = None;
+        let mut chain_end_after = 0.0f32;
         let mut i = block_idx + 1;
         loop {
             let next = match section_blocks.get(i) {
@@ -1812,6 +1815,9 @@ pub(super) fn render_paragraph_block(
                 + needed.saturating_sub(1) as f32 * resolve_line_h(next_ls, nfs, nlhr);
             first_link.get_or_insert(extra);
             if !next.keep_next || needed < count() {
+                if needed == count() {
+                    chain_end_after = next.space_after;
+                }
                 break;
             }
             if next.page_break_after {
@@ -1822,6 +1828,9 @@ pub(super) fn render_paragraph_block(
             i += 1;
         }
         let opens_note_area = state.pb.col_fn_reserved == 0.0 && para_fn_extra == 0.0;
+        if !opens_note_area || !chain_notes.is_empty() {
+            extra += chain_end_after;
+        }
         let (_, notes_h) = per_line_footnote_extra(
             &[],
             &chain_notes,
@@ -1886,6 +1895,15 @@ pub(super) fn render_paragraph_block(
             0
         }
     };
+    // Above a footnote area the paragraph's space after must fit too (Word
+    // probes on uk_commercial_lease p11: a definition with 6pt after stays
+    // above 6.1pt of room, with 6.5pt or more it moves).
+    let notes_after =
+        if keep_next_extra == 0.0 && (state.pb.col_fn_reserved > 0.0 || para_fn_extra > 0.0) {
+            effective_space_after
+        } else {
+            0.0
+        };
     // A frame in the flow never splits: `FlowFrame` has placed it, and it
     // runs past the bottom if it must (Word example, fixture
     // frame-moves-shared-tall: the next block opens the next page).
@@ -1895,7 +1913,7 @@ pub(super) fn render_paragraph_block(
         && (!at_page_top || lines.len() > 1)
         && (moved
             || state.pb.slot_top - needed_with_floats - keep_next_extra + last_line_lead
-                < state.effective_margin_bottom + para_fn_extra)
+                < state.effective_margin_bottom + para_fn_extra + notes_after)
     {
         if moved {
             let col = col_geometry[state.current_col];
@@ -1951,6 +1969,16 @@ pub(super) fn render_paragraph_block(
         );
         if moved && lines_that_fit >= lines.len() {
             break;
+        }
+        // Only the space after is left out: the last line goes on.
+        if !moved
+            && !lines.is_empty()
+            && lines_that_fit >= lines.len()
+            && notes_after > 0.0
+            && state.pb.slot_top - needed_with_floats + last_line_lead
+                >= state.effective_margin_bottom + para_fn_extra
+        {
+            lines_that_fit = lines.len() - 1;
         }
 
         let text_would_split = lines_h > available;
