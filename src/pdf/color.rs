@@ -23,6 +23,16 @@ pub(super) fn stroke_rgb(content: &mut Content, [r, g, b]: [u8; 3]) {
     content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
 }
 
+/// Set the dash array of a dotted or dashed border style, in units of its
+/// line width `w` (Word's arrays, see `BorderStyle::dashes`); solid styles
+/// emit nothing.
+pub(super) fn set_border_dashes(content: &mut Content, style: BorderStyle, w: f32) {
+    let dashes = style.dashes();
+    if !dashes.is_empty() {
+        content.set_dash_pattern(dashes.iter().map(|d| d * w), 0.0);
+    }
+}
+
 /// Stroke a paragraph, run or page border whose band is centred on the line
 /// `p0`→`p1`, in the style's `layers` and `dashes`. `inward` is +1 when what
 /// the border encloses lies to the left of the line's direction (above a
@@ -46,10 +56,7 @@ pub(super) fn stroke_border(
     }
     content.save_state();
     stroke_rgb(content, b.color);
-    let dashes = b.style.dashes();
-    if !dashes.is_empty() {
-        content.set_dash_pattern(dashes.iter().map(|d| d * w), 0.0);
-    }
+    set_border_dashes(content, b.style, w);
     for &(offset, width) in b.style.layers() {
         content.set_line_width(width * w);
         content.move_to(x0 + ix * offset * w, y0 + iy * offset * w);

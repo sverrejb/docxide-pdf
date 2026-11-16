@@ -8,7 +8,7 @@ use crate::fonts::FontEntry;
 use crate::model::{Alignment, BorderStyle, CellBorder, CellMargins, CellVAlign};
 
 use super::RenderContext;
-use super::color::{fill_rgb, stroke_rgb};
+use super::color::{fill_rgb, set_border_dashes, stroke_rgb};
 use super::layout::LinkAnnotation;
 use super::table_layout::{CellFloatingImageLayout, CellParagraphLayout, HfSubstitution};
 use super::tagging::CellTagger;
@@ -42,53 +42,32 @@ pub(super) fn draw_border(
     if let Some(c) = border.color {
         stroke_rgb(content, c);
     }
-    match border.style {
-        BorderStyle::Dotted => {
-            content.set_line_cap(pdf_writer::types::LineCapStyle::RoundCap);
-            content.set_dash_pattern([0.0, w * 3.0], 0.0);
-        }
-        BorderStyle::Dashed | BorderStyle::DashSmallGap => {
-            let dash = if border.style == BorderStyle::DashSmallGap {
-                w * 3.0
-            } else {
-                w * 4.0
-            };
-            content.set_dash_pattern([dash, w * 2.0], 0.0);
-        }
-        BorderStyle::DashDot => {
-            content.set_dash_pattern([w * 4.0, w * 2.0, 0.0, w * 2.0], 0.0);
-        }
-        BorderStyle::DashDotDot => {
-            content.set_dash_pattern([w * 4.0, w * 2.0, 0.0, w * 2.0, 0.0, w * 2.0], 0.0);
-        }
-        BorderStyle::Double => {
-            // Word renders each line of a double border at the full specified
-            // width, separated by a clear gap of the same width. The gap here is
-            // the center-to-center distance, so it must be 2×width: each line's
-            // stroke spans ±width/2, and 2×width centers leave a width-wide gap
-            // between their edges. (gap == width made the edges touch, so
-            // antialiasing merged the pair into one thick line.)
-            let thin = w.max(0.25);
-            let gap = thin * 2.0;
-            content.set_line_width(thin);
-            content.move_to(x1, y1);
-            content.line_to(x2, y2);
-            content.stroke();
-            let dx = if (x1 - x2).abs() < 0.01 { gap } else { 0.0 };
-            let dy = if (y1 - y2).abs() < 0.01 { gap } else { 0.0 };
-            content.move_to(x1 - dx, y1 - dy);
-            content.line_to(x2 - dx, y2 - dy);
-            content.stroke();
-            content.restore_state();
-            return;
-        }
-        // ponytail: cell borders draw wave and thin/thick pairs as one line
-        BorderStyle::Single
-        | BorderStyle::Wave
-        | BorderStyle::ThinThick
-        | BorderStyle::ThickThin
-        | BorderStyle::ThinThickThin => {}
+    // Word strokes a dotted/dashed cell border butt-capped in the same dash
+    // arrays as a paragraph border (turkish_ancient_religions_plan, geneva:
+    // dotted sz 4 = 0.5 on, 0.5 off; paragraph-border-styles at 1.5pt).
+    set_border_dashes(content, border.style, w);
+    if border.style == BorderStyle::Double {
+        // Word renders each line of a double border at the full specified
+        // width, separated by a clear gap of the same width. The gap here is
+        // the center-to-center distance, so it must be 2×width: each line's
+        // stroke spans ±width/2, and 2×width centers leave a width-wide gap
+        // between their edges. (gap == width made the edges touch, so
+        // antialiasing merged the pair into one thick line.)
+        let thin = w.max(0.25);
+        let gap = thin * 2.0;
+        content.set_line_width(thin);
+        content.move_to(x1, y1);
+        content.line_to(x2, y2);
+        content.stroke();
+        let dx = if (x1 - x2).abs() < 0.01 { gap } else { 0.0 };
+        let dy = if (y1 - y2).abs() < 0.01 { gap } else { 0.0 };
+        content.move_to(x1 - dx, y1 - dy);
+        content.line_to(x2 - dx, y2 - dy);
+        content.stroke();
+        content.restore_state();
+        return;
     }
+    // ponytail: cell borders draw wave and thin/thick pairs as one line
     content.move_to(x1, y1);
     content.line_to(x2, y2);
     content.stroke();
