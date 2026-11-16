@@ -237,7 +237,14 @@ pub(super) fn first_line_reach(
     } else {
         0.0
     };
-    let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    // A multiple's extra space does not count: the line goes beside a floating
+    // table that leaves room for its single-spaced height (Word probes on
+    // east_asia_conference_form: single, 1.6 and 3 lines all keep the anchor's
+    // 26.8pt line above a table 27pt below it and push it below at 26pt).
+    let ls = match p.line_spacing.unwrap_or(ctx.doc_line_spacing) {
+        LineSpacing::Auto(m) if m > 1.0 => LineSpacing::Auto(1.0),
+        ls => ls,
+    };
     let (fs, lhr, ar) = tallest_run_metrics(&p.runs, ctx.fonts);
     let line_h = resolve_line_h(ls, fs, lhr);
     if matches!(ls, LineSpacing::Exact(_)) {
