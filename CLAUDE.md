@@ -42,7 +42,7 @@ Python helpers in `tools/` (each has a docstring):
 
 - `roadmap.md` — open work only, by area. Consult it before starting; update it
   when finishing or discovering things. Finished work lives in git history.
-- `current_focus/` — one handover document per active area (tracked changes,
+- `current_focus/` — one handover document per active area (layout accuracy,
   charts, accessibility, fundamentals, …). Read the one for the area you work
   in; keep it current.
 - Specs: query `mcp__local-rag__query_documents` (OOXML spec and PDF spec are

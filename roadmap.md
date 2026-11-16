@@ -576,17 +576,31 @@ Open queue from the large-corpus and focus-fixture rounds:
 - Revision markup (Word's inline All Markup: author colours, underline /
   strike, deleted text kept in the layout, change bars, moves) is opt-in:
   `ConvertOptions::revisions(RevisionView::Markup)` / `DOCXIDE_REVISIONS=markup`
-  / CLI `--markup`; the final view stays the default. Rules, probes, the
-  external tracked-corpus scores and the ranked remaining gaps are in
-  `current_focus/tracked-changes.md`. door_air (#259/#260) is the fixture
-  whose reference shows markup, in balloons (out of scope).
-- Next steps, in order: (1) the page's text re-flowing below a
-  page-anchored floating table that fits (p24a/p24g; needs the page re-laid
-  once the float lands, our render is single-pass); (2) a header that
-  overlaps the body on later pages (a press-release family, ~60pt); (3) an
-  auto table whose cells' `tcW` sum to twice the column (Word centres it off
-  both page edges); (4) text boxes' change bars (unprobed); (5) a moved list
-  label is struck once, not twice.
+  / CLI `--markup`; the final view stays the default. The measured rules
+  live in the code comments and git history (the focus doc, removed
+  2026-11-16, is in history before that date). door_air (#259/#260) is the
+  fixture whose reference shows markup, in balloons (out of scope).
+  External tracked corpus (Word for Mac inline-markup references, main
+  checkout `tests/output/corpus-src/neurotic_docx_bench/`, scorer
+  `tools/corpus_score.py <dir> <cli --markup> <label>`): a 148-document
+  sample scores 63.91 Jaccard; most remaining losses are not code
+  (author colours follow the reference Mac's author memory, so one author
+  prints in several colours; Roboto Bold and Ubuntu missing here; Palatino
+  is Mac-only and Word for Mac uses its hhea box).
+- Open, in order: (1) the page's text re-flowing below a page-anchored
+  floating table that fits (p24a/p24g; needs the page re-laid once the
+  float lands, our render is single-pass); (2) a header that overlaps the
+  body on later pages (a press-release family whose header holds an
+  inserted and a deleted copy of a `wpg` group: Word starts page 3's body
+  at the top margin, we ~60pt lower); (3) an auto table whose cells' `tcW`
+  sum to twice the column (Word centres it off both page edges); (4) change
+  bars in footnotes and text boxes (headers and footers have them;
+  unprobed); (5) mirrored margins: bars use the right-side rule only on odd
+  pages; (6) the renumbered-label colour 0078D4 is measured with one author
+  only; (7) a 24pt exact line fits at our page foot (baseline 771.2 on an
+  A4 body ending 769.9) where Word moves it on; (8) under a wholly deleted
+  header Word prints an extra empty 12pt line no `w:p` accounts for (what-
+  ifs and a minimal p25 repro do not show it; unexplained).
 
 ## Pictures, shapes, charts
 
