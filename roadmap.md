@@ -66,6 +66,50 @@ by ≥3pp J (120 on 2026-11-07), ours vs the best engine:
 - 3pp: case152–154/166/167 66.8, vml-group-picture-washout 96.8,
   traditional_skills_job_form 52.6, case59 93.1.
 
+**External corpus round (2026-11-16):** the benchmark corpus re-scored in full
+(Word for Mac desktop references; tracked groups in the markup view). Before
+the round, J / SSIM means: clean (2480) 66.45 / 82.93, tracked (3410) 64.14 /
+81.00, comments + tracked (420) 55.53 / 75.51, comments (117) 59.69 / 80.16.
+A Word online export of each low scorer separates real gaps from the Mac
+platform (10 of the 45 worst clean documents score 57-95 against their online
+export). Done this round: mc:Choice Requires, an anchor's line above its own
+float, floats that push earlier lines move on with their anchor, at least 0pt
+off the grid, the markup pane for deleted cells, Times New Roman run defaults,
+an inline o:hr among text. Open, diagnosed:
+- "Deleted Cells" balloons in the markup pane (the pane itself opens).
+- A comment whose reference is its paragraph's only run loses its anchor: the
+  empty paragraph's line carries no chunk (`attach_comment_anchors` runs before
+  `ensure_nonempty_paragraph`, and moving it is not enough), so a document
+  whose only balloon hangs there prints no pane.
+- An anchor its own float moved to the next page keeps its line under the
+  float there; Word puts it above (probe `float-band-over-earlier-lines-moves-
+  anchor` with anchor text). The float-zone step in `paragraph.rs`, not bands.
+- A line before a LATER anchor's band: probes on a page with no box above fit
+  it by its single-spaced height (Aptos and Arial), while band-gap-too-small-
+  for-space-after (line below one box, above another) needs line + space after.
+  Find the variable before touching the prescan's `place`.
+- A wrapSquare picture anchored in a header table cell (margin-relative,
+  layoutInCell) makes Word's auto-height row 6.7pt taller, to the picture's
+  bottom; the case201 variant with wrapSquare does not reproduce it. Its x is
+  also measured from the cell edge, Word's from the cell's text area (5.4pt).
+- An inline o:hr among text is split off in body paragraphs only (not cells,
+  headers); every o:hr sits 2.5pt lower than Word's.
+- Autofit table widths count paragraph-final spaces (cells wrap where Word's
+  stay on one line); balloons stack under the first instead of hanging at
+  their anchors; a comment without initials prints "[?6]" (Word "[6]");
+  markup colours per author.
+- A 21pt Yu Mincho title with `w:spacing w:val="7"` starts 6.6pt right of
+  Word's and steps 21.35 per glyph (Word 21.73).
+- Section-level vertical text (`textDirection tbRl`) is not supported.
+- CJK fallback: Chinese text in a Calibri run, or in a font no system has
+  (楷體-繁 / Kaiti TC), prints in Microsoft JhengHei in Word online (some
+  characters Yu Gothic or MS Mincho); ours takes SimSun, YaHei or 新細明體.
+  JhengHei is vendored; the choice is the open rule (about ten low scorers).
+  Leelawadee UI, Poppins and Open Sans Light are vendored since 2026-11-16
+  (Office's cloud builds, the ones the online export embeds).
+- Unusable references: a book-fold document printed as 2-up sheets, and one
+  redline paired with another redline's PDF.
+
 **Benchmark-gap round (2026-11-08/09):** the external benchmark's published
 per-document scores against ours on its clean corpus (2478 documents): ours
 66.8 J, theirs 74.4; two thirds of the 60 worst are the references' platform
@@ -365,7 +409,8 @@ Open queue from the large-corpus and focus-fixture rounds:
   croatian +1.2 J, russian_construction −7.4, czech_expert −5.2. Needs a probe
   of NBSPs after one-letter words and runs of NBSPs.
 - docGrid: East Asian lines sit 0.17pt lower in Word on average (case79, 17
-  lines). Multiples below 1 and at-least spacing on a grid are untested.
+  lines). Multiples below 1 are untested. At-least spacing snaps to the grid
+  except at least 0pt (Word online probe, 2026-11-16).
 - A whitespace-only run between bold and italic runs (slovak_constitution)
   does not set the line's ascent in Word; whether it counts at all is open.
 - Small caps: a space at a run boundary only sees its own run.

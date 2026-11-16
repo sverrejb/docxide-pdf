@@ -273,8 +273,8 @@ Ordered roughly by expected gain. Corpus counts are clean documents.
     missing fonts; PANOSE is not Word's rule; a few names map specially
     (TimesLT → Times New Roman, Myriad Pro → Segoe UI). 14 Word probes are
     prepared in `diagnosis/scratch/fonts/probe/`, not run.
-21. docDefaults without `rFonts` → Times New Roman (not the theme font); the
-    bidi theme slot defaults to "Arab".
+21. The bidi theme slot defaults to "Arab". (docDefaults without `rFonts` →
+    Times New Roman: done 2026-11-16.)
 22. Highlights fill the line box (ours: y − 0.2 fs, 1.15 fs); a highlighted
     mark also covers the list label; small-caps spaces drawn at 80%.
 23. Connector `relativeFrom` and `cmpd="thickThin"` ignored.
