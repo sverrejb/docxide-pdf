@@ -4518,6 +4518,10 @@
     "a11y_struct": 0.5,
     "a11y_text": 1.0
   },
+  "cases/float-band-over-earlier-lines-moves-anchor": {
+    "jaccard": 0.9884,
+    "ssim": 0.9909
+  },
   "cases/float-table-band-before": {
     "jaccard": 0.9264,
     "ssim": 0.9892,

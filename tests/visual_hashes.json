@@ -1550,6 +1550,11 @@
   "cases/first-header-small-control": [
     "e1a9a0ba9dced44dff3ae753373a430eca5885d8b17347c3731cd2ded2078a46"
   ],
+  "cases/float-band-over-earlier-lines-moves-anchor": [
+    "874794ed38baa5ed4dc74e24dabe67a33d07251401ba985902de04d2072aab86",
+    "e3eee0f5162cc2b01f532d41c5d9a3c7fecc7f564e121e7f8fc2f54aff4b48dc",
+    "cffeff789bb5c005c74bbf389b8f66153078439e15f982b291168b75699d6630"
+  ],
   "cases/float-table-band-before": [
     "a2bad3658a030309ebf131408792a552d75d2eb94e555f4267724af8e45cda20",
     "cf328202ace394d28861c44a838101a9b55d21b39d11de3a8cad20ea9427ae5b",

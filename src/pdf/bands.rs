@@ -553,7 +553,21 @@ pub(super) fn prescan_page_bands(
         {
             break;
         }
-        add_bands(&mut bands, paragraph_bands(p, sp, col, text_width, ctx));
+        // Floats that would push the text above them, and so their own
+        // anchor, off the page move on with the anchor (Word online probe:
+        // a full-width box 15.8pt below the margin anchored in the sixth
+        // paragraph leaves the five lines above on their page and opens the
+        // next one with the box and its anchor).
+        let own = paragraph_bands(p, sp, col, text_width, ctx);
+        if i > 0 && !own.is_empty() {
+            let mut with = bands.clone();
+            add_bands(&mut with, own.clone());
+            let end = paras.iter().fold(top, |y, &para| place(y, para, &with));
+            if below_bands(end + p.space_before, line_h, line_h, &with, col) + line_h > bottom {
+                break;
+            }
+        }
+        add_bands(&mut bands, own);
         let para = (p.space_before, line_h, lines as f32, p.space_after);
         paras.push(para);
         y = place(y, para, &bands);
