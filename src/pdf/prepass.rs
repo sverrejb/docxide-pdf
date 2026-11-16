@@ -177,7 +177,7 @@ pub(super) fn compute_bookmark_positions(
                     let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
                     let line_h = if para.snap_to_grid
                         && sp.line_grid_pitch().is_some()
-                        && !matches!(effective_ls, LineSpacing::Exact(_))
+                        && effective_ls.snaps_to_grid()
                     {
                         grid_snapped_line_h(
                             &para.runs,

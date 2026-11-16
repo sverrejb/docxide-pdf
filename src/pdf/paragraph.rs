@@ -341,9 +341,8 @@ pub(super) fn render_paragraph_block(
     }
     let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
     let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
-    let grid_snapped = para.snap_to_grid
-        && sp.line_grid_pitch().is_some()
-        && !matches!(effective_ls, LineSpacing::Exact(_));
+    let grid_snapped =
+        para.snap_to_grid && sp.line_grid_pitch().is_some() && effective_ls.snaps_to_grid();
     let line_h = if grid_snapped {
         grid_snapped_line_h(&para.runs, ctx.fonts, effective_ls, line_h, sp.line_pitch)
     } else {

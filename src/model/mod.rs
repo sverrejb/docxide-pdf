@@ -87,6 +87,21 @@ impl Default for LineSpacing {
     }
 }
 
+impl LineSpacing {
+    /// Whether a body line takes whole docGrid cells. An exact height
+    /// keeps its own, and so does "at least 0pt", the usual way out of a
+    /// grid's doubled lines (Word online probe, 12pt Yu Mincho on an 18pt
+    /// grid: auto and at least 1 twip to 25pt step 36pt, at least 0
+    /// steps its natural 20pt).
+    pub fn snaps_to_grid(&self) -> bool {
+        match self {
+            LineSpacing::Exact(_) => false,
+            LineSpacing::AtLeast(min) => *min > 0.0,
+            LineSpacing::Auto(_) => true,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum DocGridType {
     #[default]

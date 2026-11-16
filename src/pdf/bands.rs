@@ -263,7 +263,7 @@ pub(super) fn first_line_reach(
             },
             f32::max,
         );
-    let grid_snapped = p.snap_to_grid && sp.line_grid_pitch().is_some();
+    let grid_snapped = p.snap_to_grid && sp.line_grid_pitch().is_some() && ls.snaps_to_grid();
     let pitch = if !grid_snapped && let Some(first) = lines.first_mut() {
         let ascent = fs * ar.unwrap_or(0.75);
         size_lines_by_own_runs(
