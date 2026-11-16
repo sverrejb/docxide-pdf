@@ -405,14 +405,8 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
         let ns = child.tag_name().namespace();
         let name = child.tag_name().name();
         if ns == Some(MC_NS_TOP) && name == "AlternateContent" {
-            let choice = child
-                .children()
-                .find(|n| n.has_tag_name((MC_NS_TOP, "Choice")));
-            let fallback = child
-                .children()
-                .find(|n| n.has_tag_name((MC_NS_TOP, "Fallback")));
-
-            if let Some(branch) = choice {
+            let selected = super::xml::mc_selected_branch(child);
+            if let Some((branch, true)) = selected {
                 for drawing in branch
                     .children()
                     .filter(|n| n.has_tag_name((WML_NS, "drawing")))
@@ -432,7 +426,7 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                         }
                     }
                 }
-            } else if let Some(branch) = fallback {
+            } else if let Some((branch, false)) = selected {
                 for pict in branch
                     .children()
                     .filter(|n| n.has_tag_name((WML_NS, "pict")))

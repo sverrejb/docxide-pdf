@@ -137,21 +137,6 @@ impl FieldFrame {
     }
 }
 
-fn mc_choice_or_fallback<'a>(node: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
-    let mut fallback: Option<roxmltree::Node<'a, 'a>> = None;
-    for n in node.children() {
-        if n.tag_name().namespace() != Some(MC_NS_TOP) {
-            continue;
-        }
-        match n.tag_name().name() {
-            "Choice" => return Some(n),
-            "Fallback" if fallback.is_none() => fallback = Some(n),
-            _ => {}
-        }
-    }
-    fallback
-}
-
 pub(super) struct ParsedRuns {
     pub(super) runs: Vec<Run>,
     /// `Paragraph::deleted_text`.
@@ -867,7 +852,7 @@ fn collect_run_nodes<'a>(
             // output for the static-PDF case.
             collect_run_nodes(child, rels, markup, out, active_comments);
         } else if ns == Some(MC_NS_TOP) && name == "AlternateContent" {
-            if let Some(branch) = mc_choice_or_fallback(child) {
+            if let Some((branch, _)) = super::xml::mc_selected_branch(child) {
                 collect_run_nodes(branch, rels, markup, out, active_comments);
             }
         } else if ns == Some(MATH_NS) && name == "oMathPara" {
@@ -1386,10 +1371,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
         for child in bare_break.into_iter().chain(run_node.children()) {
             let child_ns = child.tag_name().namespace();
             if child.has_tag_name((MC_NS_TOP, "AlternateContent")) {
-                let choice = child
-                    .children()
-                    .find(|n| n.has_tag_name((MC_NS_TOP, "Choice")));
-                if let Some(branch) = choice {
+                let branch = super::xml::mc_selected_branch(child);
+                if let Some((branch, true)) = branch {
                     for drawing in branch
                         .children()
                         .filter(|n| n.has_tag_name((WML_NS, "drawing")))
@@ -1407,10 +1390,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             pending_text
                         );
                     }
-                } else if let Some(branch) = child
-                    .children()
-                    .find(|n| n.has_tag_name((MC_NS_TOP, "Fallback")))
-                {
+                } else if let Some((branch, false)) = branch {
                     for pict in branch
                         .descendants()
                         .filter(|n| n.has_tag_name((WML_NS, "pict")))

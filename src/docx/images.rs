@@ -813,15 +813,7 @@ pub(super) fn inline_drawing_height(node: roxmltree::Node) -> f32 {
         } else if child.has_tag_name((WML_NS, "r")) {
             height = height.max(inline_drawing_height(child));
         } else if child.has_tag_name((super::MC_NS_TOP, "AlternateContent")) {
-            let branch = child
-                .children()
-                .find(|n| n.has_tag_name((super::MC_NS_TOP, "Choice")))
-                .or_else(|| {
-                    child
-                        .children()
-                        .find(|n| n.has_tag_name((super::MC_NS_TOP, "Fallback")))
-                });
-            if let Some(branch) = branch {
+            if let Some((branch, _)) = super::xml::mc_selected_branch(child) {
                 height = height.max(inline_drawing_height(branch));
             }
         }

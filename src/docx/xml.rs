@@ -21,6 +21,81 @@ pub(super) const WPC_NS: &str =
     "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas";
 pub(super) const WPG_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
 
+/// Namespaces Word understands in an `mc:Choice` `Requires` list. A Choice
+/// naming anything else, such as the 2008 pre-release `wps` namespace, is
+/// skipped for the next one or the Fallback (ISO 29500-1 L.7.3.4; Word
+/// online probe: a Choice requiring the 2008 `wps` URI or an unknown URN
+/// prints its Fallback, the 2010 `wps` and `w14` ones their Choice).
+const MC_UNDERSTOOD: &[&str] = &[
+    WML_NS,
+    DML_NS,
+    WPD_NS,
+    PIC_NS,
+    REL_NS,
+    CHART_NS,
+    DIAGRAM_NS,
+    DSP_NS,
+    WPS_NS,
+    WPG_NS,
+    WPC_NS,
+    W14_NS,
+    VML_NS,
+    OFFICE_NS,
+    W10_NS,
+    MATH_NS,
+    "http://schemas.microsoft.com/office/word/2010/wordprocessingInk",
+    "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
+    "http://schemas.microsoft.com/office/word/2012/wordml",
+    "http://schemas.microsoft.com/office/word/2015/wordml/symex",
+    "http://schemas.microsoft.com/office/word/2016/wordml/cid",
+    "http://schemas.microsoft.com/office/word/2018/wordml",
+    "http://schemas.microsoft.com/office/word/2018/wordml/cex",
+    "http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash",
+    "http://schemas.microsoft.com/office/word/2023/wordml/word16du",
+    "http://schemas.microsoft.com/office/drawing/2007/8/2/chart",
+    "http://schemas.microsoft.com/office/drawing/2010/main",
+    "http://schemas.microsoft.com/office/drawing/2014/chartex",
+    "http://schemas.microsoft.com/office/drawing/2015/9/8/chartex",
+    "http://schemas.microsoft.com/office/drawing/2015/10/21/chartex",
+    "http://schemas.microsoft.com/office/drawing/2016/5/9/chartex",
+    "http://schemas.microsoft.com/office/drawing/2016/5/10/chartex",
+    "http://schemas.microsoft.com/office/drawing/2016/5/11/chartex",
+    "http://schemas.microsoft.com/office/drawing/2016/5/12/chartex",
+    "http://schemas.microsoft.com/office/drawing/2016/5/13/chartex",
+    "http://schemas.microsoft.com/office/drawing/2016/5/14/chartex",
+    "http://schemas.microsoft.com/office/drawing/2016/ink",
+    "http://schemas.microsoft.com/office/drawing/2017/model3d",
+];
+
+/// The branch of an `mc:AlternateContent` Word renders: the first Choice
+/// whose required namespaces it understands, else the Fallback. The flag
+/// says whether the branch is a Choice.
+pub(super) fn mc_selected_branch<'a>(
+    alternate: roxmltree::Node<'a, 'a>,
+) -> Option<(roxmltree::Node<'a, 'a>, bool)> {
+    let understood = |n: &roxmltree::Node| {
+        n.attribute("Requires")
+            .unwrap_or("")
+            .split_whitespace()
+            .all(|prefix| {
+                n.lookup_namespace_uri(Some(prefix))
+                    .is_some_and(|uri| MC_UNDERSTOOD.contains(&uri))
+            })
+    };
+    let mut branches = alternate
+        .children()
+        .filter(|n| n.tag_name().namespace() == Some(MC_NS_TOP));
+    branches
+        .clone()
+        .find(|n| n.tag_name().name() == "Choice" && understood(n))
+        .map(|n| (n, true))
+        .or_else(|| {
+            branches
+                .find(|n| n.tag_name().name() == "Fallback")
+                .map(|n| (n, false))
+        })
+}
+
 pub(super) fn twips_to_pts(twips: f32) -> f32 {
     twips / 20.0
 }
@@ -335,5 +410,31 @@ mod tests {
         assert_eq!(twips_attr(node, "left"), Some(36.0)); // 720/20=36pt
         assert_eq!(twips_attr(node, "right"), Some(18.0)); // 360/20=18pt
         assert_eq!(twips_attr(node, "hanging"), None);
+    }
+
+    #[test]
+    fn alternate_content_skips_choices_word_does_not_understand() {
+        let branch_text = |uri: &str| {
+            let xml = format!(
+                r#"<mc:AlternateContent xmlns:mc="{MC_NS_TOP}" xmlns:x="{uri}"><mc:Choice Requires="x"><c/></mc:Choice><mc:Fallback><f/></mc:Fallback></mc:AlternateContent>"#
+            );
+            let doc = roxmltree::Document::parse(&xml).unwrap();
+            let (branch, is_choice) = mc_selected_branch(doc.root_element()).unwrap();
+            (
+                branch
+                    .first_element_child()
+                    .unwrap()
+                    .tag_name()
+                    .name()
+                    .to_string(),
+                is_choice,
+            )
+        };
+        assert_eq!(branch_text(WPS_NS), ("c".to_string(), true));
+        assert_eq!(
+            branch_text("http://schemas.microsoft.com/office/word/2008/6/28/wordprocessingShape"),
+            ("f".to_string(), false)
+        );
+        assert_eq!(branch_text("urn:example:unknown"), ("f".to_string(), false));
     }
 }
