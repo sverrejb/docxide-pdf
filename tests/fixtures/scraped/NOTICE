@@ -1,0 +1,43 @@
+Third-party documents in this folder
+====================================
+
+The `input.docx` files under `tests/fixtures/scraped/` are real-world
+documents collected from the public web. They are here only as test input
+for checking layout against Microsoft Word; they are not part of
+docxide-pdf, are not covered by its Apache-2.0 license, and are not
+shipped in the published crate.
+
+Source and attribution
+----------------------
+
+Most of these documents come from docx-corpus by SuperDoc
+(https://huggingface.co/datasets/superdoc-dev/docx-corpus,
+https://docxcorp.us), which gathers `.docx` files found through Common
+Crawl. docx-corpus is made available under the Open Data Commons
+Attribution License (ODC-By) v1.0:
+https://opendatacommons.org/licenses/by/1.0/
+
+    Contains information from docx-corpus, which is made available
+    under the ODC Attribution License (ODC-By) v1.0.
+
+Ownership
+---------
+
+ODC-By covers the docx-corpus database (the collection, its selection and
+arrangement). It does not license copyright in the individual documents
+(section 2.4 of the license). Each document remains the property of its
+author or rights holder, who keeps all rights to it. Some documents may
+name people or contain their contact details; do not use them to identify
+or profile anyone.
+
+The `reference.pdf` files next to them are this project's exports of those
+documents through Microsoft Word; the rights in the documents' content
+stay with its owners there too.
+
+Removal
+-------
+
+If you own one of these documents and want it removed, open an issue on
+this repository naming the fixture folder, and we will delete it. To have
+it removed from docx-corpus as well, email help@docxcorp.us with the
+document's hash or URL.
