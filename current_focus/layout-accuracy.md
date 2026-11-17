@@ -318,7 +318,9 @@ Poppins, Ubuntu, Segoe UI Light/Semibold, Roboto Light/Medium, …).
 - **Keep-with-next (this round):** each kept paragraph brings the lines that
   must stay together (all of keepLines, else the widow-control count); a chain
   passes only through a paragraph that stays whole; a chain longer than a page
-  starts a page and its later members keep only their own link. Word probes
+  starts a page and its later members keep only their own link; only the
+  chain's last line hangs its auto leading past the margin (issue #166
+  probes). Word probes
   for hideMark: only the document's first mark is never hidden; a hidden
   trailing mark drops its spacing.
 - **Header floats (probes):** topAndBottom pushes header text at any width,
