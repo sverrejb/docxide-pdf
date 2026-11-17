@@ -862,6 +862,19 @@ fn render_nested_table(
     }
 }
 
+/// Note where the row's cell paragraphs land, so PAGEREFs and TOC links to
+/// them follow the drawn table, not the pre-pass estimate (issue #166).
+/// ponytail: every cell paragraph takes the row's top, also the ones a split
+/// row carries to the next page.
+fn note_cell_bookmarks(row: &TableRow, pb: &mut super::PageBuilder) {
+    let pos = (pb.all_contents.len(), pb.slot_top);
+    for p in row.cells.iter().flat_map(|c| c.all_paragraphs()) {
+        for bm in &p.bookmarks {
+            pb.cell_bookmarks.push((bm.clone(), pos));
+        }
+    }
+}
+
 fn render_table_row(
     row: &TableRow,
     layout: &RowLayout,
@@ -872,6 +885,7 @@ fn render_table_row(
     row_idx: usize,
     merge_spans: &HashMap<(usize, usize), f32>,
 ) {
+    note_cell_bookmarks(row, pb);
     let row_h = layout.height;
     let row_top = pb.slot_top;
     let row_bottom = row_top - row_h;
@@ -1592,6 +1606,7 @@ pub(super) fn render_table(
         // A page that follows one nothing fitted on must take something.
         let mut force = false;
         loop {
+            note_cell_bookmarks(row, pb);
             let avail = pb.slot_top - *emb;
             let mut ends = Vec::with_capacity(ncells);
             let mut all_done = true;

@@ -713,8 +713,8 @@ Backlog (details in `current_focus/A11Y.md`):
   (`resolve_seq_fields` walks body paragraphs only). TOC regeneration
   ignores `\p` separators, `\b` scopes and TC fields, and indents a contents
   table "toc N" by 11pt × (N − 1) when the style is missing (unprobed); a
-  table's cells count as its first page, so a split table's later rows
-  point at the wrong page; a Word-written TOC spanning paragraphs is still
+  cell paragraph counts as at its row's top, so one a split row carries to
+  the next page points at the row's first page; a Word-written TOC spanning paragraphs is still
   drawn as cached. PAGEREFs print the measured page, as Word's export does,
   so TOC numbers in uk_commercial_lease_template (18 of 95) and
   carbon_farming_initiative_rule (5 of 160) show where our pagination drifts.
