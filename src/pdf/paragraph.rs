@@ -1731,6 +1731,11 @@ pub(super) fn render_paragraph_block(
         let mut prev_sa = effective_space_after;
         let mut first_link: Option<f32> = None;
         let mut chain_end_after = 0.0f32;
+        // The leading the last kept paragraph hangs past the margin, owed back
+        // once the chain goes on below it: only the chain's last line hangs
+        // (issue #166: two 1.5-spaced kept headings and two 1.5-spaced lines
+        // need 75.9pt; Word moves them with 72pt of room, keeps them with 78).
+        let mut hang = 0.0f32;
         let mut i = block_idx + 1;
         loop {
             let next = match section_blocks.get(i) {
@@ -1739,7 +1744,9 @@ pub(super) fn render_paragraph_block(
                 // stays with its first row (czech_wastewater's "8. Seznam…"
                 // heading moves to page 4 with its table).
                 Some(Block::Table(t)) if t.position.is_none() => {
-                    extra += prev_sa + first_row_height(t, &ctx, col_geometry[state.current_col].1);
+                    extra += hang
+                        + prev_sa
+                        + first_row_height(t, &ctx, col_geometry[state.current_col].1);
                     break;
                 }
                 _ => break,
@@ -1787,8 +1794,9 @@ pub(super) fn render_paragraph_block(
                 first_link.get_or_insert(extra + next_inter + next_first_line_h);
                 let col_w = col_geometry[state.current_col].1;
                 let blocks = &section_blocks[i..];
-                extra +=
-                    next_inter + frame_box_h(fp, blocks, ctx, frame_width(fp, blocks, ctx, col_w));
+                extra += hang
+                    + next_inter
+                    + frame_box_h(fp, blocks, ctx, frame_width(fp, blocks, ctx, col_w));
                 break;
             }
             // The chain needs as many of the next paragraph's lines as must
@@ -1809,10 +1817,14 @@ pub(super) fn render_paragraph_block(
             } else {
                 lines_kept_together(next.widow_control, &mut count)
             };
-            extra += next_inter
+            let next_line_h = resolve_line_h(next_ls, nfs, nlhr);
+            extra += hang
+                + next_inter
                 + next_first_line_h
-                + needed.saturating_sub(1) as f32 * resolve_line_h(next_ls, nfs, nlhr);
+                + needed.saturating_sub(1) as f32 * next_line_h;
             first_link.get_or_insert(extra);
+            hang = line_h_with_picture(picture_h, &next.runs, next, ctx.fonts, next_ls, next_line_h)
+                - next_first_line_h;
             if !next.keep_next || needed < count() {
                 if needed == count() {
                     chain_end_after = next.space_after;
