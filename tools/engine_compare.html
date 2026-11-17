@@ -4,26 +4,33 @@
 <!-- The engine comparison page. tools/engine_compare.py (write_html) fills in the double-underscore placeholders
      and writes the result to comparison/index.html. -->
 <style>
-:root { --bg:#1e1e1e; --panel:#252526; --fg:#ddd; --muted:#888; --accent:#4ea1ff; --border:#3a3a3a;
-  --line:#2e2e2e; --cell:#2a2a2a; --hover:#2c2c2c; --sel:#094771; --tint:color-mix(in srgb, var(--accent) 15%, transparent);
+/* Dark on its own; the docxide site sets color-scheme from its light/dark toggle and light-dark() follows. */
+:root { color-scheme:dark;
+  --bg:light-dark(#f4f4f5, #1e1e1e); --panel:light-dark(#fff, #252526); --fg:light-dark(#1f1f1f, #ddd); --muted:light-dark(#6b6b6b, #888);
+  --accent:light-dark(#0b66d6, #4ea1ff); --border:light-dark(#d4d4d8, #3a3a3a); --line:light-dark(#e4e4e7, #2e2e2e);
+  --cell:light-dark(#f0f0f0, #2a2a2a); --hover:light-dark(#ebebeb, #2c2c2c); --sel:light-dark(#cfe3ff, #094771);
+  --ctl:light-dark(#fff, #333); --ctl-hover:light-dark(#f0f0f0, #444); --ctl-line:light-dark(#c4c4cc, #555); --good:light-dark(#1a7f37, #7ee787);
+  --tint:color-mix(in srgb, var(--accent) 15%, transparent);
   --side:280px; }
 * { box-sizing:border-box; }
 body { margin:0; font:13px/1.4 -apple-system, Helvetica, Arial, sans-serif; background:var(--bg); color:var(--fg); height:100vh;
-  display:grid; grid-template-columns:var(--side) 1fr; grid-template-rows:auto auto 1fr; grid-template-areas:"nav bar" "side legend" "side main"; }
+  display:grid; grid-template-columns:var(--side) 1fr; grid-template-rows:auto auto auto 1fr; grid-template-areas:"top top" "nav bar" "side legend" "side main"; }
 /* Two columns all the way down: case navigation and the case list on the left; view controls, the legend and
    the pages on the right. The scores table spans both columns, its sticky first column standing where the list was. */
-body.table { grid-template-areas:"nav bar" "corner legend" "main main"; }
+body.table { grid-template-areas:"top top" "nav bar" "corner legend" "main main"; }
 body.table #side { display:none; }
 body.table #corner { display:block; }
 body.table #main { padding:0; }
+/* The "top" row stays empty (0 px) here; the docxide site (docxide-demo on fly) injects its #sitenav header there. */
+#sitenav { grid-area:top; }
 #nav { grid-area:nav; border-right:1px solid var(--border); gap:4px; padding:6px 8px; }
 #nav button { padding:2px 6px; }   /* the navigation fits the side column on one line */
 #bar { grid-area:bar; } #legend { grid-area:legend; } #side { grid-area:side; } #main { grid-area:main; }
 #corner { grid-area:corner; display:none; background:var(--panel); border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
-button, select, input:not([type=checkbox], [type=range]) { background:#333; color:var(--fg); border:1px solid #555; border-radius:3px; font:inherit; }
+button, select, input:not([type=checkbox], [type=range]) { background:var(--ctl); color:var(--fg); border:1px solid var(--ctl-line); border-radius:3px; font:inherit; }
 button { cursor:pointer; }
-button:hover { background:#444; }
-kbd { background:#333; border:1px solid #555; border-radius:3px; padding:0 4px; font-size:11px; color:var(--muted); }
+button:hover { background:var(--ctl-hover); }
+kbd { background:var(--ctl); border:1px solid var(--ctl-line); border-radius:3px; padding:0 4px; font-size:11px; color:var(--muted); }
 .ver { color:var(--muted); font-weight:400; font-size:11px; }
 .hidden { display:none !important; }
 /* Sortable headers: a click sorts the case list and the scores table by that key. */
@@ -43,12 +50,12 @@ kbd { background:#333; border:1px solid #555; border-radius:3px; padding:0 4px; 
 #legend summary { cursor:pointer; user-select:none; }
 #legend .items { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0, 1fr); gap:6px; margin:4px 0 5px; }
 #legend .item { border:1px solid var(--border); border-radius:6px; background:var(--cell); color:inherit; line-height:inherit; text-align:left; padding:4px 9px; user-select:none; }
-#legend .item:hover { border-color:#555; background:var(--cell); }
+#legend .item:hover { border-color:var(--ctl-line); background:var(--cell); }
 #legend .item[aria-pressed=false] { opacity:.45; }   /* its column is hidden in the scores table */
 
 /* The filters float under their button, out of the flow, so opening them moves nothing. */
 #filterAnchor { position:relative; display:inline-flex; }
-#filters { position:absolute; top:calc(100% + 4px); left:0; z-index:20; width:300px; background:var(--panel); border:1px solid #555; border-radius:6px; box-shadow:0 8px 24px #000a; overflow:hidden; }
+#filters { position:absolute; top:calc(100% + 4px); left:0; z-index:20; width:300px; background:var(--panel); border:1px solid var(--ctl-line); border-radius:6px; box-shadow:0 8px 24px #000a; overflow:hidden; }
 #filterBtn.on { border-color:var(--accent); color:var(--accent); }
 #filter { width:100%; padding:6px 8px; border:0; border-bottom:1px solid var(--border); border-radius:0; }
 #fx { display:grid; grid-template-columns:auto minmax(0, 1fr); gap:4px 8px; padding:6px 8px; font-size:12px; align-items:center; }
@@ -78,8 +85,8 @@ kbd { background:#333; border:1px solid #555; border-radius:3px; padding:0 4px; 
 .colhead { margin:0; min-width:0; font-size:12px; font-weight:600; color:var(--muted); position:sticky; top:0; background:var(--bg); padding:2px 0; z-index:1; }
 .colhead b { color:var(--fg); }
 .page { margin-bottom:8px; }
-.page img { width:100%; display:block; background:#fff; box-shadow:0 0 0 1px #000; }
-.missing { width:100%; aspect-ratio:8.5/11; display:flex; align-items:center; justify-content:center; color:var(--muted); background:var(--cell); border:1px dashed #444; }
+.page img { width:100%; display:block; background:#fff; box-shadow:0 0 0 1px light-dark(#c4c4cc, #000); }
+.missing { width:100%; aspect-ratio:8.5/11; display:flex; align-items:center; justify-content:center; color:var(--muted); background:var(--cell); border:1px dashed var(--ctl-hover); }
 #overlay > div { position:relative; margin-bottom:8px; }
 #overlay img { width:100%; display:block; }
 #overlay img.top { position:absolute; inset:0; }
@@ -98,7 +105,7 @@ kbd { background:#333; border:1px solid #555; border-radius:3px; padding:0 4px; 
 #scores th.count { font-weight:400; font-size:11px; }
 #scores .num { text-align:right; font-variant-numeric:tabular-nums; }
 #scores .first { border-left:1px solid var(--border); }
-#scores td.best { color:#7ee787; }
+#scores td.best { color:var(--good); }
 #scores tr.mean { --row-bg:var(--cell); }
 #scores tr.mean td { color:var(--fg); font-weight:600; background:var(--row-bg); }
 #scores tbody tr { cursor:pointer; background:var(--row-bg); }
@@ -207,6 +214,8 @@ document.querySelectorAll('#engines input').forEach(cb => cb.onchange = () => { 
 
 const pagesOf = (c, k) => c.pages[k] || [];
 const pageCount = (c, k) => pagesOf(c, k).length;
+// The docxide site serves this page from its own origin and sets SITE_IMG_BASE to where the images live.
+const IMG = window.SITE_IMG_BASE || '';
 function visibleCases() {
   const f = state.fx.text.toLowerCase();
   return DATA.map((c,i) => [c,i]).filter(([c]) => (!f || (c.case + ' ' + c.group).toLowerCase().includes(f)) && passesFx(c));
@@ -413,7 +422,7 @@ function render() {
   if (state.ovl) {
     ov.innerHTML = pageIdx.map(p => {
       const a = pagesOf(c, state.ovlA)[p], b = pagesOf(c, state.ovlB)[p];
-      return `<div>${a ? `<img src="${a}">` : '<div class="missing">no page</div>'}${b ? `<img class="top" src="${b}">` : ''}</div>`;
+      return `<div>${a ? `<img src="${IMG}${a}">` : '<div class="missing">no page</div>'}${b ? `<img class="top" src="${IMG}${b}">` : ''}</div>`;
     }).join('');
     applyLook();
     return;
@@ -433,11 +442,12 @@ function render() {
     grid.appendChild(h);
     const col = document.createElement('div'); col.className = 'col';
     col.innerHTML = pageIdx.map(p => { const src = pagesOf(c, key)[p];
-      return `<div class="page">${src ? `<img src="${src}" loading="lazy">` : `<div class="missing">no page ${p+1}</div>`}</div>`; }).join('');
+      return `<div class="page" data-case="${c.group}/${c.case}" data-eng="${key}" data-p="${p}">${src ? `<img src="${IMG}${src}" loading="lazy">` : `<div class="missing">no page ${p+1}</div>`}</div>`; }).join('');
     cols.push(col);
   }
   cols.forEach(col => grid.appendChild(col));
   applyLook();
+  document.dispatchEvent(new Event('compare:render'));   // the docxide site's annotation layer redraws its markers
 }
 
 $('#more').onclick = () => { state.shown += PAGE_STEP; render(); };
@@ -514,7 +524,7 @@ setupFx();
 const KEYS = { ArrowDown: '#next', ArrowUp: '#prev', r: '#rand', f: '#filterBtn', o: '#ovl', m: '#more', t: '#viewToggle' };
 document.onkeydown = e => {
   if (e.key === 'Escape' && filtersOpen()) { showFilters(false); $('#filterBtn').focus(); return; }
-  if (e.target.tagName === 'SELECT' || ['text', 'number'].includes(e.target.type)) return;
+  if (e.target.tagName === 'SELECT' || ['text', 'number', 'textarea'].includes(e.target.type)) return;
   // Browser shortcuts are not ours: Cmd+R would pick a random case just before the reload.
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const control = KEYS[e.key] ? $(KEYS[e.key]) : /^[1-9]$/.test(e.key) ? document.querySelectorAll('#engines input')[e.key - 1] : null;

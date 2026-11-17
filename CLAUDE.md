@@ -28,7 +28,11 @@ Python helpers in `tools/` (each has a docstring):
   — Word | ours | LibreOffice | MiniPdf | rdocx | office2pdf | jubarte | dxpdf |
   WordCraft side by side → `comparison/index.html`; `deploy_comparison.sh`
   publishes it; CI does both on pushes to main that touch src, fixtures or the site generator
-  (`.github/workflows/comparison.yml`).
+  (`.github/workflows/comparison.yml`). The docxide site (docxide-demo repo, fly)
+  serves that page with a navbar and click-to-annotate on docxide-pdf pages; each
+  note becomes a PR adding `annotations/<group>/<case>/*.json` (see its README).
+  Its hooks in the template (SITE_IMG_BASE, data-case/eng/p, `compare:render`, the
+  `top` grid row, `light-dark()` colour tokens) are listed in docxide-demo's CLAUDE.md.
 - `word_export.py <docx|dir>... [--preset online|print]` — unattended Word for
   Mac export (default online = tagged, Windows metrics); `--check` preflight;
   needs the sandbox off.
