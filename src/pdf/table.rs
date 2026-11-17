@@ -1606,7 +1606,6 @@ pub(super) fn render_table(
         // A page that follows one nothing fitted on must take something.
         let mut force = false;
         loop {
-            note_cell_bookmarks(row, pb);
             let avail = pb.slot_top - *emb;
             let mut ends = Vec::with_capacity(ncells);
             let mut all_done = true;
@@ -1619,6 +1618,9 @@ pub(super) fn render_table(
                 ends.push(end);
             }
             force = ends == starts;
+            if !force {
+                note_cell_bookmarks(row, pb);
+            }
 
             let page = pb.all_contents.len();
             render_partial_row(
