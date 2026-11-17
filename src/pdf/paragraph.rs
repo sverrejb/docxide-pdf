@@ -1865,6 +1865,15 @@ pub(super) fn render_paragraph_block(
     } else {
         0.0
     };
+    // A kept paragraph's last line is not the page's: the chain's own last
+    // line hangs its leading (issue #166: a 1.5-spaced heading with both
+    // 1.5-spaced lines of its successor needs 55.2pt of 50 and moves with
+    // them).
+    let last_line_lead = if keep_next_extra > 0.0 {
+        0.0
+    } else {
+        last_line_lead
+    };
 
     // A multi-line paragraph that opens the page and outruns it splits like
     // any other: one of 108 manual line breaks, double spaced, took one page
