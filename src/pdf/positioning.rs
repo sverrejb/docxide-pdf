@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use pdf_writer::Content;
+use super::canvas::Content;
 
 use crate::model::{
     ArrowEnd, ConnectorShape, ConnectorType, FloatingImage, HRelativeFrom, HorizontalPosition,

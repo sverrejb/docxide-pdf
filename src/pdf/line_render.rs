@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use pdf_writer::types::TextRenderingMode;
-use pdf_writer::{Buf, Content, Name, Primitive, Rect, Str};
+use pdf_writer::{Name, Rect, Str};
+use super::canvas::{Content, TjItem};
 
 use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
 use crate::model::{Alignment, FormCheckbox, ParagraphBorder, TextFill, UnderlineStyle};
@@ -371,30 +372,10 @@ fn placed_move(pen: &mut f32, x: f32, advance: f32) -> f32 {
     adjust
 }
 
-enum TjItem {
-    Text(Vec<u8>),
-    Adjust(f32),
-}
-
-/// A TJ array without pdf-writer's spaces between strings and numbers,
-/// `[(ab)9(cd)]` as Word writes it: about 3% of a text page.
-struct TjArray<'a>(&'a [TjItem]);
-
-impl Primitive for TjArray<'_> {
-    fn write(self, buf: &mut Buf) {
-        buf.extend([b'[']);
-        for item in self.0 {
-            match item {
-                TjItem::Text(text) => Str(text).write(buf),
-                TjItem::Adjust(adjust) => adjust.write(buf),
-            }
-        }
-        buf.extend([b']']);
-    }
-}
-
+/// A TJ array written compactly, `[(ab)9(cd)]` as Word writes it
+/// (`canvas::TjItem`): about 3% of a text page.
 fn write_tj(content: &mut Content, items: &[TjItem]) {
-    content.op("TJ").operand(TjArray(items));
+    content.show_array(items);
 }
 
 /// Draws `glyphs` (text, x, advance) in the order given, each at its own x

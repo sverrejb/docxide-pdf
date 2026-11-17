@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use pdf_writer::Content;
+use super::canvas::Content;
 
 use crate::fonts::FontEntry;
 use crate::model::{SmartArtDiagram, SmartArtShape, SmartArtTextAlign, SmartArtTextAnchor};

@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use crate::fonts::FontEntry;
 
-use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref};
+use pdf_writer::{Filter, Name, Pdf, Rect, Ref};
+use super::canvas::Content;
 
 use crate::model::{
     Block, Document, EmbeddedImage, HeaderFooter, ImageFormat, ImageShadow, Paragraph,

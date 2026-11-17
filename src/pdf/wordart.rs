@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use pdf_writer::types::TextRenderingMode;
-use pdf_writer::{Content, Name, Str};
+use pdf_writer::{Name, Str};
+use super::canvas::Content;
 
 use crate::fonts::FontEntry;
 use crate::geometry::{self, ResolvedCommand};

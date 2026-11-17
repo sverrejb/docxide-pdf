@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
-use pdf_writer::Content;
+use super::canvas::Content;
 
 use crate::model::{Footnote, LineSpacing, Paragraph, Run};
 

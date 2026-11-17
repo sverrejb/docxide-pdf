@@ -1,6 +1,6 @@
 //! Preset and custom shape outlines as PDF paths, and pictures clipped to them.
 
-use pdf_writer::Content;
+use super::canvas::Content;
 
 use crate::geometry::{self, ResolvedCommand};
 use crate::model::ShapeGeometry;

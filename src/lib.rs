@@ -1,3 +1,4 @@
+pub mod display;
 mod docx;
 mod error;
 mod fonts;

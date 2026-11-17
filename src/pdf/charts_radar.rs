@@ -1,6 +1,6 @@
 //! Radar charts: spokes, rings, series polygons and their labels.
 
-use pdf_writer::Content;
+use super::canvas::Content;
 
 use crate::fonts::FontEntry;
 use crate::model::{InlineChart, LegendPosition};

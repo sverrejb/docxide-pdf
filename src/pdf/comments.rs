@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use pdf_writer::{Content, Name, Str};
+use pdf_writer::{Name, Str};
+use super::canvas::Content;
 
 use super::color::{fill_rgb, stroke_rgb};
 use crate::fonts::FontEntry;

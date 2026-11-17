@@ -7,7 +7,8 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use pdf_writer::{Content, Name, Pdf, Rect, Ref, Str};
+use pdf_writer::{Name, Pdf, Rect, Ref, Str};
+use super::canvas::Content;
 
 use super::color::{fill_rgb, stroke_rgb};
 use crate::docx::emf::{EmfRecord, FillRule, for_each_record, parse_header};

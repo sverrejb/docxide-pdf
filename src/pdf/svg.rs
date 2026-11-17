@@ -3,7 +3,8 @@
 //! raster or EMF picture.
 
 use pdf_writer::types::{LineCapStyle, LineJoinStyle};
-use pdf_writer::{Content, Pdf, Rect, Ref};
+use pdf_writer::{Pdf, Rect, Ref};
+use super::canvas::Content;
 
 use super::color::{fill_rgb, stroke_rgb};
 use crate::docx::svg::{IDENTITY, Seg, parse};

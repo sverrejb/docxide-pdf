@@ -1,6 +1,7 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
+use pdf_writer::{Filter, Name, Pdf, Rect, Ref, Str, TextStr};
+use super::canvas::Content;
 
 use crate::fonts::FontEntry;
 use crate::model::{Document, PageBorderDisplay, PageBorders, ParagraphBorder, SectionProperties};

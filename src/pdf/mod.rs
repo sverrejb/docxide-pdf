@@ -1,6 +1,7 @@
 mod assembly;
 mod bands;
 mod bidi;
+pub(crate) mod canvas;
 mod cell_draw;
 mod chart_legend;
 mod charts;
@@ -43,7 +44,8 @@ mod wordart;
 
 use std::collections::{HashMap, HashSet};
 
-use pdf_writer::{Content, Name, Pdf, Ref};
+use pdf_writer::{Name, Pdf, Ref};
+use canvas::Content;
 
 use crate::ConvertOptions;
 use crate::error::Error;

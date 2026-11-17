@@ -11,7 +11,8 @@ use std::collections::HashMap;
 
 use pdf_writer::types::{ListNumbering, TableHeaderScope};
 use pdf_writer::writers::StructTreeRoot;
-use pdf_writer::{Content, Name, Pdf, Ref, Str, TextStr};
+use pdf_writer::{Name, Pdf, Ref, Str, TextStr};
+use super::canvas::Content;
 
 use crate::model::ListItem;
 

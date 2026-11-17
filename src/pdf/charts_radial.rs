@@ -1,6 +1,6 @@
 use std::f32::consts::{FRAC_PI_2, TAU};
 
-use pdf_writer::Content;
+use super::canvas::Content;
 
 use crate::fonts::FontEntry;
 use crate::model::{InlineChart, LegendPosition, View3D};
