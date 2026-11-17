@@ -172,6 +172,68 @@ convert_docx_to_pdf_with("input.docx", "output.pdf", &options)?;
 
 The functions without an options argument use `ConvertOptions::from_env()`, so the same settings can come from `DOCXIDE_*` environment variables (see [Configuration](#configuration)). Options passed explicitly never read the environment.
 
+### Hosts without a filesystem (WebAssembly)
+
+From a source checkout, compile the library for the bare wasm target:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo build --locked --lib --no-default-features --target wasm32-unknown-unknown
+```
+
+This produces `target/wasm32-unknown-unknown/debug/libdocxide_pdf.rlib`, for linking
+into a Rust host that exports its own wasm interface. It does not produce a
+JavaScript package or browser bindings.
+
+On this target, environment configuration is ignored, font directory discovery
+defaults to off, and diagnostic timings are zero. The host supplies font bytes:
+
+```rust
+use docxide_pdf::{
+    clear_fonts, convert_docx_bytes_to_pdf_bytes, register_font,
+    take_bookmark_positions, take_font_requests, use_system_fonts,
+};
+
+use_system_fonts(false); // Also useful for deterministic native conversions.
+clear_fonts();
+register_font(font_bytes); // Vec<u8>: TrueType, OpenType, or a TTC collection.
+let pdf = convert_docx_bytes_to_pdf_bytes(&docx_bytes)?;
+let missing_fonts = take_font_requests();
+let paragraphs = take_bookmark_positions();
+```
+
+Registered faces take precedence over directory fonts of the same family and
+style. DOCX-embedded fonts remain available. Missing-font requests group names
+in resolution order and carry the requested bold/italic flags, including a
+missing exact style that fell back to regular. Supply available missing faces
+and convert again; requests describe missing index entries, so an embedded
+DOCX font may already cover them.
+
+Fonts, the directory-discovery policy, and metadata are **thread-local**. Register
+fonts, convert, and read metadata on the same thread (or the same wasm instance).
+Fonts persist until `clear_fonts`; starting a conversion clears old metadata,
+even if parsing fails. The `take_*` functions drain their results. Independent
+native threads cannot consume each other's results.
+
+Bookmark positions describe the paragraph containing `bookmarkStart`: its first
+fragment's page/top and last fragment's page/bottom, including table cells,
+nested tables and fragments spanning pages or columns. They come from the final
+render pass and include section vertical alignment. Pages are zero-based and
+coordinates are PDF points measured upward from the page bottom. This is not a
+multi-paragraph bookmark-range API; headers, footers and text boxes are excluded.
+
+Validation from a source checkout (tested with Rust 1.96 and Node.js):
+
+```sh
+./tools/run-tests.sh --test host
+./tools/check-wasm-host.sh
+```
+
+The smoke script builds `target/wasm32-unknown-unknown/debug/host-smoke.wasm`
+and runs it in Node. That small host converts an embedded fixture without JS
+clock or filesystem implementations; see `tools/wasm_host_smoke.rs` for its
+Rust entry point and `tools/check-wasm-host.mjs` for the Node runner.
+
 ## Works well with `docxide-template`
 
 [`docxide-template`](https://github.com/sverrejb/docxide-template) is a sibling crate for type-safe MS Word templates. It scans a folder of `.docx` files at compile time and generates a Rust struct per template, with `{Placeholder}` patterns turned into snake_case fields. Pair it with `docxide-pdf` to go from template → filled DOCX → PDF in a single, fully in-memory pipeline:

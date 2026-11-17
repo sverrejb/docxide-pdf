@@ -2,12 +2,13 @@ mod cache;
 mod discovery;
 mod embed;
 mod encoding;
+pub(crate) mod host;
 mod resolve;
 
+use crate::clock::Instant;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
-use std::time::Instant;
 
 use pdf_writer::{Name, Pdf, Ref};
 
@@ -335,7 +336,7 @@ pub(crate) fn font_file(
         return Some((data.clone(), 0));
     }
     let (path, index, ..) = font_index.find_font_file(name, false, false)?;
-    Some((std::fs::read(path).ok()?, index))
+    Some((host::read_font(&path)?, index))
 }
 
 pub(crate) fn primary_font_name(name: &str) -> &str {

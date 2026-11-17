@@ -5,6 +5,10 @@ Open work only. Finished rounds, their rules and evidence live in git history
 
 ## Open fixture leads
 
+**Host metadata:** the bookmark-position API reports body/cell paragraphs carrying
+`bookmarkStart`, not the full range up to `bookmarkEnd`. Header/footer and text-box
+positions are not exported. Keep these limits explicit if extending the host API.
+
 **East Asian layout and float leads (2026-11-16):**
 - compat-14 `compressPunctuation` past the marks: once each mark has given
   0.5 em, the autoSpaceDE gap before the pulled Latin word shrinks from

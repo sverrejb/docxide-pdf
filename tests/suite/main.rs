@@ -7,6 +7,7 @@ mod common;
 mod accessibility;
 mod file_size;
 mod font_validation;
+mod host;
 mod image_count;
 mod libreoffice_comparison;
 mod page_geometry;

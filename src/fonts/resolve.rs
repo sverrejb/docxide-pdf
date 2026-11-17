@@ -57,7 +57,7 @@ fn try_font(
         .font_index
         .find_font_file(candidate, bold, italic)
         .and_then(|(path, face_index, face_bold, face_italic)| {
-            let data = std::fs::read(&path).ok()?;
+            let data = host::read_font(&path)?;
             Some(ResolvedFont {
                 metrics: embed(&data, face_index)?,
                 synthetic_bold: bold && !face_bold,
@@ -573,6 +573,7 @@ pub(crate) fn register_font(
     ctx: &FontContext,
 ) -> FontEntry {
     let t0 = Instant::now();
+    let _request = host::begin_request(bold, italic);
     let refs = FontRefs {
         font: alloc(),
         descriptor: alloc(),
