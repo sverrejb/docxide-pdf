@@ -293,6 +293,24 @@ pub(super) struct GradientSpec {
     pub(super) h: f32,
 }
 
+impl GradientSpec {
+    /// The axis of the axial shading, `[x0, y0, x1, y1]` in page space: through the box's
+    /// centre at `angle_deg`, long enough for the box's corners.
+    pub(super) fn axis(&self) -> [f32; 4] {
+        let ang_rad = self.angle_deg.to_radians();
+        let (sin_a, cos_a) = ang_rad.sin_cos();
+        let cx = self.x + self.w / 2.0;
+        let cy = self.y + self.h / 2.0;
+        let half_len = ((self.w / 2.0 * cos_a).powi(2) + (self.h / 2.0 * sin_a).powi(2)).sqrt();
+        [
+            cx - half_len * cos_a,
+            cy + half_len * sin_a,
+            cx + half_len * cos_a,
+            cy - half_len * sin_a,
+        ]
+    }
+}
+
 pub(super) fn render_shape_fill(
     content: &mut Content,
     fill: &ShapeFill,

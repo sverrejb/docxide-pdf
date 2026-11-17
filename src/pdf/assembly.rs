@@ -277,16 +277,7 @@ pub(super) fn assemble_pdf_pages(
                         stitch_ref
                     };
 
-                    let ang_rad = spec.angle_deg.to_radians();
-                    let (sin_a, cos_a) = ang_rad.sin_cos();
-                    let cx = spec.x + spec.w / 2.0;
-                    let cy = spec.y + spec.h / 2.0;
-                    let half_len =
-                        ((spec.w / 2.0 * cos_a).powi(2) + (spec.h / 2.0 * sin_a).powi(2)).sqrt();
-                    let x0 = cx - half_len * cos_a;
-                    let y0 = cy + half_len * sin_a;
-                    let x1 = cx + half_len * cos_a;
-                    let y1 = cy - half_len * sin_a;
+                    let [x0, y0, x1, y1] = spec.axis();
 
                     let pat_ref = alloc();
                     let mut pattern = pdf.shading_pattern(pat_ref);
@@ -651,7 +642,10 @@ pub(super) fn assemble_pdf_pages(
                 display_list::Builder::new(seen_fonts, image_xobjects, &session.xobjects);
             for (i, page) in recorded_pages.into_iter().enumerate() {
                 let links = display_list::links(&all_page_links[i], bookmark_positions, n);
-                builder.add_page(page, links);
+                let gradients = all_page_gradient_specs
+                    .get(i)
+                    .map_or(&[][..], Vec::as_slice);
+                builder.add_page(page, links, gradients);
             }
             let document = builder.finish(doc, lang);
             session.document = Some(document);

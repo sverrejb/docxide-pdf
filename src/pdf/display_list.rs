@@ -6,12 +6,13 @@
 use std::collections::HashMap;
 
 use crate::display::{
-    DisplayDocument, FillRule, Font, FontSource, Glyph, Info, Item, Link, LinkTarget, Matrix, Page,
-    Paint, Path, Segment, TextRun,
+    DisplayDocument, FillRule, Font, FontSource, Glyph, GradientStop, Info, Item, LinearGradient,
+    Link, LinkTarget, Matrix, Page, Paint, Path, Segment, TextRun,
 };
 use crate::fonts::FontEntry;
 use crate::model::Document;
 
+use super::GradientSpec;
 use super::canvas::{Captured, IDENTITY, Rec, RecPaint, RecText, TjItem, concat, translate};
 use super::layout::LinkAnnotation;
 
@@ -46,6 +47,8 @@ pub(super) struct Builder<'a> {
     image_index: HashMap<i32, usize>,
     /// Where each text object of the stream being resolved left the pen.
     text_ends: HashMap<u32, Matrix>,
+    /// The gradients of the page being built, by pattern name.
+    gradients: HashMap<String, LinearGradient>,
     document: DisplayDocument,
 }
 
@@ -68,11 +71,21 @@ impl<'a> Builder<'a> {
             font_index: HashMap::new(),
             image_index: HashMap::new(),
             text_ends: HashMap::new(),
+            gradients: HashMap::new(),
             document: DisplayDocument::default(),
         }
     }
 
-    pub(super) fn add_page(&mut self, page: RecordedPage, links: Vec<Link>) {
+    pub(super) fn add_page(
+        &mut self,
+        page: RecordedPage,
+        links: Vec<Link>,
+        gradients: &[GradientSpec],
+    ) {
+        self.gradients = gradients
+            .iter()
+            .map(|spec| (spec.pattern_name.clone(), gradient(spec)))
+            .collect();
         let mut items = Vec::new();
         if let Some(header_footer) = page.header_footer {
             let mut group: Vec<Item> = page.zoom.map(Item::Transform).into_iter().collect();
@@ -138,6 +151,18 @@ impl<'a> Builder<'a> {
                 Rec::Fill {
                     path,
                     fill_rule,
+                    paint: RecPaint::Pattern(name),
+                } => match self.gradients.get(&name) {
+                    Some(gradient) => out.push(Item::FillGradient {
+                        path,
+                        fill_rule,
+                        gradient: gradient.clone(),
+                    }),
+                    None => self.unsupported("pattern not described"),
+                },
+                Rec::Fill {
+                    path,
+                    fill_rule,
                     paint,
                 } => {
                     if let Some(paint) = self.paint(paint) {
@@ -173,12 +198,12 @@ impl<'a> Builder<'a> {
         out
     }
 
-    /// A pattern (a gradient) is not described yet: counted, not drawn.
+    /// A pattern stroked, or text painted with one, is not described yet: counted, not drawn.
     fn paint(&mut self, paint: RecPaint) -> Option<Paint> {
         match paint {
             RecPaint::Solid(paint) => Some(paint),
             RecPaint::Pattern(_) => {
-                self.unsupported("gradient");
+                self.unsupported("gradient text or stroke");
                 None
             }
         }
@@ -331,6 +356,26 @@ impl<'a> Builder<'a> {
             color: crate::display::Color::Gray(0.0),
             alpha: 1.0,
         })
+    }
+}
+
+/// A shape's gradient as the PDF export writes its pattern: an axial shading along
+/// `GradientSpec::axis`, extended both ways, interpolated in linear light (`CalRGB`).
+fn gradient(spec: &GradientSpec) -> LinearGradient {
+    let [x0, y0, x1, y1] = spec.axis();
+    LinearGradient {
+        start: [x0, y0],
+        end: [x1, y1],
+        stops: spec
+            .stops
+            .iter()
+            .map(|&(color, offset)| GradientStop {
+                offset,
+                color: color.map(|c| f32::from(c) / 255.0),
+            })
+            .collect(),
+        extend: [true, true],
+        linear_light: true,
     }
 }
 

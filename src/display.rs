@@ -74,6 +74,12 @@ pub enum Item {
         paint: Paint,
         style: StrokeStyle,
     },
+    /// The path filled with a gradient.
+    FillGradient {
+        path: Path,
+        fill_rule: FillRule,
+        gradient: LinearGradient,
+    },
     Text(TextRun),
     /// A picture of [`DisplayDocument::images`], drawn into the unit square
     /// of the current transform (as a PDF image XObject is).
@@ -113,6 +119,27 @@ pub struct Paint {
 pub enum Color {
     Gray(f32),
     Rgb(f32, f32, f32),
+}
+
+/// A linear (axial) gradient. Its axis is in the page's default user space, as a PDF pattern's
+/// is: the transforms in force where it fills do not move it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LinearGradient {
+    pub start: [f32; 2],
+    pub end: [f32; 2],
+    /// Offsets from 0 (`start`) to 1 (`end`), ascending.
+    pub stops: Vec<GradientStop>,
+    /// Whether the first and last colours go on before `start` and past `end`.
+    pub extend: [bool; 2],
+    /// Interpolated in linear light, as Word draws gradients, rather than between sRGB values.
+    pub linear_light: bool,
+}
+
+/// A colour of a gradient, sRGB components from 0 to 1.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GradientStop {
+    pub offset: f32,
+    pub color: [f32; 3],
 }
 
 #[derive(Debug, Clone, PartialEq)]
