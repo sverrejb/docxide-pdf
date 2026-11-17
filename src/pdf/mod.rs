@@ -1381,10 +1381,9 @@ fn render_pass(
                             &mut state.effective_margin_bottom,
                             col_bounds,
                         );
-                        // Reversed so a bookmark's first (row start) entry wins.
-                        for (bm, pos) in state.pb.cell_bookmarks.drain(..).rev() {
-                            state.bookmark_positions.insert(bm, pos);
-                        }
+                        state
+                            .bookmark_positions
+                            .extend(state.pb.cell_bookmarks.drain());
                         state.pb.table_extent = None;
                         // A full-width, negatively positioned text float displaces
                         // its preceding empty anchor line below the table in Word.

@@ -870,7 +870,7 @@ fn note_cell_bookmarks(row: &TableRow, pb: &mut super::PageBuilder) {
     let pos = (pb.all_contents.len(), pb.slot_top);
     for p in row.cells.iter().flat_map(|c| c.all_paragraphs()) {
         for bm in &p.bookmarks {
-            pb.cell_bookmarks.push((bm.clone(), pos));
+            pb.cell_bookmarks.entry(bm.clone()).or_insert(pos);
         }
     }
 }

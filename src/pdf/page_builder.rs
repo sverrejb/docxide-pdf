@@ -290,11 +290,9 @@ pub(super) struct PageBuilder {
     toc_field: bool,
     /// Structure of the body table being rendered (see `table::render_table`).
     pub(super) table_tags: Option<tagging::TableTags>,
-    /// (bookmark, (page, row top)) of the cell paragraphs of each row drawn
-    /// of the body table being rendered, in drawing order: a bookmark's first
-    /// entry is where its row starts (later ones are repeated header rows and
-    /// continued split rows).
-    pub(super) cell_bookmarks: Vec<(String, (usize, f32))>,
+    /// Bookmark → (page, row top) of the cell paragraphs of the body table
+    /// being rendered, where each row is first drawn.
+    pub(super) cell_bookmarks: HashMap<String, (usize, f32)>,
 }
 
 impl PageBuilder {
@@ -394,7 +392,7 @@ impl PageBuilder {
             toc: None,
             toc_field: false,
             table_tags: None,
-            cell_bookmarks: Vec::new(),
+            cell_bookmarks: HashMap::new(),
         }
     }
 

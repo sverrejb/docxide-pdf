@@ -1865,10 +1865,10 @@ pub(super) fn render_paragraph_block(
     } else {
         0.0
     };
-    // A kept paragraph's last line is not the page's: the chain's own last
-    // line hangs its leading (issue #166: a 1.5-spaced heading with both
-    // 1.5-spaced lines of its successor needs 55.2pt of 50 and moves with
-    // them).
+    // A kept paragraph's last line is not the page's: the chain already lets
+    // one line of its successor hang its leading (`first_ls`), and only one
+    // line can (issue #166: a 1.5-spaced heading with both 1.5-spaced lines
+    // of its successor needs 55.2pt of 50 and moves with them).
     let last_line_lead = if keep_next_extra > 0.0 {
         0.0
     } else {
