@@ -1995,6 +1995,10 @@
     "fa2ec98cd9a329adc299336df8b7576cf1acb82e65a44ea28031a3fb00f48655",
     "77cf7c8dfca97b9a042f4b8531158f56a517422fab26997daa266959a70494ba"
   ],
+  "cases/keep-next-auto-spacing-chain": [
+    "f012ae1e1b026bbfcea036a0bc291663e22a8ae6a92aadf5e7f2e74be807069f",
+    "750cc06c943133f4d58e3e6722992fd1c1ce7084ded6472c660819e7e5c4eb30"
+  ],
   "cases/keep-next-auto-spacing-fits": [
     "836a9c1fca25c3bcbe89de24f06d4882c968f9bd52114799067a61dc8a7eb7a9"
   ],
