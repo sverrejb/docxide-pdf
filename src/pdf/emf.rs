@@ -7,8 +7,8 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use pdf_writer::{Name, Pdf, Rect, Ref, Str};
 use super::canvas::Content;
+use pdf_writer::{Name, Pdf, Rect, Ref, Str};
 
 use super::color::{fill_rgb, stroke_rgb};
 use crate::docx::emf::{EmfRecord, FillRule, for_each_record, parse_header};
@@ -161,6 +161,12 @@ pub(super) fn emf_to_form_xobject(
     });
 
     let form_ref = alloc();
+    super::canvas::capture_form(
+        form_ref,
+        [0.0, 0.0, 1.0, 1.0],
+        t.content.take_recording(),
+        &[],
+    );
     let bytes = t.content.finish();
     let mut form = pdf.form_xobject(form_ref, &bytes);
     form.bbox(Rect::new(0.0, 0.0, 1.0, 1.0));

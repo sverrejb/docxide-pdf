@@ -60,9 +60,20 @@ pub enum Item {
     /// Concatenated to the current transform.
     Transform(Matrix),
     /// Intersected with the current clip.
-    Clip { path: Path, fill_rule: FillRule },
-    Fill { path: Path, fill_rule: FillRule, paint: Paint },
-    Stroke { path: Path, paint: Paint, style: StrokeStyle },
+    Clip {
+        path: Path,
+        fill_rule: FillRule,
+    },
+    Fill {
+        path: Path,
+        fill_rule: FillRule,
+        paint: Paint,
+    },
+    Stroke {
+        path: Path,
+        paint: Paint,
+        style: StrokeStyle,
+    },
     Text(TextRun),
     /// A picture of [`DisplayDocument::images`], drawn into the unit square
     /// of the current transform (as a PDF image XObject is).
@@ -215,7 +226,9 @@ pub enum ImageColorSpace {
     Rgb,
     Cmyk,
     /// A palette of RGB triples, `palette.len() / 3` entries.
-    IndexedRgb { palette: Vec<u8> },
+    IndexedRgb {
+        palette: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -242,5 +255,8 @@ pub struct Link {
 pub enum LinkTarget {
     Uri(String),
     /// A page index and the y to show at the top.
-    Page { page: usize, y: f32 },
+    Page {
+        page: usize,
+        y: f32,
+    },
 }

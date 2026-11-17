@@ -169,6 +169,21 @@ pub fn convert_docx_bytes_to_pdf_with(
     render_and_write(&doc, path, options)
 }
 
+/// The pages `convert_docx_bytes_to_pdf_bytes_with` would write, laid out
+/// but not written: what each page draws, with the fonts and pictures it
+/// draws them with ([`display`]), for a caller that writes PDF (or renders
+/// pages) itself.
+pub fn layout_docx_bytes_with(
+    input: &[u8],
+    options: &ConvertOptions,
+) -> Result<display::DisplayDocument, Error> {
+    reject_old_env_vars()?;
+    let doc = docx::parse_bytes(input, options.revisions)?;
+    let recording = pdf::canvas::Recording::start();
+    pdf::render(&doc, options)?;
+    Ok(recording.finish().unwrap_or_default())
+}
+
 /// For callers that serve or store the PDF themselves (web handlers, databases,
 /// wasm). Converts with [`ConvertOptions::from_env`].
 pub fn convert_docx_bytes_to_pdf_bytes(input: &[u8]) -> Result<Vec<u8>, Error> {

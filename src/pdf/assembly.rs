@@ -1,13 +1,14 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use pdf_writer::{Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 use super::canvas::Content;
+use pdf_writer::{Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 
 use crate::fonts::FontEntry;
 use crate::model::{Document, PageBorderDisplay, PageBorders, ParagraphBorder, SectionProperties};
 
 use super::GradientSpec;
 use super::comments::{page_zoom, render_comment_pane};
+use super::display_list::{self, RecordedPage};
 use super::layout::LinkAnnotation;
 
 pub(crate) struct HeadingEntry {
@@ -313,19 +314,25 @@ pub(super) fn assemble_pdf_pages(
         })
         .collect();
 
+    let recording = super::canvas::recording();
+    let mut recorded_pages: Vec<RecordedPage> = Vec::new();
     let mut all_deferred_shapes = all_deferred_shapes.into_iter();
     let mut all_behind_shapes = all_behind_shapes.into_iter();
-    for (i, c) in all_contents.into_iter().enumerate() {
+    for (i, mut c) in all_contents.into_iter().enumerate() {
         let mut body_raw = Vec::new();
-        for (_, shape) in all_behind_shapes.next().into_iter().flatten() {
+        let mut body_recorded = Vec::new();
+        for (_, mut shape) in all_behind_shapes.next().into_iter().flatten() {
+            body_recorded.push(shape.take_recording());
             body_raw.extend_from_slice(&super::tagging::finish_artifact_content(shape));
         }
+        body_recorded.push(c.take_recording());
         body_raw.extend_from_slice(&super::tagging::finish_artifact_content(c));
         // Anchored shapes paint above the page's text layer, pre-sorted by
         // relativeHeight at flush time
         // Each buffer opens inside an artifact (tagging::artifact_content) so
         // a textbox's text can be tagged.
-        for (_, shape) in all_deferred_shapes.next().into_iter().flatten() {
+        for (_, mut shape) in all_deferred_shapes.next().into_iter().flatten() {
+            body_recorded.push(shape.take_recording());
             body_raw.extend_from_slice(&super::tagging::finish_artifact_content(shape));
         }
 
@@ -361,6 +368,7 @@ pub(super) fn assemble_pdf_pages(
         };
 
         let mut pane_raw = Vec::new();
+        let mut pane_recorded = None;
         if let Some((body_key, label_key)) = &comment_keys {
             let transformed: Vec<(u32, f32, f32, f32)> = all_page_comment_anchors[i]
                 .iter()
@@ -376,11 +384,15 @@ pub(super) fn assemble_pdf_pages(
                 seen_fonts,
                 (body_key, label_key, doc.comment_font_size),
             );
+            pane_recorded = Some(pane_content.take_recording());
             pane_raw = pane_content.finish().to_vec();
         }
 
         let mut combined: Vec<u8> = Vec::new();
-        if let Some(hf) = all_hf_contents[i].take() {
+        let mut hf_recorded = None;
+        let mut borders_recorded = None;
+        if let Some(mut hf) = all_hf_contents[i].take() {
+            hf_recorded = Some(hf.take_recording());
             // Word zooms headers and footers with the body (door_air_cooling_unit_spec).
             combined.extend_from_slice(&scale_prefix);
             super::tagging::wrap_artifact(&mut combined, hf.finish().as_slice(), true);
@@ -396,7 +408,9 @@ pub(super) fn assemble_pdf_pages(
                 PageBorderDisplay::NotFirstPage => !is_first,
             };
             if show {
-                let borders = render_page_borders(pb, sp).finish();
+                let mut borders = render_page_borders(pb, sp);
+                borders_recorded = Some(borders.take_recording());
+                let borders = borders.finish();
                 super::tagging::wrap_artifact(&mut combined, borders.as_slice(), false);
             }
         }
@@ -412,6 +426,28 @@ pub(super) fn assemble_pdf_pages(
         let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&combined, 9);
         pdf.stream(content_ids[i], &compressed)
             .filter(Filter::FlateDecode);
+        if recording {
+            recorded_pages.push(RecordedPage {
+                width: sp.page_width,
+                height: sp.page_height,
+                header_footer: hf_recorded,
+                borders: borders_recorded,
+                zoom: has_any_comments.then_some([zoom, 0.0, 0.0, zoom, zoom_tx, zoom_ty]),
+                // As the prefix writes it, to three decimals.
+                valign: (valign_off > 0.01).then(|| {
+                    [
+                        1.0,
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0,
+                        (-valign_off * 1000.0).round() / 1000.0,
+                    ]
+                }),
+                body: body_recorded,
+                comment_pane: pane_recorded,
+            });
+        }
     }
 
     // Build PDF outline (bookmarks panel) from heading entries
@@ -607,5 +643,18 @@ pub(super) fn assemble_pdf_pages(
                 }
             }
         }
+    }
+
+    if recording {
+        super::canvas::with_session(|session| {
+            let mut builder =
+                display_list::Builder::new(seen_fonts, image_xobjects, &session.xobjects);
+            for (i, page) in recorded_pages.into_iter().enumerate() {
+                let links = display_list::links(&all_page_links[i], bookmark_positions, n);
+                builder.add_page(page, links);
+            }
+            let document = builder.finish(doc, lang);
+            session.document = Some(document);
+        });
     }
 }

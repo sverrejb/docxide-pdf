@@ -11,7 +11,7 @@ const HIGH: [u16; 32] = [
 
 /// Windows-1252 (WinAnsi) byte to Unicode char mapping.
 /// Bytes 0x80-0x9F are remapped; all others map directly to their Unicode codepoint.
-pub(super) fn winansi_to_char(byte: u8) -> char {
+pub(crate) fn winansi_to_char(byte: u8) -> char {
     match byte {
         0x80..=0x9F => char::from_u32(HIGH[(byte - 0x80) as usize] as u32)
             .filter(|&c| c != '\0')

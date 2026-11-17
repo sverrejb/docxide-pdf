@@ -93,14 +93,14 @@ pub(crate) fn capture_image(reference: Ref, image: Image, soft_mask: Option<Ref>
     });
 }
 
-/// Records a written form XObject drawn by `content`.
+/// Records a written form XObject: its bounding box, what it draws (see
+/// `Content::take_recording`) and the XObjects its resources name.
 pub(crate) fn capture_form(
     reference: Ref,
-    content: &mut Content,
     bbox: [f32; 4],
+    items: Vec<Rec>,
     xobjects: &[(&str, Ref)],
 ) {
-    let items = content.take_recording();
     with_session(|s| {
         s.xobjects.insert(
             reference.get(),

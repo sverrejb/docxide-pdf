@@ -3,8 +3,9 @@ use std::sync::Arc;
 
 use crate::fonts::FontEntry;
 
+use super::canvas::{self, Content};
+use crate::display::{Image, ImageColorSpace, ImageFilter};
 use pdf_writer::{Filter, Name, Pdf, Rect, Ref};
-use super::canvas::Content;
 
 use crate::model::{
     Block, Document, EmbeddedImage, HeaderFooter, ImageFormat, ImageShadow, Paragraph,
@@ -300,6 +301,14 @@ fn palette_png(data: &[u8]) -> Option<PaletteImage> {
     })
 }
 
+/// Records a picture for the display list while a recording session is open
+/// (`canvas::recording`); `image` is only built then.
+fn capture(reference: Ref, image: Image, soft_mask: Option<Ref>) {
+    if canvas::recording() {
+        canvas::capture_image(reference, image, soft_mask);
+    }
+}
+
 /// Write an image XObject into the PDF with the given filter and data.
 /// Optionally attaches a soft mask (alpha channel) reference.
 /// Write an 8-bit image XObject, its color space picked from the component
@@ -313,6 +322,27 @@ fn write_image_xobject(
     components: u8,
     smask: Option<Ref>,
 ) {
+    capture(
+        xobj_ref,
+        Image {
+            width: w,
+            height: h,
+            color_space: match components {
+                1 => ImageColorSpace::Gray,
+                4 => ImageColorSpace::Cmyk,
+                _ => ImageColorSpace::Rgb,
+            },
+            bits_per_component: 8,
+            filter: match filter {
+                Filter::DctDecode => ImageFilter::Jpeg,
+                _ => ImageFilter::Flate,
+            },
+            data: data.to_vec(),
+            soft_mask: None,
+            interpolate: matches!(filter, Filter::DctDecode),
+        },
+        smask,
+    );
     let mut xobj = pdf.image_xobject(xobj_ref, data);
     xobj.filter(filter);
     xobj.width(w as i32);
@@ -344,6 +374,20 @@ fn write_gray_mask_xobject(
     h: u32,
     interpolate: bool,
 ) {
+    capture(
+        mask_ref,
+        Image {
+            width: w,
+            height: h,
+            color_space: ImageColorSpace::Gray,
+            bits_per_component: 8,
+            filter: ImageFilter::Flate,
+            data: compressed.to_vec(),
+            soft_mask: None,
+            interpolate,
+        },
+        None,
+    );
     let mut mask = pdf.image_xobject(mask_ref, compressed);
     mask.filter(Filter::FlateDecode);
     mask.width(w as i32);
@@ -367,6 +411,20 @@ fn write_solid_color_with_gray_mask(
     mask_h: u32,
 ) {
     write_gray_mask_xobject(pdf, mask_ref, compressed_mask, mask_w, mask_h, true);
+    capture(
+        color_ref,
+        Image {
+            width: 1,
+            height: 1,
+            color_space: ImageColorSpace::Rgb,
+            bits_per_component: 8,
+            filter: ImageFilter::None,
+            data: color.to_vec(),
+            soft_mask: None,
+            interpolate: true,
+        },
+        Some(mask_ref),
+    );
     let mut color_img = pdf.image_xobject(color_ref, &color);
     color_img.width(1);
     color_img.height(1);
@@ -447,6 +505,12 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
         content.transform(crop_matrix(src_rect));
         content.x_object(Name(b"Src"));
         let form_ref = self.next_ref();
+        canvas::capture_form(
+            form_ref,
+            [0.0, 0.0, 1.0, 1.0],
+            content.take_recording(),
+            &[("Src", inner_ref)],
+        );
         let bytes = content.finish();
         let mut form = self.pdf.form_xobject(form_ref, &bytes);
         form.bbox(Rect::new(0.0, 0.0, 1.0, 1.0));
@@ -554,6 +618,22 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                         .stream(lookup_ref, &lookup)
                         .filter(Filter::FlateDecode);
                     let data = miniz_oxide::deflate::compress_to_vec_zlib(&p.rows, 6);
+                    capture(
+                        xobj_ref,
+                        Image {
+                            width: p.width,
+                            height: p.height,
+                            color_space: ImageColorSpace::IndexedRgb {
+                                palette: p.palette.clone(),
+                            },
+                            bits_per_component: p.bits,
+                            filter: ImageFilter::Flate,
+                            data: data.clone(),
+                            soft_mask: None,
+                            interpolate: false,
+                        },
+                        None,
+                    );
                     let mut xobj = self.pdf.image_xobject(xobj_ref, &data);
                     xobj.filter(Filter::FlateDecode);
                     xobj.width(p.width as i32);
@@ -583,6 +663,20 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                             Some(img) => img,
                             None => {
                                 log::warn!("PNG decode failed — writing 1x1 placeholder");
+                                capture(
+                                    xobj_ref,
+                                    Image {
+                                        width: 1,
+                                        height: 1,
+                                        color_space: ImageColorSpace::Rgb,
+                                        bits_per_component: 8,
+                                        filter: ImageFilter::None,
+                                        data: vec![255, 255, 255],
+                                        soft_mask: None,
+                                        interpolate: false,
+                                    },
+                                    None,
+                                );
                                 let mut xobj = self.pdf.image_xobject(xobj_ref, &[255, 255, 255]);
                                 xobj.width(1);
                                 xobj.height(1);
@@ -654,6 +748,20 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 if bilevel && !has_alpha && !img.recolored() {
                     let packed = pack_bilevel(&rgb_data, w, h);
                     let data = miniz_oxide::deflate::compress_to_vec_zlib(&packed, 6);
+                    capture(
+                        xobj_ref,
+                        Image {
+                            width: w,
+                            height: h,
+                            color_space: ImageColorSpace::Gray,
+                            bits_per_component: 1,
+                            filter: ImageFilter::Flate,
+                            data: data.clone(),
+                            soft_mask: None,
+                            interpolate: false,
+                        },
+                        None,
+                    );
                     let mut xobj = self.pdf.image_xobject(xobj_ref, &data);
                     xobj.filter(Filter::FlateDecode);
                     xobj.width(w as i32);
@@ -709,6 +817,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 // Conversion failed — register the wasted ref so it still maps to
                 // something (an empty form XObject) and the page content stream
                 // referencing it won't crash.
+                canvas::capture_form(xobj_ref, [0.0, 0.0, 1.0, 1.0], Vec::new(), &[]);
                 let mut empty = self.pdf.form_xobject(xobj_ref, b"");
                 empty.bbox(pdf_writer::Rect::new(0.0, 0.0, 1.0, 1.0));
                 drop(empty);

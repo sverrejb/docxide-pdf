@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use super::canvas::{Content, TjItem};
 use pdf_writer::types::TextRenderingMode;
 use pdf_writer::{Name, Rect, Str};
-use super::canvas::{Content, TjItem};
 
 use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
 use crate::model::{Alignment, FormCheckbox, ParagraphBorder, TextFill, UnderlineStyle};

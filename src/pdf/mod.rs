@@ -12,6 +12,7 @@ mod charts_radar;
 mod charts_radial;
 pub(crate) mod color;
 mod comments;
+mod display_list;
 mod emf;
 mod fonts;
 mod footnotes;
@@ -44,8 +45,8 @@ mod wordart;
 
 use std::collections::{HashMap, HashSet};
 
-use pdf_writer::{Name, Pdf, Ref};
 use canvas::Content;
+use pdf_writer::{Name, Pdf, Ref};
 
 use crate::ConvertOptions;
 use crate::error::Error;
@@ -721,6 +722,11 @@ fn render_pass(
     let t0 = std::time::Instant::now();
     // Bars collected by a previous pass (headers, footers) must not leak in.
     layout::take_change_bars();
+    // The XObjects a previous pass recorded have other object numbers.
+    canvas::with_session(|session| {
+        session.xobjects.clear();
+        session.document = None;
+    });
     let mut pdf = Pdf::new();
     let mut next_id = 1i32;
     let mut alloc = || {
