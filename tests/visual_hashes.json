@@ -1991,6 +1991,13 @@
   "cases/justify-mixed-script-footnote": [
     "1b6e4b357f01b4a2182798ef8728d8d227a730fa4671a8281ec498a352c7f7da"
   ],
+  "cases/keep-next-auto-spacing": [
+    "fa2ec98cd9a329adc299336df8b7576cf1acb82e65a44ea28031a3fb00f48655",
+    "77cf7c8dfca97b9a042f4b8531158f56a517422fab26997daa266959a70494ba"
+  ],
+  "cases/keep-next-auto-spacing-fits": [
+    "836a9c1fca25c3bcbe89de24f06d4882c968f9bd52114799067a61dc8a7eb7a9"
+  ],
   "cases/keep-next-inline-image": [
     "6bcc687e1fa6ff660b20b7c53261b587e2105b493eccd490a1bffc441c4cff21",
     "8fe9275787da528b2f8567d24407b055f5a194f011312dc024032085247f36f3"
@@ -3390,6 +3397,10 @@
   "cases/toc-section-page-labels": [
     "154c890c0b0a098cdf79c9b84616a14887c69d7d20826d84c33760d96fb80e76",
     "361960787a4fa0e7e26296841a3d59e5fbc76576b6037e7b4810c1a7b1a9bb77"
+  ],
+  "cases/toc-table-cell-target-moved": [
+    "5faa47ae7d74e7318b6ecd14a19dc61286b3dc5e6140e3b5f2cb6560092c0a5f",
+    "6d15c64f702d77b665540d10e6649b7d1998455b4d345c8b28acfb66e6359f58"
   ],
   "cases/toc-table-cell-targets": [
     "7f2b6e6030a548f1005653f5e961a0c23c2850425824edf5c1aeef6519959e1c"

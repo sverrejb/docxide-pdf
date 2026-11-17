@@ -5704,6 +5704,14 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/keep-next-auto-spacing": {
+    "jaccard": 0.8371,
+    "ssim": 0.9739
+  },
+  "cases/keep-next-auto-spacing-fits": {
+    "jaccard": 0.9509,
+    "ssim": 0.9781
+  },
   "cases/keep-next-inline-image": {
     "jaccard": 0.9465,
     "ssim": 0.9748,
@@ -9671,6 +9679,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.4167,
     "a11y_text": 0.1398
+  },
+  "cases/toc-table-cell-target-moved": {
+    "jaccard": 0.8865,
+    "ssim": 0.9595
   },
   "cases/toc-table-cell-targets": {
     "jaccard": 0.9082,
