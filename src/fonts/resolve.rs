@@ -573,6 +573,7 @@ pub(crate) fn register_font(
     ctx: &FontContext,
 ) -> FontEntry {
     let t0 = Instant::now();
+    let _request = requests::begin(bold, italic);
     let refs = FontRefs {
         font: alloc(),
         descriptor: alloc(),

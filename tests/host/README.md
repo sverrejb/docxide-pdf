@@ -8,4 +8,5 @@ fixture in `src/fonts/testdata/nb-hyphen-native.ttf`; no third-party document or
 font data is included. This input needs no Word reference PDF.
 
 `tools/check-wasm-host.sh` embeds this input and the font in its wasm module,
-then verifies actual conversion with the fallback and with the registered font.
+then verifies actual conversion with the fallback and with the registered font,
+and the font requests of each.

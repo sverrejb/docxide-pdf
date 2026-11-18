@@ -189,21 +189,31 @@ On this target, environment configuration is ignored, font directory discovery
 defaults to off, and diagnostic timings are zero. The host supplies font bytes:
 
 ```rust
-use docxide_pdf::{clear_fonts, convert_docx_bytes_to_pdf_bytes, register_font, use_system_fonts};
+use docxide_pdf::{
+    clear_fonts, convert_docx_bytes_to_pdf_bytes, register_font, take_font_requests,
+    use_system_fonts,
+};
 
 use_system_fonts(false); // Also useful for deterministic native conversions.
 clear_fonts();
 register_font(font_bytes); // Vec<u8>: TrueType, OpenType, or a TTC collection.
 let pdf = convert_docx_bytes_to_pdf_bytes(&docx_bytes)?;
+let missing_fonts = take_font_requests();
 ```
 
 Registered faces take precedence over directory fonts of the same family and
 style. DOCX-embedded fonts remain available. Text no font covers uses
 standard-14 Helvetica (not embedded).
 
-Fonts and the directory-discovery policy are **thread-local**. Register fonts
-and convert on the same thread (or the same wasm instance). Fonts persist until
-`clear_fonts`.
+Missing-font requests group names in resolution order and carry the requested
+bold/italic flags, including a missing exact style that fell back to regular.
+Supply available missing faces and convert again; requests describe missing
+index entries, so an embedded DOCX font may already cover them.
+
+Fonts, the directory-discovery policy, and requests are **thread-local**.
+Register fonts, convert, and read requests on the same thread (or the same wasm
+instance). Fonts persist until `clear_fonts`; starting a conversion clears old
+requests, even if parsing fails, and `take_font_requests` drains them.
 
 Validation from a source checkout (tested with Rust 1.96 and Node.js):
 

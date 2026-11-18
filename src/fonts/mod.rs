@@ -3,6 +3,7 @@ mod discovery;
 mod embed;
 mod encoding;
 pub(crate) mod memory;
+pub(crate) mod requests;
 mod resolve;
 
 use crate::clock::Instant;
