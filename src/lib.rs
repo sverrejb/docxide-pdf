@@ -1,3 +1,4 @@
+mod clock;
 mod docx;
 mod error;
 mod fonts;
@@ -8,8 +9,8 @@ mod pdf;
 
 pub use error::Error;
 
+use crate::clock::Instant;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 /// Which view of a document's tracked changes to print.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -71,6 +72,10 @@ impl ConvertOptions {
     /// The defaults overridden by whichever `DOCXIDE_*` variables are set. A
     /// boolean variable is on unless its value is empty, `0` or `false`.
     pub fn from_env() -> Self {
+        // A bare wasm host has no process environment.
+        if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
+            return Self::new();
+        }
         Self::from_vars(|name| std::env::var(name).ok())
     }
 
@@ -186,6 +191,9 @@ pub fn convert_docx_bytes_to_pdf_bytes_with(
 /// The variables lost their old `DOCXSIDE_` prefix; failing loudly beats silently
 /// dropping someone's font directories and rendering with fallbacks.
 fn reject_old_env_vars() -> Result<(), Error> {
+    if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
+        return Ok(());
+    }
     match old_env_var(std::env::vars_os().map(|(key, _)| key)) {
         Some(name) => Err(Error::RenamedEnvVar(name)),
         None => Ok(()),

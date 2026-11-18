@@ -1,0 +1,32 @@
+name: Bare wasm
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/host/**'
+      - 'tools/*wasm*'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/host.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wasm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUSTUP_TOOLCHAIN: '1.96.0'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust and wasm target
+        run: rustup toolchain install 1.96.0 --profile minimal --target wasm32-unknown-unknown
+      - name: Check native library
+        run: cargo check --locked --lib --no-default-features
+      - name: Convert in WebAssembly
+        run: ./tools/check-wasm-host.sh
