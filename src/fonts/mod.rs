@@ -2,6 +2,7 @@ mod cache;
 mod discovery;
 mod embed;
 mod encoding;
+pub(crate) mod memory;
 mod resolve;
 
 use crate::clock::Instant;
@@ -335,7 +336,7 @@ pub(crate) fn font_file(
         return Some((data.clone(), 0));
     }
     let (path, index, ..) = font_index.find_font_file(name, false, false)?;
-    Some((std::fs::read(path).ok()?, index))
+    Some((memory::read_font(&path)?, index))
 }
 
 pub(crate) fn primary_font_name(name: &str) -> &str {

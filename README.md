@@ -185,13 +185,30 @@ This produces `target/wasm32-unknown-unknown/debug/libdocxide_pdf.rlib`, for lin
 into a Rust host that exports its own wasm interface. It does not produce a
 JavaScript package or browser bindings.
 
-On this target, environment configuration is ignored, font directories are not
-scanned, and diagnostic timings are zero. Text uses DOCX-embedded fonts, and
-standard-14 Helvetica (not embedded) for everything else.
+On this target, environment configuration is ignored, font directory discovery
+defaults to off, and diagnostic timings are zero. The host supplies font bytes:
+
+```rust
+use docxide_pdf::{clear_fonts, convert_docx_bytes_to_pdf_bytes, register_font, use_system_fonts};
+
+use_system_fonts(false); // Also useful for deterministic native conversions.
+clear_fonts();
+register_font(font_bytes); // Vec<u8>: TrueType, OpenType, or a TTC collection.
+let pdf = convert_docx_bytes_to_pdf_bytes(&docx_bytes)?;
+```
+
+Registered faces take precedence over directory fonts of the same family and
+style. DOCX-embedded fonts remain available. Text no font covers uses
+standard-14 Helvetica (not embedded).
+
+Fonts and the directory-discovery policy are **thread-local**. Register fonts
+and convert on the same thread (or the same wasm instance). Fonts persist until
+`clear_fonts`.
 
 Validation from a source checkout (tested with Rust 1.96 and Node.js):
 
 ```sh
+./tools/run-tests.sh --test host
 ./tools/check-wasm-host.sh
 ```
 

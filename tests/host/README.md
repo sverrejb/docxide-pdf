@@ -7,6 +7,5 @@ bookmarks `wasm_body` and `wasm_cell`, respectively. It names the geometric font
 fixture in `src/fonts/testdata/nb-hyphen-native.ttf`; no third-party document or
 font data is included. This input needs no Word reference PDF.
 
-`tools/check-wasm-host.sh` embeds this input in its wasm module and verifies
-that the bare wasm target converts it. No font is available there, so the text
-uses standard-14 Helvetica.
+`tools/check-wasm-host.sh` embeds this input and the font in its wasm module,
+then verifies actual conversion with the fallback and with the registered font.

@@ -8,6 +8,7 @@ mod model;
 mod pdf;
 
 pub use error::Error;
+pub use fonts::memory::{clear_fonts, register_font, use_system_fonts};
 
 use crate::clock::Instant;
 use std::path::{Path, PathBuf};

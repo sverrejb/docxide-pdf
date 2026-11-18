@@ -57,7 +57,7 @@ fn try_font(
         .font_index
         .find_font_file(candidate, bold, italic)
         .and_then(|(path, face_index, face_bold, face_italic)| {
-            let data = std::fs::read(&path).ok()?;
+            let data = memory::read_font(&path)?;
             Some(ResolvedFont {
                 metrics: embed(&data, face_index)?,
                 synthetic_bold: bold && !face_bold,
