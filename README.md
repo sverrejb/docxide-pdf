@@ -4,7 +4,7 @@
 
 Library and CLI for converting DOCX files to PDF, matching Microsoft Word's output as closely as possible.
 
-[Try the demo!](https://docxide-demo.fly.dev/)
+[Try the demo!](https://docxide.fly.dev/)
 
 **🫶 Accessible:** Output PDFs should be just as accessible as Word's export, or better: tagged structure, reading order, language and metadata that pass the same PDF/UA checks.
 
