@@ -89,7 +89,8 @@ src/
                  charts_format.rs / charts_radial.rs / charts_ex.rs / chart_legend.rs, smartart.rs,
                  wordart.rs, bidi.rs, comments.rs (comment pane), fonts.rs (per-document font set),
                  tagging.rs (PDF/UA structure tree), assembly.rs (pages, borders, document objects),
-                 objstm.rs (object streams), color.rs, helpers.rs (border geometry)
+                 objstm.rs (object streams), color.rs, helpers.rs (border geometry), bookmarks.rs
+                 (where bookmarked paragraphs were laid out, for `take_bookmark_positions`)
   fonts/       — mod.rs (FontEntry, metrics, font keys), resolve.rs (resolution, substitution, fallback,
                  registration), discovery.rs (cross-platform search), cache.rs (TSV index cache), embed.rs
                  (subsetting, kern/GPOS, line metrics), encoding.rs (WinAnsi)
@@ -98,6 +99,7 @@ src/
 tests/
   suite/main.rs       — the one integration-test binary; modules visual_comparison, accessibility,
                         text_boundary, font_validation, image_count, page_geometry, file_size,
+                        bookmark_positions,
                         libreoffice_comparison (DOCXIDE_LO_COMPARE=1), speed (#[ignore])
   common/             — shared harness: fixtures, conversion, baselines, per-case score caches,
                         metrics.rs (rasterization, Jaccard/SSIM), a11y.rs, text_boundary.rs

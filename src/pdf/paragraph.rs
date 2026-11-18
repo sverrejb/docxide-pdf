@@ -2071,6 +2071,7 @@ pub(super) fn render_paragraph_block(
         if lines_that_fit >= min_split_lines && lines_that_fit < lines.len() {
             let first_part = &lines[..lines_that_fit];
             state.pb.slot_top -= inter_gap;
+            let bookmark_top = state.pb.slot_top;
             layout::set_change_bar_extension(
                 own_space_before(inter_gap, state.prev_space_after),
                 effective_space_after,
@@ -2166,6 +2167,7 @@ pub(super) fn render_paragraph_block(
 
             // The column ends below the lines that stay (its separator reaches them).
             state.pb.slot_top -= text_drop + lines_height(first_part, line_h, para_metrics);
+            bookmarks::mark(&mut state.pb.links, para, bookmark_top, state.pb.slot_top);
             state.advance_column_or_page(col_count, sect_idx, sp, ctx);
 
             let baseline_offset2 = if grid_snapped {
@@ -2443,6 +2445,8 @@ pub(super) fn render_paragraph_block(
                         tag,
                         grid,
                     );
+                    let top = seg_baseline + baseline_offset2;
+                    bookmarks::mark(&mut state.pb.links, para, top, top - seg_h(from, to));
                 }
                 state.pb.end_tag();
 
@@ -2582,6 +2586,7 @@ pub(super) fn render_paragraph_block(
     content_h += d;
     lines_h += d;
 
+    let bookmark_top = state.pb.slot_top;
     for bookmark in &para.bookmarks {
         state.bookmark_positions.insert(
             bookmark.clone(),
@@ -3191,6 +3196,7 @@ pub(super) fn render_paragraph_block(
     }
 
     state.pb.slot_top -= content_h + bdr_top_pad + bdr_bottom_extent;
+    bookmarks::mark(&mut state.pb.links, para, bookmark_top, state.pb.slot_top);
     state.prev_between_below = if bottom_collapses {
         between_space(para)
     } else {

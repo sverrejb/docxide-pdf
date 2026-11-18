@@ -7,6 +7,7 @@ mod model;
 mod pdf;
 
 pub use error::Error;
+pub use pdf::bookmarks::{BookmarkPosition, take_bookmark_positions};
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -148,6 +149,7 @@ pub fn convert_docx_to_pdf_with(
     path: impl AsRef<Path>,
     options: &ConvertOptions,
 ) -> Result<(), Error> {
+    reset_conversion_metadata();
     reject_old_env_vars()?;
     let doc = docx::parse(input.as_ref(), options.revisions)?;
     render_and_write(&doc, path, options)
@@ -163,6 +165,7 @@ pub fn convert_docx_bytes_to_pdf_with(
     path: impl AsRef<Path>,
     options: &ConvertOptions,
 ) -> Result<(), Error> {
+    reset_conversion_metadata();
     reject_old_env_vars()?;
     let doc = docx::parse_bytes(input, options.revisions)?;
     render_and_write(&doc, path, options)
@@ -178,9 +181,14 @@ pub fn convert_docx_bytes_to_pdf_bytes_with(
     input: &[u8],
     options: &ConvertOptions,
 ) -> Result<Vec<u8>, Error> {
+    reset_conversion_metadata();
     reject_old_env_vars()?;
     let doc = docx::parse_bytes(input, options.revisions)?;
     pdf::render(&doc, options)
+}
+
+fn reset_conversion_metadata() {
+    take_bookmark_positions();
 }
 
 /// The variables lost their old `DOCXSIDE_` prefix; failing loudly beats silently

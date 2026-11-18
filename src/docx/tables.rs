@@ -848,6 +848,11 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             ppr,
                             para_style.and_then(|s| s.frame_attrs.as_ref()),
                         ),
+                        bookmarks: p
+                            .children()
+                            .filter(|n| n.has_tag_name((WML_NS, "bookmarkStart")))
+                            .filter_map(|n| n.attribute((WML_NS, "name")).map(str::to_string))
+                            .collect(),
                         ..numbering.into_paragraph()
                     }));
                     super::paragraph::merge_field_code_paragraphs(&mut cell_blocks);

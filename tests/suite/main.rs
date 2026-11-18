@@ -5,6 +5,7 @@
 mod common;
 
 mod accessibility;
+mod bookmark_positions;
 mod file_size;
 mod font_validation;
 mod image_count;

@@ -172,6 +172,33 @@ convert_docx_to_pdf_with("input.docx", "output.pdf", &options)?;
 
 The functions without an options argument use `ConvertOptions::from_env()`, so the same settings can come from `DOCXIDE_*` environment variables (see [Configuration](#configuration)). Options passed explicitly never read the environment.
 
+### Bookmark positions
+
+After a conversion, `take_bookmark_positions` returns where each bookmarked
+paragraph was laid out, so a host can map a place in the PDF back to the
+document (to scroll to it or highlight it):
+
+```rust
+use docxide_pdf::{convert_docx_bytes_to_pdf_bytes, take_bookmark_positions};
+
+let pdf = convert_docx_bytes_to_pdf_bytes(&docx_bytes)?;
+for p in take_bookmark_positions() {
+    println!("{}: page {} top {} → page {} bottom {}", p.name, p.page, p.top, p.end_page, p.bottom);
+}
+```
+
+A position describes the paragraph containing `bookmarkStart`: its first
+fragment's page/top and last fragment's page/bottom, including table cells,
+nested tables and fragments spanning pages or columns. Positions come from the
+final render pass and include section vertical alignment. Pages are zero-based
+and coordinates are PDF points measured upward from the page bottom. This is
+not a multi-paragraph bookmark-range API; headers, footers and text boxes are
+excluded.
+
+Positions are **thread-local**: convert and read them on the same thread.
+Starting a conversion clears the previous positions, even if parsing fails, and
+`take_bookmark_positions` drains them.
+
 ## Works well with `docxide-template`
 
 [`docxide-template`](https://github.com/sverrejb/docxide-template) is a sibling crate for type-safe MS Word templates. It scans a folder of `.docx` files at compile time and generates a Rust struct per template, with `{Placeholder}` patterns turned into snake_case fields. Pair it with `docxide-pdf` to go from template → filled DOCX → PDF in a single, fully in-memory pipeline:
