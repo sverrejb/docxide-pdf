@@ -738,7 +738,9 @@ fn render_pass(
     options: &ConvertOptions,
 ) -> Result<(Vec<u8>, BodyPageFields, Vec<f32>, Option<BookmarkPages>), Error> {
     let debug_wrap = options.debug_wrap;
-    let t0 = crate::clock::Instant::now();
+    // Bare wasm has no clock: no timings there.
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    let t0 = std::time::Instant::now();
     // Bars collected by a previous pass (headers, footers) must not leak in.
     layout::take_change_bars();
     // The XObjects a previous pass recorded have other object numbers.
@@ -759,6 +761,7 @@ fn render_pass(
 
     let (seen_fonts, font_order) = collect_and_register_fonts(doc, &mut pdf, &mut alloc, options);
     let smartart_font_key = font_order.first().map(|s| s.as_str()).unwrap_or("");
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     let t_fonts = t0.elapsed();
 
     let images = embed_all_images(
@@ -769,6 +772,7 @@ fn render_pass(
         options.resample_pictures,
     );
 
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     let t_images = t0.elapsed();
 
     // Pre-compute footnote and endnote display order: scan body runs for
@@ -1688,6 +1692,7 @@ fn render_pass(
         *last -= state.prev_space_after;
     }
 
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     let t_layout = t0.elapsed();
     let bookmark_fragments = bookmarks::collect(&mut state.pb.all_links);
 
@@ -1816,6 +1821,7 @@ fn render_pass(
         }
     }
 
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     let t_headers = t0.elapsed();
 
     // Phase 2d: render headers/footers into separate content streams (behind body)
@@ -2035,16 +2041,18 @@ fn render_pass(
         &state.pb.tags,
     );
 
-    let t_assembly = t0.elapsed();
-
-    log::info!(
-        "Render phases: fonts={:.1}ms, images={:.1}ms, layout={:.1}ms, headers={:.1}ms, assembly={:.1}ms",
-        t_fonts.as_secs_f64() * 1000.0,
-        (t_images - t_fonts).as_secs_f64() * 1000.0,
-        (t_layout - t_images).as_secs_f64() * 1000.0,
-        (t_headers - t_layout).as_secs_f64() * 1000.0,
-        (t_assembly - t_headers).as_secs_f64() * 1000.0,
-    );
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    {
+        let t_assembly = t0.elapsed();
+        log::info!(
+            "Render phases: fonts={:.1}ms, images={:.1}ms, layout={:.1}ms, headers={:.1}ms, assembly={:.1}ms",
+            t_fonts.as_secs_f64() * 1000.0,
+            (t_images - t_fonts).as_secs_f64() * 1000.0,
+            (t_layout - t_images).as_secs_f64() * 1000.0,
+            (t_headers - t_layout).as_secs_f64() * 1000.0,
+            (t_assembly - t_headers).as_secs_f64() * 1000.0,
+        );
+    }
 
     let measured_pages: BookmarkPages = (
         state.bookmark_positions,

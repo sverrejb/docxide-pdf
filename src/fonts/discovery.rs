@@ -1,10 +1,10 @@
-use crate::clock::Instant;
 use std::collections::{HashMap, HashSet};
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
+use std::time::Instant;
 
 use memmap2::Mmap;
 use ttf_parser::Face;

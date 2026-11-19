@@ -1,5 +1,4 @@
 pub mod display;
-mod clock;
 mod docx;
 mod error;
 mod fonts;
@@ -11,7 +10,6 @@ mod pdf;
 pub use error::Error;
 pub use pdf::bookmarks::{BookmarkPosition, take_bookmark_positions};
 
-use crate::clock::Instant;
 use std::path::{Path, PathBuf};
 
 /// Which view of a document's tracked changes to print.
@@ -236,21 +234,26 @@ fn render_and_write(
     options: &ConvertOptions,
 ) -> Result<(), Error> {
     let path = path.as_ref().with_extension("pdf");
-    let t0 = Instant::now();
+    // Bare wasm has no clock: no timings there.
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    let t0 = std::time::Instant::now();
 
     let bytes = pdf::render(doc, options)?;
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     let t_render = t0.elapsed();
 
     std::fs::write(&path, &bytes)?;
-    let t_total = t0.elapsed();
-
-    log::info!(
-        "Timing: render={:.1}ms, write={:.1}ms, total={:.1}ms (output {} bytes)",
-        t_render.as_secs_f64() * 1000.0,
-        (t_total - t_render).as_secs_f64() * 1000.0,
-        t_total.as_secs_f64() * 1000.0,
-        bytes.len(),
-    );
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    {
+        let t_total = t0.elapsed();
+        log::info!(
+            "Timing: render={:.1}ms, write={:.1}ms, total={:.1}ms (output {} bytes)",
+            t_render.as_secs_f64() * 1000.0,
+            (t_total - t_render).as_secs_f64() * 1000.0,
+            t_total.as_secs_f64() * 1000.0,
+            bytes.len(),
+        );
+    }
 
     Ok(())
 }

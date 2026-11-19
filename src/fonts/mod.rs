@@ -4,7 +4,6 @@ mod embed;
 mod encoding;
 mod resolve;
 
-use crate::clock::Instant;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;

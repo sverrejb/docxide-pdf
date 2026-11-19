@@ -576,7 +576,9 @@ pub(crate) fn register_font(
     alloc: &mut impl FnMut() -> Ref,
     ctx: &FontContext,
 ) -> FontEntry {
-    let t0 = Instant::now();
+    // Bare wasm has no clock: no timings there.
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    let t0 = std::time::Instant::now();
     let refs = FontRefs {
         font: alloc(),
         descriptor: alloc(),
@@ -816,6 +818,7 @@ pub(crate) fn register_font(
         entry.set_line_box(BAHNSCHRIFT_ASCENT, BAHNSCHRIFT_LINE_H);
     }
 
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     log::debug!(
         "register_font: {font_name} bold={bold} italic={italic} → {:.1}ms",
         t0.elapsed().as_secs_f64() * 1000.0,
