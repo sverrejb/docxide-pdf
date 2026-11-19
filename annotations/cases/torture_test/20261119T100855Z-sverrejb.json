@@ -1,0 +1,12 @@
+{
+  "case": "cases/torture_test",
+  "page": 1,
+  "source": "Generated",
+  "x_pt": 151.3,
+  "y_pt": 297.6,
+  "note": "Red glow shows visible banding. Also color is a bit off.",
+  "author": "sverrejb",
+  "created": "2026-11-19T10:08:55Z",
+  "generated": "0.21.4 @27555200",
+  "fixed": false
+}
