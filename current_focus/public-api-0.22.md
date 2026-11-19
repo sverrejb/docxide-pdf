@@ -80,10 +80,54 @@ memory file `pr-review-policy.md`. In short:
 - push with `git push origin review/pr-N:main` from the worktree, only after
   the user's OK.
 
-**During steps 1–4, skip API-shape polish.** Step 5 replaces those APIs, so
+**During steps 1–4, skip API-shape polish.** Order changed 2026-11-19 (user): the wasm stack first, then #175. Step 5 replaces those APIs, so
 judge each PR on security, correctness and byte-identical output only.
 
-### Step 1: #175 (sboily), "Display list: marked content, structure tree and outline"
+### Step 1: #170 (banduk), "Convert on bare wasm32-unknown-unknown"
+
+- The base of the wasm stack (#170 → #171 → #172).
+- Reviewed 2026-11-19 on `review/pr-170`. User decisions:
+  - **No stand-in clock.** The PR's `src/clock.rs` (an `Instant` that always
+    says zero) is gone; the timing statements and their log lines carry
+    `#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]`.
+  - Kept: the CI workflow `.github/workflows/host.yml`, the smoke test
+    (`tools/check-wasm-host.sh`, `.mjs`, `tools/wasm_host_smoke.rs`,
+    `tests/host/`), the README section and the CLAUDE.md command line.
+- The smoke script now builds the host as a Cargo `[[example]]` (cdylib):
+  the PR's hand-written `rustc` call broke on Rust 1.100's new target-dir
+  layout. Checked on Rust 1.99 and 1.100.
+- Measured on bare wasm: `std::env::var` returns nothing, but
+  `std::env::vars_os` **panics**, and so does `Instant::now`. File access
+  returns errors, no panic.
+
+### Step 2: #171 (banduk), "Register fonts in memory per thread"
+
+- Stacked on #170: review only the top commit, `1d70662eb`.
+- Public: `register_font(Vec<u8>) -> usize`, `clear_fonts()`,
+  `use_system_fonts(bool)`, all thread-local; new `src/fonts/memory.rs`;
+  `tests/suite/host.rs`.
+- This is an *input* side channel. See the open question below. Merge it as
+  is.
+- Built on #170's original commit, so expect conflicts: it still imports
+  `crate::clock::Instant` (in context lines) and its CLAUDE.md line mentions
+  `clock.rs`. Both are gone after the #170 review; use `std::time::Instant`
+  under the bare-wasm `#[cfg(not(...))]` wherever it adds timing. #172 has
+  the same (`fonts/resolve.rs` `t0`).
+
+### Step 3: #172 (banduk), "Report the font lookups a conversion missed"
+
+- Stacked on #171: review only the top commit, `45ca9312a`.
+- Public: `FontRequest`, `take_font_requests()` (thread-local); new
+  `src/fonts/requests.rs`.
+- Known conflict: `reset_conversion_metadata()` in `src/lib.rs` must call
+  both `take_bookmark_positions()` and `take_font_requests()`. The README
+  and CLAUDE.md lists also conflict trivially.
+- The PR says 1243/1245 fixtures are byte-identical. case30 and charts_ex
+  differ in the last float digit from release codegen partitioning;
+  `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1` makes them identical. Verify that
+  claim; don't take it on trust.
+
+### Step 4: #175 (sboily), "Display list: marked content, structure tree and outline"
 
 - Independent of the rest; adds `Item::BeginMarked`/`EndMarked`,
   `Document::structure`, `Document::outline`, `Info::pdf_ua` and `StructType`.
@@ -100,44 +144,6 @@ judge each PR on security, correctness and byte-identical output only.
   `BookmarkPosition.top` includes it. Our PDF's outline destinations have the
   same offset. It is a separate fix: apply `valign_offsets` to
   `heading_entries` the way `bookmarks::store` does.
-
-### Step 2: #170 (banduk), "Convert on bare wasm32-unknown-unknown"
-
-- The base of the wasm stack (#170 → #171 → #172).
-- Non-source files need the user's approval:
-  - `.github/workflows/host.yml`
-  - `tools/check-wasm-host.sh`, `tools/check-wasm-host.mjs`,
-    `tools/wasm_host_smoke.rs`
-  - `tests/host/input.docx` + `tests/host/README.md`
-  - README and CLAUDE.md edits
-
-  Ask the user about each. Policy defaults: contributor tooling stays on the
-  contributor's machine, and a new CI workflow and a new language (JS) are
-  attack surface.
-- Adds `src/clock.rs` (an `Instant` stand-in) and skips font discovery and
-  the env check on wasm.
-
-### Step 3: #171 (banduk), "Register fonts in memory per thread"
-
-- Stacked on #170: review only the top commit, `1d70662eb`.
-- Public: `register_font(Vec<u8>) -> usize`, `clear_fonts()`,
-  `use_system_fonts(bool)`, all thread-local; new `src/fonts/memory.rs`;
-  `tests/suite/host.rs`.
-- This is an *input* side channel. See the open question below. Merge it as
-  is.
-
-### Step 4: #172 (banduk), "Report the font lookups a conversion missed"
-
-- Stacked on #171: review only the top commit, `45ca9312a`.
-- Public: `FontRequest`, `take_font_requests()` (thread-local); new
-  `src/fonts/requests.rs`.
-- Known conflict: `reset_conversion_metadata()` in `src/lib.rs` must call
-  both `take_bookmark_positions()` and `take_font_requests()`. The README
-  and CLAUDE.md lists also conflict trivially.
-- The PR says 1243/1245 fixtures are byte-identical. case30 and charts_ex
-  differ in the last float digit from release codegen partitioning;
-  `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1` makes them identical. Verify that
-  claim; don't take it on trust.
 
 ### Step 5: our 0.22 refactor (separate commits, one concern each)
 
@@ -162,7 +168,8 @@ Work in a worktree. Suggested commits:
    - The old-`DOCXSIDE_` check moves into `ConvertOptions::from_env()`. It
      can no longer return an error from there, so pick one: `from_env`
      returns `Result`, or it panics, or it logs. **Ask the user.**
-   - This also simplifies #170's wasm `cfg` around the check.
+   - The check uses `std::env::vars_os`, which panics on bare wasm: keep
+     #170's `cfg!` guard when it moves into `from_env`.
 4. **`Error`.**
    - Add `#[non_exhaustive]`.
    - Replace `Zip(ZipError)` and `Xml(roxmltree::Error)` with variants that
@@ -244,9 +251,9 @@ Work in a worktree. Suggested commits:
 | Step | State |
 |---|---|
 | #169 bookmark positions | merged `a23175b1b` (2026-11-19) |
-| 1. #175 display tags | not started |
-| 2. #170 bare wasm | not started |
-| 3. #171 memory fonts | not started |
-| 4. #172 font requests | not started |
+| 1. #170 bare wasm | reviewed on `review/pr-170`, awaiting push |
+| 2. #171 memory fonts | not started |
+| 3. #172 font requests | not started |
+| 4. #175 display tags | not started |
 | 5. 0.22 refactor | not started |
 | Release 0.22.0 | not started |
