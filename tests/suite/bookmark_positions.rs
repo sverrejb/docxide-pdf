@@ -4,7 +4,8 @@ use std::io::{Cursor, Write};
 use std::sync::{Arc, Barrier};
 
 use docxide_pdf::{
-    BookmarkPosition, ConvertOptions, convert_docx_bytes_to_pdf_bytes_with, take_bookmark_positions,
+    BookmarkPosition, ConvertOptions, convert_docx_bytes_to_pdf_bytes_with, layout_docx_bytes_with,
+    take_bookmark_positions,
 };
 
 fn document(body: &str, section: &str) -> Vec<u8> {
@@ -148,4 +149,21 @@ fn bookmark_positions_belong_to_the_converting_thread() {
     for thread in threads {
         thread.join().unwrap();
     }
+}
+
+#[test]
+fn bookmark_positions_from_layout_leave_no_links_and_clear_on_failure() {
+    let cell = paragraph("cell", "<w:t>Cell</w:t>");
+    let body = format!(
+        "{}<w:tbl><w:tr><w:tc>{cell}</w:tc></w:tr></w:tbl>",
+        paragraph("body", "<w:t>Body</w:t>")
+    );
+    let options = ConvertOptions::new().font_cache(false);
+    let layout = layout_docx_bytes_with(&document(&body, ""), &options).unwrap();
+    assert!(layout.pages.iter().all(|page| page.links.is_empty()));
+    assert_eq!(take_bookmark_positions().len(), 2);
+
+    convert(&document(&body, ""));
+    assert!(layout_docx_bytes_with(b"not a zip", &options).is_err());
+    assert!(take_bookmark_positions().is_empty());
 }
