@@ -360,7 +360,7 @@ pub(crate) fn font_file(
     font_index: &FontIndex,
 ) -> Option<(Vec<u8>, u32)> {
     if let Some(data) = embedded.get(&(name.to_lowercase(), false, false)) {
-        return Some((data.clone(), 0));
+        return Some((data.to_vec(), 0));
     }
     let (path, index, ..) = font_index.find_font_file(name, false, false)?;
     Some((std::fs::read(path).ok()?, index))
@@ -406,7 +406,7 @@ pub(crate) fn font_key_for(font_name: &str, bold: bool, italic: bool) -> String 
     buf
 }
 
-pub(crate) type EmbeddedFonts = HashMap<(String, bool, bool), Vec<u8>>;
+pub(crate) type EmbeddedFonts = HashMap<(String, bool, bool), std::sync::Arc<Vec<u8>>>;
 
 pub(crate) type FontFiles = RefCell<HashMap<Vec<u8>, Ref>>;
 

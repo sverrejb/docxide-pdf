@@ -302,7 +302,7 @@ pub struct Document {
     pub line_spacing: LineSpacing,
     /// Fonts embedded in the DOCX (deobfuscated TTF/OTF bytes).
     /// Key: (lowercase_font_name, bold, italic)
-    pub embedded_fonts: HashMap<(String, bool, bool), Vec<u8>>,
+    pub embedded_fonts: HashMap<(String, bool, bool), std::sync::Arc<Vec<u8>>>,
     pub footnotes: HashMap<u32, Footnote>,
     /// footnotes.xml's separator paragraph: Word lays it out above a page's
     /// notes like any paragraph and draws the rule as its strikethrough.

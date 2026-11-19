@@ -301,14 +301,6 @@ fn palette_png(data: &[u8]) -> Option<PaletteImage> {
     })
 }
 
-/// Records a picture for the display list while a recording session is open
-/// (`canvas::recording`); `image` is only built then.
-fn capture(reference: Ref, image: Image, soft_mask: Option<Ref>) {
-    if canvas::recording() {
-        canvas::capture_image(reference, image, soft_mask);
-    }
-}
-
 /// Write an image XObject into the PDF with the given filter and data.
 /// Optionally attaches a soft mask (alpha channel) reference.
 /// Write an 8-bit image XObject, its color space picked from the component
@@ -322,9 +314,9 @@ fn write_image_xobject(
     components: u8,
     smask: Option<Ref>,
 ) {
-    capture(
+    canvas::capture_image(
         xobj_ref,
-        Image {
+        || Image {
             width: w,
             height: h,
             color_space: match components {
@@ -374,9 +366,9 @@ fn write_gray_mask_xobject(
     h: u32,
     interpolate: bool,
 ) {
-    capture(
+    canvas::capture_image(
         mask_ref,
-        Image {
+        || Image {
             width: w,
             height: h,
             color_space: ImageColorSpace::Gray,
@@ -411,9 +403,9 @@ fn write_solid_color_with_gray_mask(
     mask_h: u32,
 ) {
     write_gray_mask_xobject(pdf, mask_ref, compressed_mask, mask_w, mask_h, true);
-    capture(
+    canvas::capture_image(
         color_ref,
-        Image {
+        || Image {
             width: 1,
             height: 1,
             color_space: ImageColorSpace::Rgb,
@@ -618,9 +610,9 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                         .stream(lookup_ref, &lookup)
                         .filter(Filter::FlateDecode);
                     let data = miniz_oxide::deflate::compress_to_vec_zlib(&p.rows, 6);
-                    capture(
+                    canvas::capture_image(
                         xobj_ref,
-                        Image {
+                        || Image {
                             width: p.width,
                             height: p.height,
                             color_space: ImageColorSpace::IndexedRgb {
@@ -663,9 +655,9 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                             Some(img) => img,
                             None => {
                                 log::warn!("PNG decode failed — writing 1x1 placeholder");
-                                capture(
+                                canvas::capture_image(
                                     xobj_ref,
-                                    Image {
+                                    || Image {
                                         width: 1,
                                         height: 1,
                                         color_space: ImageColorSpace::Rgb,
@@ -748,9 +740,9 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 if bilevel && !has_alpha && !img.recolored() {
                     let packed = pack_bilevel(&rgb_data, w, h);
                     let data = miniz_oxide::deflate::compress_to_vec_zlib(&packed, 6);
-                    capture(
+                    canvas::capture_image(
                         xobj_ref,
-                        Image {
+                        || Image {
                             width: w,
                             height: h,
                             color_space: ImageColorSpace::Gray,

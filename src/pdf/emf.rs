@@ -7,8 +7,8 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use super::canvas::Content;
-use pdf_writer::{Name, Pdf, Rect, Ref, Str};
+use super::canvas::{Content, TjItem};
+use pdf_writer::{Name, Pdf, Rect, Ref};
 
 use super::color::{fill_rgb, stroke_rgb};
 use crate::docx::emf::{EmfRecord, FillRule, for_each_record, parse_header};
@@ -525,21 +525,19 @@ impl Translator<'_> {
         fill_rgb(c, self.state.text_color);
         let (ex, ey) = (sx * em as f32, sy * em as f32);
         c.set_text_matrix([ex * cos, ex * sin, -ey * sin, ey * cos, u, v]);
-        let mut tj = c.show_positioned();
-        let mut items = tj.items();
+        let mut items = Vec::with_capacity(chars.len() * 2);
         let mut buf = [0u8; 4];
         for (i, &ch) in chars.iter().enumerate() {
-            items.show(Str(&entry.encode(ch.encode_utf8(&mut buf))));
+            items.push(TjItem::Text(entry.encode(ch.encode_utf8(&mut buf))));
             if i + 1 < chars.len() {
                 // TJ subtracts thousandths of the em from the glyph's own advance.
                 let adjust = entry.char_width_1000(ch) as f64 - advances[i] * 1000.0 / em;
                 if adjust.abs() > 0.01 {
-                    items.adjust(adjust as f32);
+                    items.push(TjItem::Adjust(adjust as f32));
                 }
             }
         }
-        drop(items);
-        drop(tj);
+        c.show_positioned(&items);
         c.end_text();
     }
 }

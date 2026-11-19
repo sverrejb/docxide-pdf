@@ -344,7 +344,7 @@ fn show_kerned(content: &mut Content, entry: &FontEntry, text: &str, boundary_sp
         run.push(' ');
     }
     items.push(TjItem::Text(entry.encode(&run)));
-    write_tj(content, &items);
+    content.show_array(&items);
 }
 
 /// Each character of `text` with the TJ adjustment its pair kerning puts
@@ -372,12 +372,6 @@ fn placed_move(pen: &mut f32, x: f32, advance: f32) -> f32 {
     adjust
 }
 
-/// A TJ array written compactly, `[(ab)9(cd)]` as Word writes it
-/// (`canvas::TjItem`): about 3% of a text page.
-fn write_tj(content: &mut Content, items: &[TjItem]) {
-    content.show_array(items);
-}
-
 /// Draws `glyphs` (text, x, advance) in the order given, each at its own x
 /// from the pen's start, with TJ moves between them (`placed_move`). Moves
 /// and advances scale alike with Tz, so all of this is in thousandths of the
@@ -401,7 +395,7 @@ fn show_placed(
     if let Some(t) = trailing {
         items.push(TjItem::Text(entry.encode(t)));
     }
-    write_tj(content, &items);
+    content.show_array(&items);
     pen
 }
 
@@ -467,7 +461,7 @@ impl TjRun {
         if self.items.is_empty() {
             return;
         }
-        write_tj(content, &self.items);
+        content.show_array(&self.items);
         self.items.clear();
     }
 }

@@ -214,7 +214,6 @@ impl<'a> Builder<'a> {
             Some(Captured::Image(..)) => self.image(reference).map(Item::Image),
             Some(Captured::Form {
                 bbox,
-                matrix,
                 items,
                 xobjects,
             }) => {
@@ -224,14 +223,10 @@ impl<'a> Builder<'a> {
                 }
                 let local: HashMap<String, i32> = xobjects.iter().cloned().collect();
                 let [x0, y0, x1, y1] = *bbox;
-                let mut group = Vec::new();
-                if *matrix != IDENTITY {
-                    group.push(Item::Transform(*matrix));
-                }
-                group.push(Item::Clip {
+                let mut group = vec![Item::Clip {
                     path: Path(vec![Segment::Rect(x0, y0, x1 - x0, y1 - y0)]),
                     fill_rule: FillRule::NonZero,
-                });
+                }];
                 let saved = std::mem::take(&mut self.text_ends);
                 group.extend(self.items(items.clone(), Some(&local), depth + 1));
                 self.text_ends = saved;

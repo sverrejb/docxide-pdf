@@ -51,7 +51,7 @@ struct EmbedInfo {
 }
 
 pub(super) struct FontTableResult {
-    pub embedded_fonts: HashMap<(String, bool, bool), Vec<u8>>,
+    pub embedded_fonts: HashMap<(String, bool, bool), std::sync::Arc<Vec<u8>>>,
     pub font_table: FontTable,
 }
 
@@ -162,7 +162,7 @@ pub(super) fn parse_font_table<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> 
         );
         embedded_fonts.insert(
             (info.font_name.to_lowercase(), info.bold, info.italic),
-            data,
+            std::sync::Arc::new(data),
         );
     }
 

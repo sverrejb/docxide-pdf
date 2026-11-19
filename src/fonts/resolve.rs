@@ -79,7 +79,7 @@ fn try_font(
             synthetic_bold: false,
             synthetic_italic: false,
             font_path: None,
-            embedded_data: Some(std::sync::Arc::new(data.clone())),
+            embedded_data: Some(data.clone()),
             face_index: 0,
         })
     })
@@ -837,7 +837,7 @@ mod tests {
 
     #[test]
     fn a_face_used_under_two_styles_embeds_one_font_file() {
-        let face = include_bytes!("testdata/nb-hyphen-native.ttf").to_vec();
+        let face = std::sync::Arc::new(include_bytes!("testdata/nb-hyphen-native.ttf").to_vec());
         let embedded: EmbeddedFonts = [false, true]
             .map(|bold| (("synthetic hyphen".to_string(), bold, false), face.clone()))
             .into();

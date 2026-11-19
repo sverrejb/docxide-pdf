@@ -59,7 +59,6 @@ pub(crate) enum Captured {
     /// resources name.
     Form {
         bbox: [f32; 4],
-        matrix: Matrix,
         items: Vec<Rec>,
         xobjects: Vec<(String, i32)>,
     },
@@ -83,12 +82,13 @@ pub(crate) fn with_session(f: impl FnOnce(&mut Session)) {
     });
 }
 
-/// Records a written image XObject.
-pub(crate) fn capture_image(reference: Ref, image: Image, soft_mask: Option<Ref>) {
+/// Records a written image XObject; `image` is only built while a session is
+/// open, so plain conversions do not copy picture bytes.
+pub(crate) fn capture_image(reference: Ref, image: impl FnOnce() -> Image, soft_mask: Option<Ref>) {
     with_session(|s| {
         s.xobjects.insert(
             reference.get(),
-            Captured::Image(image, soft_mask.map(Ref::get)),
+            Captured::Image(image(), soft_mask.map(Ref::get)),
         );
     });
 }
@@ -106,7 +106,6 @@ pub(crate) fn capture_form(
             reference.get(),
             Captured::Form {
                 bbox,
-                matrix: IDENTITY,
                 items,
                 xobjects: xobjects
                     .iter()
@@ -117,31 +116,24 @@ pub(crate) fn capture_form(
     });
 }
 
-/// An open recording session; closing it (or dropping it) restores what was
-/// open before.
-pub(crate) struct Recording {
-    previous: Option<Session>,
-}
+/// An open recording session; dropping it closes the session.
+pub(crate) struct Recording;
 
 impl Recording {
     pub(crate) fn start() -> Self {
-        let previous = SESSION.with(|s| s.borrow_mut().replace(Session::default()));
-        Recording { previous }
+        SESSION.with(|s| *s.borrow_mut() = Some(Session::default()));
+        Recording
     }
 
     /// The document the last pass recorded.
-    pub(crate) fn finish(mut self) -> Option<DisplayDocument> {
-        let previous = self.previous.take();
-        SESSION
-            .with(|s| std::mem::replace(&mut *s.borrow_mut(), previous))
-            .and_then(|session| session.document)
+    pub(crate) fn finish(self) -> Option<DisplayDocument> {
+        SESSION.with(|s| s.borrow_mut().as_mut()?.document.take())
     }
 }
 
 impl Drop for Recording {
     fn drop(&mut self) {
-        let previous = self.previous.take();
-        SESSION.with(|s| *s.borrow_mut() = previous);
+        SESSION.with(|s| *s.borrow_mut() = None);
     }
 }
 
@@ -328,17 +320,12 @@ impl Content {
         self
     }
 
-    /// `gs`: only the layout's fill opacities (`GSa{percent}`, see
-    /// `color::set_fill_alpha`) change what is recorded.
-    pub(crate) fn set_parameters(&mut self, dict: Name) -> &mut Self {
-        self.inner.set_parameters(dict);
-        let alpha = dict
-            .0
-            .strip_prefix(b"GSa")
-            .and_then(|pct| std::str::from_utf8(pct).ok()?.parse::<u8>().ok());
-        if let Some(pct) = alpha {
-            self.record(|r| r.state.fill_alpha = f32::from(pct) / 100.0);
-        }
+    /// `gs` with the page's `GSa{pct}` ExtGState (see assembly): fill at
+    /// `pct` percent opacity.
+    pub(crate) fn set_fill_alpha(&mut self, pct: u8) -> &mut Self {
+        self.inner
+            .set_parameters(Name(format!("GSa{pct}").as_bytes()));
+        self.record(|r| r.state.fill_alpha = f32::from(pct) / 100.0);
         self
     }
 
@@ -382,8 +369,7 @@ impl Content {
         name: Name,
     ) -> &mut Self {
         self.inner.set_fill_pattern(tint, name);
-        let name = String::from_utf8_lossy(name.0).into_owned();
-        self.record(|r| r.state.fill = FillColor::Pattern(name));
+        self.record(|r| r.state.fill = FillColor::Pattern(lossy(name)));
         self
     }
 
@@ -491,8 +477,7 @@ impl Content {
 
     pub(crate) fn set_font(&mut self, font: Name, size: f32) -> &mut Self {
         self.inner.set_font(font, size);
-        let name = String::from_utf8_lossy(font.0).into_owned();
-        self.record(|r| r.state.font = Some((name, size)));
+        self.record(|r| r.state.font = Some((lossy(font), size)));
         self
     }
 
@@ -545,33 +530,38 @@ impl Content {
 
     pub(crate) fn show(&mut self, text: Str) -> &mut Self {
         self.inner.show(text);
-        let items = vec![TjItem::Text(text.0.to_vec())];
-        self.record(|r| r.show(items));
+        self.record(|r| r.show(vec![TjItem::Text(text.0.to_vec())]));
         self
     }
 
     /// `TJ`, written compactly (`TjArray`).
     pub(crate) fn show_array(&mut self, items: &[TjItem]) -> &mut Self {
         self.inner.op("TJ").operand(TjArray(items));
-        let items = items.to_vec();
-        self.record(|r| r.show(items));
+        self.record(|r| r.show(items.to_vec()));
         self
     }
 
     /// `TJ` as pdf-writer writes it: items separated by spaces.
-    pub(crate) fn show_positioned(&mut self) -> ShowPositioned<'_> {
-        ShowPositioned {
-            content: self,
-            items: Vec::new(),
+    pub(crate) fn show_positioned(&mut self, items: &[TjItem]) -> &mut Self {
+        {
+            let mut show = self.inner.show_positioned();
+            let mut writer = show.items();
+            for item in items {
+                match item {
+                    TjItem::Text(text) => writer.show(Str(text)),
+                    TjItem::Adjust(adjust) => writer.adjust(*adjust),
+                };
+            }
         }
+        self.record(|r| r.show(items.to_vec()));
+        self
     }
 
     // XObjects and marked content
 
     pub(crate) fn x_object(&mut self, name: Name) -> &mut Self {
         self.inner.x_object(name);
-        let name = String::from_utf8_lossy(name.0).into_owned();
-        self.record(|r| r.push(Rec::XObject(name)));
+        self.record(|r| r.push(Rec::XObject(lossy(name))));
         self
     }
 
@@ -590,52 +580,8 @@ impl Content {
     }
 }
 
-/// `Content::show_positioned`: the items are written, and recorded, when
-/// this is dropped.
-pub(crate) struct ShowPositioned<'a> {
-    content: &'a mut Content,
-    items: Vec<TjItem>,
-}
-
-impl ShowPositioned<'_> {
-    pub(crate) fn items(&mut self) -> PositionedItems<'_> {
-        PositionedItems {
-            items: &mut self.items,
-        }
-    }
-}
-
-impl Drop for ShowPositioned<'_> {
-    fn drop(&mut self) {
-        let items = std::mem::take(&mut self.items);
-        {
-            let mut show = self.content.inner.show_positioned();
-            let mut writer = show.items();
-            for item in &items {
-                match item {
-                    TjItem::Text(text) => writer.show(Str(text)),
-                    TjItem::Adjust(adjust) => writer.adjust(*adjust),
-                };
-            }
-        }
-        self.content.record(|r| r.show(items));
-    }
-}
-
-pub(crate) struct PositionedItems<'a> {
-    items: &'a mut Vec<TjItem>,
-}
-
-impl PositionedItems<'_> {
-    pub(crate) fn show(&mut self, text: Str) -> &mut Self {
-        self.items.push(TjItem::Text(text.0.to_vec()));
-        self
-    }
-
-    pub(crate) fn adjust(&mut self, amount: f32) -> &mut Self {
-        self.items.push(TjItem::Adjust(amount));
-        self
-    }
+fn lossy(name: Name) -> String {
+    String::from_utf8_lossy(name.0).into_owned()
 }
 
 // ---------------------------------------------------------------------------

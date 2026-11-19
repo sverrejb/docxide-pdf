@@ -15,7 +15,7 @@ pub(super) fn set_fill_alpha(
 ) {
     let pct = (alpha * 100.0).round().clamp(0.0, 100.0) as u8;
     alpha_states.insert(pct);
-    content.set_parameters(pdf_writer::Name(format!("GSa{pct}").as_bytes()));
+    content.set_fill_alpha(pct);
 }
 
 /// Set stroke color from an RGB byte array.
