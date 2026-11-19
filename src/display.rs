@@ -24,6 +24,12 @@ pub struct Document {
     /// The pictures [`Item::Image`] indexes.
     pub images: Vec<Image>,
     pub info: Info,
+    /// The logical structure (tagged PDF) tying the pages' marked content
+    /// ([`Item::BeginMarked`]) and links to what they are, when the document
+    /// is tagged.
+    pub structure: Option<Structure>,
+    /// The bookmarks, in reading order: one per heading.
+    pub outline: Vec<OutlineEntry>,
     /// What the layout drew that this description does not carry yet, by
     /// kind, with how many times: a writer of these pages draws less than
     /// the PDF export where this is not empty.
@@ -50,6 +56,9 @@ pub enum Unsupported {
     FontWithoutSource,
     /// Text in a font the page's resources do not have.
     UnknownFont,
+    /// A marked sequence that is neither a structure element's content nor
+    /// an artifact (left out, what it draws kept).
+    MarkedContent,
 }
 
 /// What the document says about itself.
@@ -62,6 +71,10 @@ pub struct Info {
     pub keywords: Option<String>,
     /// BCP 47 language tag of the document's text.
     pub language: Option<String>,
+    /// Whether the export claims PDF/UA-1: the document is tagged and passes
+    /// the checks that depend on it (a title, alternate text on every
+    /// figure, headings in order, every font embedded, no `.notdef` drawn).
+    pub pdf_ua: bool,
 }
 
 /// One page.
@@ -111,6 +124,116 @@ pub enum Item {
     /// A picture of [`Document::images`], drawn into the unit square
     /// of the current transform (as a PDF image XObject is).
     Image(usize),
+    /// What is drawn from here to the matching [`Item::EndMarked`] is marked:
+    /// content of a structure element, or an artifact. Marked sequences nest,
+    /// and may begin and end in different groups, as PDF's do.
+    BeginMarked(Mark),
+    EndMarked,
+}
+
+/// What a marked sequence of a page is.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mark {
+    /// Content of a structure element of type `kind`, which lists it as
+    /// [`Kid::Content`] by `mcid`, unique on its page.
+    Content { kind: StructType, mcid: u32 },
+    /// Not part of the document's content, of a type or of none (the
+    /// export's borders, shading and comment pane).
+    Artifact(Option<ArtifactKind>),
+}
+
+/// The type of an artifact.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArtifactKind {
+    /// Headers and footers.
+    Pagination,
+}
+
+/// The document's logical structure: its elements, the first the root
+/// ([`StructType::Document`]), each listing what it holds in reading order.
+#[non_exhaustive]
+#[derive(Debug, Clone, Default)]
+pub struct Structure {
+    pub elements: Vec<Element>,
+}
+
+/// An element of the structure.
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct Element {
+    pub kind: StructType,
+    pub kids: Vec<Kid>,
+    /// Alternate text (a figure's, a formula's).
+    pub alt: Option<String>,
+    /// The text the element's content stands for (letters drawn as small
+    /// caps, for one).
+    pub actual_text: Option<String>,
+    /// BCP 47 tag of the element's language, when not the document's.
+    pub lang: Option<String>,
+    /// The element's identifier (each note has one).
+    pub id: Option<String>,
+    pub table_cell: Option<TableCell>,
+    pub list_numbering: Option<ListNumbering>,
+}
+
+/// What an element holds.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kid {
+    /// An element of [`Structure::elements`], by index.
+    Element(usize),
+    /// The page's sequence marked [`Mark::Content`] with this `mcid`.
+    Content { page: usize, mcid: u32 },
+    /// A link area: the index in its page's [`Page::links`].
+    Link { page: usize, link: usize },
+}
+
+/// A table cell's attributes.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TableCell {
+    /// For a header cell, the cells it heads.
+    pub header_scope: Option<HeaderScope>,
+    /// Columns the cell spans, 1 or more.
+    pub col_span: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderScope {
+    Row,
+    Column,
+    Both,
+}
+
+/// How a list's items are numbered, as PDF names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListNumbering {
+    Unordered,
+    Ordered,
+    Description,
+    Disc,
+    Circle,
+    Square,
+    Decimal,
+    LowerRoman,
+    UpperRoman,
+    LowerAlpha,
+    UpperAlpha,
+}
+
+/// A bookmark: a heading and where it is.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutlineEntry {
+    /// The heading's level: an entry nests under the nearest entry before it
+    /// of a smaller level.
+    pub level: u8,
+    pub title: String,
+    pub page: usize,
+    /// The heading's top, in the page's user space.
+    pub top: f32,
 }
 
 /// A path in the current user space.

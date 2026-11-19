@@ -13,12 +13,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use pdf_writer::types::{ColorSpaceOperand, LineCapStyle, LineJoinStyle, TextRenderingMode};
-use pdf_writer::writers::MarkContent;
 use pdf_writer::{Buf, Name, Primitive, Ref, Str};
 
 use crate::display::{
     Color, Document as DisplayDocument, FillRule, Image, LineCap, LineJoin, Matrix, Paint, Path,
-    Segment, StrokeStyle, TextMode,
+    Segment, StrokeStyle, StructType, TextMode,
 };
 
 pub(crate) const IDENTITY: Matrix = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
@@ -161,6 +160,15 @@ pub(crate) enum Rec {
     },
     Text(RecText),
     XObject(String),
+    /// `BMC` with this tag.
+    BeginMarked(String),
+    /// `BDC` with an `/MCID`: content of a structure element.
+    BeginTagged {
+        kind: StructType,
+        mcid: i32,
+    },
+    /// `EMC`.
+    EndMarked,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -570,15 +578,23 @@ impl Content {
 
     pub(crate) fn begin_marked_content(&mut self, tag: Name) -> &mut Self {
         self.inner.begin_marked_content(tag);
+        self.record(|r| r.push(Rec::BeginMarked(lossy(tag))));
         self
     }
 
-    pub(crate) fn begin_marked_content_with_properties(&mut self, tag: Name) -> MarkContent<'_> {
-        self.inner.begin_marked_content_with_properties(tag)
+    /// `/kind <</MCID mcid>> BDC`: content of a structure element.
+    pub(crate) fn begin_tagged(&mut self, kind: StructType, mcid: i32) -> &mut Self {
+        self.inner
+            .begin_marked_content_with_properties(Name(kind.name().as_bytes()))
+            .properties()
+            .identify(mcid);
+        self.record(|r| r.push(Rec::BeginTagged { kind, mcid }));
+        self
     }
 
     pub(crate) fn end_marked_content(&mut self) -> &mut Self {
         self.inner.end_marked_content();
+        self.record(|r| r.push(Rec::EndMarked));
         self
     }
 }
@@ -877,6 +893,38 @@ mod tests {
             c.end_path();
         });
         assert!(matches!(items.as_slice(), [Rec::Clip { .. }]));
+    }
+
+    #[test]
+    fn records_marked_content_as_written() {
+        let (bytes, items) = recorded(|c| {
+            c.begin_marked_content(Name(b"Artifact"));
+            c.end_marked_content();
+            c.begin_tagged(StructType::P, 3);
+            c.end_marked_content();
+        });
+        let mut plain = pdf_writer::Content::new();
+        plain.begin_marked_content(Name(b"Artifact"));
+        plain.end_marked_content();
+        plain
+            .begin_marked_content_with_properties(Name(b"P"))
+            .properties()
+            .identify(3);
+        plain.end_marked_content();
+        assert_eq!(bytes, plain.finish().to_vec());
+        let [
+            Rec::BeginMarked(artifact),
+            Rec::EndMarked,
+            Rec::BeginTagged {
+                kind: StructType::P,
+                mcid: 3,
+            },
+            Rec::EndMarked,
+        ] = items.as_slice()
+        else {
+            panic!("unexpected items: {items:?}");
+        };
+        assert_eq!(artifact, "Artifact");
     }
 
     #[test]

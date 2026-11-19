@@ -14,7 +14,7 @@ use pdf_writer::types::{ListNumbering, TableHeaderScope};
 use pdf_writer::writers::StructTreeRoot;
 use pdf_writer::{Name, Pdf, Ref, Str, TextStr};
 
-use crate::display::StructType;
+use crate::display::{self, StructType};
 use crate::model::ListItem;
 
 pub(super) const ROOT: usize = 0;
@@ -531,10 +531,7 @@ impl Tags {
         self.next_mcid[page] += 1;
         self.nodes[node].kids.push(Kid::Mcid { page, mcid });
         content.end_marked_content();
-        content
-            .begin_marked_content_with_properties(Name(self.nodes[node].kind.name().as_bytes()))
-            .properties()
-            .identify(mcid);
+        content.begin_tagged(self.nodes[node].kind, mcid);
     }
 
     pub(super) fn end(content: &mut Content) {
@@ -567,6 +564,51 @@ impl Tags {
     /// Page `p`'s `/StructParents` key, if it has tagged content.
     pub(super) fn struct_parents(&self, page: usize) -> Option<i32> {
         (self.next_mcid.get(page).copied().unwrap_or(0) > 0).then_some(page as i32)
+    }
+
+    /// The tree as the display list describes it. `links`: (Link element,
+    /// page, index of the link in the page's links), each an `OBJR` kid
+    /// after the element's own, as `write` adds them.
+    pub(super) fn describe(&self, links: &[(usize, usize, usize)]) -> display::Structure {
+        let mut elements: Vec<display::Element> = self
+            .nodes
+            .iter()
+            .map(|node| display::Element {
+                kind: node.kind,
+                kids: node
+                    .kids
+                    .iter()
+                    .filter_map(|kid| match *kid {
+                        Kid::Node(c) => Some(display::Kid::Element(c)),
+                        Kid::Mcid { page, mcid } => u32::try_from(mcid)
+                            .ok()
+                            .map(|mcid| display::Kid::Content { page, mcid }),
+                    })
+                    .collect(),
+                alt: node.alt.clone(),
+                actual_text: node.actual.clone(),
+                lang: node.lang.clone(),
+                id: node.id.clone(),
+                // As `write` writes them: no attribute that says nothing.
+                table_cell: node.cell.filter(|&(s, span)| s.is_some() || span > 1).map(
+                    |(scope, span)| display::TableCell {
+                        header_scope: scope.map(|scope| match scope {
+                            TableHeaderScope::Row => display::HeaderScope::Row,
+                            TableHeaderScope::Column => display::HeaderScope::Column,
+                            TableHeaderScope::Both => display::HeaderScope::Both,
+                        }),
+                        col_span: u32::try_from(span).unwrap_or(1).max(1),
+                    },
+                ),
+                list_numbering: node.numbering.and_then(list_numbering),
+            })
+            .collect();
+        for &(node, page, link) in links {
+            if let Some(element) = elements.get_mut(node) {
+                element.kids.push(display::Kid::Link { page, link });
+            }
+        }
+        display::Structure { elements }
     }
 
     /// Write the elements and parent tree; returns the StructTreeRoot ref.
@@ -698,9 +740,61 @@ fn heading_level(kind: StructType) -> Option<u8> {
     }
 }
 
+/// A list's numbering as the display list names it; `None` says nothing.
+fn list_numbering(numbering: ListNumbering) -> Option<display::ListNumbering> {
+    use display::ListNumbering as N;
+    Some(match numbering {
+        ListNumbering::None => return None,
+        ListNumbering::Unordered => N::Unordered,
+        ListNumbering::Ordered => N::Ordered,
+        ListNumbering::Description => N::Description,
+        ListNumbering::Disc => N::Disc,
+        ListNumbering::Circle => N::Circle,
+        ListNumbering::Square => N::Square,
+        ListNumbering::Decimal => N::Decimal,
+        ListNumbering::LowerRoman => N::LowerRoman,
+        ListNumbering::UpperRoman => N::UpperRoman,
+        ListNumbering::LowerAlpha => N::LowerAlpha,
+        ListNumbering::UpperAlpha => N::UpperAlpha,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_tree_is_described_with_its_links() {
+        let mut tags = Tags::new();
+        let p = tags.add(ROOT, StructType::P);
+        let link = tags.add(p, StructType::Link);
+        let mut content = artifact_content();
+        tags.begin(&mut content, 0, p);
+        Tags::end(&mut content);
+        tags.begin(&mut content, 1, link);
+        Tags::end(&mut content);
+        let structure = tags.describe(&[(link, 1, 0)]);
+        let kinds: Vec<StructType> = structure.elements.iter().map(|e| e.kind).collect();
+        assert_eq!(
+            kinds,
+            [StructType::Document, StructType::P, StructType::Link]
+        );
+        assert_eq!(structure.elements[ROOT].kids, [display::Kid::Element(p)]);
+        assert_eq!(
+            structure.elements[p].kids,
+            [
+                display::Kid::Element(link),
+                display::Kid::Content { page: 0, mcid: 0 }
+            ]
+        );
+        assert_eq!(
+            structure.elements[link].kids,
+            [
+                display::Kid::Content { page: 1, mcid: 0 },
+                display::Kid::Link { page: 1, link: 0 }
+            ]
+        );
+    }
 
     #[test]
     fn tagged_regions_leave_no_empty_artifacts() {
