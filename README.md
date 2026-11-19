@@ -199,6 +199,34 @@ Positions are **thread-local**: convert and read them on the same thread.
 Starting a conversion clears the previous positions, even if parsing fails, and
 `take_bookmark_positions` drains them.
 
+### Hosts without a filesystem (WebAssembly)
+
+From a source checkout, compile the library for the bare wasm target:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo build --locked --lib --no-default-features --target wasm32-unknown-unknown
+```
+
+This produces `target/wasm32-unknown-unknown/debug/libdocxide_pdf.rlib`, for linking
+into a Rust host that exports its own wasm interface. It does not produce a
+JavaScript package or browser bindings.
+
+On this target, environment configuration is ignored, font directories are not
+scanned, and diagnostic timings are zero. Text uses DOCX-embedded fonts, and
+standard-14 Helvetica (not embedded) for everything else.
+
+Validation from a source checkout (tested with Rust 1.96 and Node.js):
+
+```sh
+./tools/check-wasm-host.sh
+```
+
+The smoke script builds `target/wasm32-unknown-unknown/debug/host-smoke.wasm`
+and runs it in Node. That small host converts an embedded fixture without JS
+clock or filesystem implementations; see `tools/wasm_host_smoke.rs` for its
+Rust entry point and `tools/check-wasm-host.mjs` for the Node runner.
+
 ## Works well with `docxide-template`
 
 [`docxide-template`](https://github.com/sverrejb/docxide-template) is a sibling crate for type-safe MS Word templates. It scans a folder of `.docx` files at compile time and generates a Rust struct per template, with `{Placeholder}` patterns turned into snake_case fields. Pair it with `docxide-pdf` to go from template → filled DOCX → PDF in a single, fully in-memory pipeline:

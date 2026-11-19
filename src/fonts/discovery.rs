@@ -1,8 +1,10 @@
+use crate::clock::Instant;
 use std::collections::{HashMap, HashSet};
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use std::time::Instant;
-use std::{env, fs};
+use std::sync::{LazyLock, Mutex};
 
 use memmap2::Mmap;
 use ttf_parser::Face;
@@ -29,6 +31,14 @@ pub(crate) struct FontIndex {
 impl FontIndex {
     /// One scan per distinct setup for the life of the process.
     pub(crate) fn for_setup(setup: &FontSetup) -> &'static FontIndex {
+        // A bare wasm host has no font directories to scan.
+        if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
+            static EMPTY: LazyLock<FontIndex> = LazyLock::new(|| FontIndex {
+                lookup: HashMap::new(),
+                mac_only: HashSet::new(),
+            });
+            return &EMPTY;
+        }
         // ponytail: leaked once per distinct setup; a server cycling through
         // many font-directory sets would keep an index per set.
         static INDEXES: Mutex<Vec<(FontSetup, &'static FontIndex)>> = Mutex::new(Vec::new());

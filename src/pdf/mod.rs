@@ -738,7 +738,7 @@ fn render_pass(
     options: &ConvertOptions,
 ) -> Result<(Vec<u8>, BodyPageFields, Vec<f32>, Option<BookmarkPages>), Error> {
     let debug_wrap = options.debug_wrap;
-    let t0 = std::time::Instant::now();
+    let t0 = crate::clock::Instant::now();
     // Bars collected by a previous pass (headers, footers) must not leak in.
     layout::take_change_bars();
     // The XObjects a previous pass recorded have other object numbers.
