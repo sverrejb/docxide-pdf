@@ -8,6 +8,8 @@ struct ResolvedFont {
     synthetic_bold: bool,
     synthetic_italic: bool,
     font_path: Option<PathBuf>,
+    /// The program, when it is the document's embedded copy.
+    embedded_data: Option<std::sync::Arc<Vec<u8>>>,
     face_index: u32,
 }
 
@@ -63,19 +65,21 @@ fn try_font(
                 synthetic_bold: bold && !face_bold,
                 synthetic_italic: italic && !face_italic,
                 font_path: Some(path),
+                embedded_data: None,
                 face_index,
             })
         });
     installed.or_else(|| {
-        let metrics = ctx
+        let data = ctx
             .embedded_fonts
-            .get(&(candidate.to_lowercase(), bold, italic))
-            .and_then(|d| embed(d, 0))?;
+            .get(&(candidate.to_lowercase(), bold, italic))?;
+        let metrics = embed(data, 0)?;
         Some(ResolvedFont {
             metrics,
             synthetic_bold: false,
             synthetic_italic: false,
             font_path: None,
+            embedded_data: Some(std::sync::Arc::new(data.clone())),
             face_index: 0,
         })
     })
@@ -774,26 +778,32 @@ pub(crate) fn register_font(
             font_path: r.font_path,
             face_index: r.face_index,
             gid_remap: r.metrics.gid_remap,
+            code_glyphs: r.metrics.code_glyphs,
+            ps_name: Some(r.metrics.ps_name),
+            embedded_data: r.embedded_data,
             ..FontEntry::unresolved(pdf_name, refs.font, missing_chars)
         },
         None => {
             // Pick the matching standard-14 Helvetica variant so a bold/italic run of an
             // unresolved font still renders bold/italic. Previously this always emitted plain
             // Helvetica, dropping the weight for every unresolved font across the corpus.
-            let base_font: &[u8] = match (bold, italic) {
-                (true, true) => b"Helvetica-BoldOblique",
-                (true, false) => b"Helvetica-Bold",
-                (false, true) => b"Helvetica-Oblique",
-                (false, false) => b"Helvetica",
+            let base_font: &'static str = match (bold, italic) {
+                (true, true) => "Helvetica-BoldOblique",
+                (true, false) => "Helvetica-Bold",
+                (false, true) => "Helvetica-Oblique",
+                (false, false) => "Helvetica",
             };
             log::warn!(
                 "Font not found: {font_name} bold={bold} italic={italic} — using {}",
-                String::from_utf8_lossy(base_font)
+                base_font
             );
             pdf.type1_font(refs.font)
-                .base_font(Name(base_font))
+                .base_font(Name(base_font.as_bytes()))
                 .encoding_predefined(Name(b"WinAnsiEncoding"));
-            FontEntry::unresolved(pdf_name, refs.font, missing_chars)
+            FontEntry {
+                standard_font: Some(base_font),
+                ..FontEntry::unresolved(pdf_name, refs.font, missing_chars)
+            }
         }
     };
 

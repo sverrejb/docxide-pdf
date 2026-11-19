@@ -6,7 +6,7 @@ use ttf_parser::Face;
 use ttf_parser::gpos::{PairAdjustment, PositioningSubtable};
 
 use super::encoding::winansi_to_char;
-use super::{FontContext, FontMetrics, FontRefs};
+use super::{CodeGlyph, FontContext, FontMetrics, FontRefs};
 
 pub(super) fn embed_truetype(
     pdf: &mut Pdf,
@@ -55,6 +55,8 @@ pub(super) fn embed_truetype(
     let mut char_to_gid = HashMap::with_capacity(used_chars.len());
     let mut char_widths_1000 = HashMap::with_capacity(used_chars.len());
     let mut char_ink_1000 = HashMap::with_capacity(used_chars.len());
+    // The font file's own glyph id of each character, for `FontMetrics::code_glyphs`.
+    let mut char_glyph = HashMap::with_capacity(used_chars.len());
 
     // HashSet order differs per process, and the remapper numbers glyphs in visit order:
     // sorting keeps the subset, and so the PDF bytes, the same from run to run.
@@ -65,6 +67,7 @@ pub(super) fn embed_truetype(
         if let Some(gid) = gid {
             let new_gid = remapper.remap(gid.0);
             char_to_gid.insert(ch, new_gid);
+            char_glyph.insert(ch, gid.0);
             char_widths_1000.insert(ch, advance_1000(gid));
             if let Some(r) = face.glyph_bounding_box(gid) {
                 char_ink_1000.insert(ch, (to_1000(r.y_max as f32), to_1000(-r.y_min as f32)));
@@ -255,14 +258,28 @@ pub(super) fn embed_truetype(
     for &(cid, _, ch) in &extra_widths {
         cid_unicode.entry(cid).or_insert(ch);
     }
+    let mut code_text: BTreeMap<u16, Vec<char>> = BTreeMap::new();
     for (cid, uni) in cid_unicode {
-        match crate::docx::arabic::source_letters(uni) {
-            Some((letter, None)) => cmap.pair(cid, letter),
-            Some((lam, Some(alef))) => cmap.pair_with_multiple(cid, [lam, alef]),
-            None => cmap.pair(cid, uni),
+        let chars = match crate::docx::arabic::source_letters(uni) {
+            Some((letter, None)) => vec![letter],
+            Some((lam, Some(alef))) => vec![lam, alef],
+            None => vec![uni],
+        };
+        match chars.as_slice() {
+            [single] => cmap.pair(cid, *single),
+            _ => cmap.pair_with_multiple(cid, chars.iter().copied()),
         }
+        code_text.insert(cid, chars);
     }
     pdf.stream(tounicode_ref, cmap.finish().as_slice());
+    let code_glyphs = code_glyphs(
+        &char_to_gid,
+        &char_glyph,
+        &char_widths_1000,
+        &gid_remap,
+        &extra_widths,
+        code_text,
+    );
 
     pdf.type0_font(refs.font)
         .base_font(ps_name_ref)
@@ -327,8 +344,50 @@ pub(super) fn embed_truetype(
         char_ink_1000,
         kern_pairs,
         gid_remap,
+        code_glyphs,
+        ps_name: ps_name.clone(),
         stand_ins: hyphen_fallback.map(|_| '\u{2011}').into_iter().collect(),
     })
+}
+
+/// What each code the content streams write stands for: the font file's
+/// glyph, the text the `ToUnicode` CMap gives it and the width `/W` gives it.
+fn code_glyphs(
+    char_to_gid: &HashMap<char, u16>,
+    char_glyph: &HashMap<char, u16>,
+    char_widths_1000: &HashMap<char, f32>,
+    gid_remap: &HashMap<u16, u16>,
+    extra_widths: &[(u16, f32, char)],
+    code_text: BTreeMap<u16, Vec<char>>,
+) -> HashMap<u16, CodeGlyph> {
+    let mut glyphs = HashMap::with_capacity(char_to_gid.len() + gid_remap.len());
+    for (&ch, &code) in char_to_gid {
+        let (Some(&gid), Some(width)) = (char_glyph.get(&ch), char_widths_1000.get(&ch)) else {
+            continue;
+        };
+        glyphs.entry(code).or_insert(CodeGlyph {
+            gid,
+            text: String::new(),
+            width_1000: width.round(),
+        });
+    }
+    for (&gid, &code) in gid_remap {
+        let width = extra_widths
+            .iter()
+            .find(|&&(c, ..)| c == code)
+            .map_or(0.0, |&(_, w, _)| w.round());
+        glyphs.entry(code).or_insert(CodeGlyph {
+            gid,
+            text: String::new(),
+            width_1000: width,
+        });
+    }
+    for (code, chars) in code_text {
+        if let Some(glyph) = glyphs.get_mut(&code) {
+            glyph.text = chars.into_iter().collect();
+        }
+    }
+    glyphs
 }
 
 /// How many ids `printable_code` has codes for: id 0 and every pair of

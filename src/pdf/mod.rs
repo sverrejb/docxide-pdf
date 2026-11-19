@@ -1,6 +1,7 @@
 mod assembly;
 mod bands;
 mod bidi;
+pub(crate) mod canvas;
 mod cell_draw;
 mod chart_legend;
 mod charts;
@@ -11,6 +12,7 @@ mod charts_radar;
 mod charts_radial;
 pub(crate) mod color;
 mod comments;
+mod display_list;
 mod emf;
 mod fonts;
 mod footnotes;
@@ -43,7 +45,8 @@ mod wordart;
 
 use std::collections::{HashMap, HashSet};
 
-use pdf_writer::{Content, Name, Pdf, Ref};
+use canvas::Content;
+use pdf_writer::{Name, Pdf, Ref};
 
 use crate::ConvertOptions;
 use crate::error::Error;
@@ -288,6 +291,24 @@ pub(super) struct GradientSpec {
     pub(super) y: f32,
     pub(super) w: f32,
     pub(super) h: f32,
+}
+
+impl GradientSpec {
+    /// The axis of the axial shading, `[x0, y0, x1, y1]` in page space: through the box's
+    /// centre at `angle_deg`, long enough for the box's corners.
+    pub(super) fn axis(&self) -> [f32; 4] {
+        let ang_rad = self.angle_deg.to_radians();
+        let (sin_a, cos_a) = ang_rad.sin_cos();
+        let cx = self.x + self.w / 2.0;
+        let cy = self.y + self.h / 2.0;
+        let half_len = ((self.w / 2.0 * cos_a).powi(2) + (self.h / 2.0 * sin_a).powi(2)).sqrt();
+        [
+            cx - half_len * cos_a,
+            cy + half_len * sin_a,
+            cx + half_len * cos_a,
+            cy - half_len * sin_a,
+        ]
+    }
 }
 
 pub(super) fn render_shape_fill(
@@ -719,6 +740,11 @@ fn render_pass(
     let t0 = std::time::Instant::now();
     // Bars collected by a previous pass (headers, footers) must not leak in.
     layout::take_change_bars();
+    // The XObjects a previous pass recorded have other object numbers.
+    canvas::with_session(|session| {
+        session.xobjects.clear();
+        session.document = None;
+    });
     let mut pdf = Pdf::new();
     let mut next_id = 1i32;
     let mut alloc = || {

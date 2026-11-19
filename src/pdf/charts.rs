@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use pdf_writer::{Content, Name, Str};
+use super::canvas::Content;
+use pdf_writer::{Name, Str};
 
 use crate::fonts::{FontEntry, to_winansi_bytes};
 use crate::model::{

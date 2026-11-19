@@ -8,7 +8,7 @@
 
 use std::f32::consts::{FRAC_PI_2, TAU};
 
-use pdf_writer::Content;
+use super::canvas::Content;
 use pdf_writer::types::{LineCapStyle, LineJoinStyle};
 
 use crate::fonts::FontEntry;

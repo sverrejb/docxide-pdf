@@ -2,7 +2,8 @@
 
 use std::sync::Arc;
 
-use pdf_writer::{Content, Rect};
+use super::canvas::Content;
+use pdf_writer::Rect;
 
 use super::layout::WordChunk;
 

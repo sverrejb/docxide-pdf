@@ -1,4 +1,4 @@
-use pdf_writer::Content;
+use super::canvas::Content;
 
 use crate::model::{
     Alignment, HorizontalRule, LineSpacing, Paragraph, ParagraphBorder, ParagraphBorders,

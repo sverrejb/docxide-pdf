@@ -2,8 +2,9 @@
 //! (y flipped) so the draw sites' `w 0 0 h x y cm /Im Do` places it like any
 //! raster or EMF picture.
 
+use super::canvas::Content;
 use pdf_writer::types::{LineCapStyle, LineJoinStyle};
-use pdf_writer::{Content, Pdf, Rect, Ref};
+use pdf_writer::{Pdf, Rect, Ref};
 
 use super::color::{fill_rgb, stroke_rgb};
 use crate::docx::svg::{IDENTITY, Seg, parse};
@@ -63,6 +64,7 @@ pub(super) fn svg_to_form_xobject(
         c.restore_state();
     }
     let form_ref = alloc();
+    super::canvas::capture_form(form_ref, [0.0, 0.0, 1.0, 1.0], c.take_recording(), &[]);
     pdf.form_xobject(form_ref, &c.finish())
         .bbox(Rect::new(0.0, 0.0, 1.0, 1.0));
     Some(form_ref)

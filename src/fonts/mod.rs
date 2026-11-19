@@ -14,7 +14,7 @@ use pdf_writer::{Name, Pdf, Ref};
 use crate::model::{FontFamily, FontTable, Run};
 
 pub(crate) use discovery::{FontIndex, FontSetup};
-pub(crate) use encoding::{encode_as_gids, to_winansi_bytes};
+pub(crate) use encoding::{encode_as_gids, to_winansi_bytes, winansi_to_char};
 pub(crate) use resolve::{
     FontContext, FontRefs, hhea_box, is_cjk_family, register_font, rescue_fonts,
 };
@@ -52,11 +52,26 @@ pub(crate) struct FontMetrics {
     /// Each used character's ink above and below the baseline, per 1000 em.
     pub(crate) char_ink_1000: HashMap<char, (f32, f32)>,
     pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
+    /// See `FontEntry::code_glyphs`.
+    pub(crate) code_glyphs: HashMap<u16, CodeGlyph>,
+    /// The name the PDF gives the font (`BaseFont`).
+    pub(crate) ps_name: String,
     /// Subset ids of `FontContext::extra_glyphs`, by original id.
     pub(crate) gid_remap: HashMap<u16, u16>,
     /// Characters drawn with a stand-in glyph (U+2011 as the font's hyphen):
     /// a rescue font with the real glyph draws them first, as Word does.
     pub(crate) stand_ins: HashSet<char>,
+}
+
+/// What one code of an embedded font's content-stream text stands for.
+#[derive(Debug, Clone)]
+pub(crate) struct CodeGlyph {
+    /// The glyph id in the font file (not the subset's).
+    pub(crate) gid: u16,
+    /// The text the PDF's `ToUnicode` CMap maps the code to.
+    pub(crate) text: String,
+    /// The advance the PDF's `/W` gives the code, in thousandths of an em.
+    pub(crate) width_1000: f32,
 }
 
 pub(crate) struct FontEntry {
@@ -112,6 +127,15 @@ pub(crate) struct FontEntry {
     pub(crate) face_index: u32,
     /// Subset ids of glyphs embedded by id (`FontContext::extra_glyphs`).
     pub(crate) gid_remap: HashMap<u16, u16>,
+    /// What each code an embedded font's text is written with stands for
+    /// (`embed::code_glyphs`); empty for a standard-14 font.
+    pub(crate) code_glyphs: HashMap<u16, CodeGlyph>,
+    /// The name the PDF gives an embedded font.
+    pub(crate) ps_name: Option<String>,
+    /// The font program when it comes from the document, not a file.
+    pub(crate) embedded_data: Option<std::sync::Arc<Vec<u8>>>,
+    /// The standard-14 font drawn when no font file resolved.
+    pub(crate) standard_font: Option<&'static str>,
     /// The math font's laid-out Office Math zones, by `MathZone` address
     /// (`pdf::fonts::register_math_font`), drawing subset ids.
     pub(crate) math_boxes: HashMap<usize, std::sync::Arc<crate::math::MathBox>>,
@@ -164,6 +188,10 @@ impl FontEntry {
             font_path: None,
             face_index: 0,
             gid_remap: HashMap::new(),
+            code_glyphs: HashMap::new(),
+            ps_name: None,
+            embedded_data: None,
+            standard_font: None,
             math_boxes: HashMap::new(),
         }
     }

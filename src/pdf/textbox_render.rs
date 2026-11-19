@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use pdf_writer::Content;
+use super::canvas::Content;
 
 use crate::model::{
     EmbeddedImage, ImageGlow, ImageReflection, LineSpacing, Paragraph, Run, SectionProperties,

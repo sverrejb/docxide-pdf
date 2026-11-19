@@ -1,6 +1,6 @@
 //! 3-D charts: the oblique and perspective projections, 3-D bars and ribbons.
 
-use pdf_writer::Content;
+use super::canvas::Content;
 
 use crate::model::{BarGrouping, BarShape, Chart, ChartType, View3D};
 
