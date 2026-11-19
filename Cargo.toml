@@ -18,6 +18,13 @@ name = "docxide-pdf"
 path = "src/main.rs"
 required-features = ["cli"]
 
+# The bare-wasm smoke host (tools/check-wasm-host.sh): Cargo builds and links it,
+# so the script does not depend on Cargo's target-dir layout.
+[[example]]
+name = "wasm_host_smoke"
+path = "tools/wasm_host_smoke.rs"
+crate-type = ["cdylib"]
+
 [features]
 default = ["cli"]
 cli = ["clap", "env_logger"]

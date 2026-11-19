@@ -216,14 +216,14 @@ On this target, environment configuration is ignored, font directories are not
 scanned, and diagnostic timings are zero. Text uses DOCX-embedded fonts, and
 standard-14 Helvetica (not embedded) for everything else.
 
-Validation from a source checkout (tested with Rust 1.96 and Node.js):
+Validation from a source checkout (tested with Rust 1.96, 1.99 and 1.100, and Node.js):
 
 ```sh
 ./tools/check-wasm-host.sh
 ```
 
-The smoke script builds `target/wasm32-unknown-unknown/debug/host-smoke.wasm`
-and runs it in Node. That small host converts an embedded fixture without JS
+The smoke script builds the `wasm_host_smoke` example
+(`target/wasm32-unknown-unknown/debug/examples/wasm_host_smoke.wasm`) and runs it in Node. That small host converts an embedded fixture without JS
 clock or filesystem implementations; see `tools/wasm_host_smoke.rs` for its
 Rust entry point and `tools/check-wasm-host.mjs` for the Node runner.
 
