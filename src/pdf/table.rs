@@ -238,6 +238,9 @@ fn render_cell_content(
                         );
                     }
                     draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
+                    if let Some(src) = source_para {
+                        super::bookmarks::mark(links, src, para_top, cursor_y);
+                    }
                     end_cell_tag(content, &tagger);
                     continue;
                 }
@@ -304,6 +307,9 @@ fn render_cell_content(
                     });
                     cursor_y -= para.bottom_band.1;
                     draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
+                    if let Some(src) = source_para {
+                        super::bookmarks::mark(links, src, para_top, cursor_y);
+                    }
                     continue;
                 }
 
@@ -386,6 +392,9 @@ fn render_cell_content(
                 };
                 if l1 == para.lines.len() {
                     draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
+                }
+                if let Some(src) = source_para {
+                    super::bookmarks::mark(links, src, para_top, cursor_y);
                 }
 
                 if whole && let Some(src) = source_para {

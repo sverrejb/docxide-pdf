@@ -1,6 +1,7 @@
 mod assembly;
 mod bands;
 mod bidi;
+pub(crate) mod bookmarks;
 pub(crate) mod canvas;
 mod cell_draw;
 mod chart_legend;
@@ -1688,6 +1689,7 @@ fn render_pass(
     }
 
     let t_layout = t0.elapsed();
+    let bookmark_fragments = bookmarks::collect(&mut state.pb.all_links);
 
     // Phase 2b: column separator lines
     for (content, seps) in state.pb.all_contents.iter_mut().zip(&state.pb.all_col_seps) {
@@ -1969,6 +1971,9 @@ fn render_pass(
     // rows) have no Link element, but PDF/UA puts every link annotation in
     // one (Word leaves them untagged): one per link, holding only its
     // annotations, after the body.
+    // Table rendering can also emit markers in headers/footers; the public
+    // positions describe the body only. Never serialize any marker as a link.
+    bookmarks::collect(&mut state.pb.all_links);
     for links in &mut state.pb.all_links {
         let untagged = |a: &LinkAnnotation, b: &LinkAnnotation| {
             a.node.is_none() && b.node.is_none() && a.url == b.url
@@ -2005,6 +2010,7 @@ fn render_pass(
         })
         .collect();
 
+    bookmarks::store(bookmark_fragments, &valign_offsets);
     assemble_pdf_pages(
         &mut pdf,
         &mut alloc,
