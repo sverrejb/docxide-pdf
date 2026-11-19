@@ -806,6 +806,14 @@ Backlog (details in `current_focus/A11Y.md`):
 
 ## Architecture and code structure
 
+- **Bookmark positions API (#169)**: `take_bookmark_positions()` drains a
+  thread-local that the `convert_*_with` functions fill as a side effect.
+  Return the positions with the conversion instead: one call returning a
+  `#[non_exhaustive]` struct `{ pdf, bookmarks, … }` (room for #172's font
+  misses), so a caller wanting both converts once and no hidden state
+  survives a failed parse (`layout_docx_bytes_with` never clears it). A
+  field on `display::Document` alone would make PDF + positions two
+  conversions.
 - **Paginator extraction**: a pass producing `Vec<Page>` of positioned
   elements, so widow/keep logic leaves the render loop, look-back wrapping
   becomes possible and PAGE/NUMPAGES resolve after layout.
