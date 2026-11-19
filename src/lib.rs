@@ -72,10 +72,6 @@ impl ConvertOptions {
     /// The defaults overridden by whichever `DOCXIDE_*` variables are set. A
     /// boolean variable is on unless its value is empty, `0` or `false`.
     pub fn from_env() -> Self {
-        // A bare wasm host has no process environment.
-        if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
-            return Self::new();
-        }
         Self::from_vars(|name| std::env::var(name).ok())
     }
 
@@ -214,6 +210,7 @@ fn reset_conversion_metadata() {
 /// The variables lost their old `DOCXSIDE_` prefix; failing loudly beats silently
 /// dropping someone's font directories and rendering with fallbacks.
 fn reject_old_env_vars() -> Result<(), Error> {
+    // std::env::vars_os panics on bare wasm (std::env::var just finds nothing).
     if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
         return Ok(());
     }

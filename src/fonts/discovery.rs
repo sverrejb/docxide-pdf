@@ -1,10 +1,8 @@
 use std::collections::{HashMap, HashSet};
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
-use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::Mutex;
 use std::time::Instant;
+use std::fs;
 
 use memmap2::Mmap;
 use ttf_parser::Face;
@@ -22,6 +20,7 @@ pub(crate) struct FontSetup {
     pub(crate) cache: bool,
 }
 
+#[derive(Default)]
 pub(crate) struct FontIndex {
     lookup: FontLookup,
     /// Lowercase families that only Mac Roman–named macOS system faces provide.
@@ -31,14 +30,6 @@ pub(crate) struct FontIndex {
 impl FontIndex {
     /// One scan per distinct setup for the life of the process.
     pub(crate) fn for_setup(setup: &FontSetup) -> &'static FontIndex {
-        // A bare wasm host has no font directories to scan.
-        if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
-            static EMPTY: LazyLock<FontIndex> = LazyLock::new(|| FontIndex {
-                lookup: HashMap::new(),
-                mac_only: HashSet::new(),
-            });
-            return &EMPTY;
-        }
         // ponytail: leaked once per distinct setup; a server cycling through
         // many font-directory sets would keep an index per set.
         static INDEXES: Mutex<Vec<(FontSetup, &'static FontIndex)>> = Mutex::new(Vec::new());
@@ -125,7 +116,7 @@ fn font_directories(extra: &[PathBuf]) -> Vec<PathBuf> {
             "/System/Library/Fonts".into(),
             "/System/Library/Fonts/Supplemental".into(),
         ]);
-        if let Ok(home) = env::var("HOME") {
+        if let Ok(home) = std::env::var("HOME") {
             dirs.push(PathBuf::from(&home).join("Library/Fonts"));
         }
     }
@@ -133,14 +124,14 @@ fn font_directories(extra: &[PathBuf]) -> Vec<PathBuf> {
     #[cfg(target_os = "linux")]
     {
         dirs.extend(["/usr/share/fonts".into(), "/usr/local/share/fonts".into()]);
-        if let Ok(home) = env::var("HOME") {
+        if let Ok(home) = std::env::var("HOME") {
             dirs.push(PathBuf::from(home).join(".local/share/fonts"));
         }
     }
 
     #[cfg(target_os = "windows")]
     {
-        if let Ok(windir) = env::var("WINDIR") {
+        if let Ok(windir) = std::env::var("WINDIR") {
             dirs.push(PathBuf::from(windir).join("Fonts"));
         } else {
             dirs.push("C:\\Windows\\Fonts".into());
@@ -188,6 +179,10 @@ fn is_font_file(path: &Path) -> bool {
 }
 
 fn scan_font_dirs(setup: &FontSetup) -> FontIndex {
+    // A bare wasm host has no font directories, and no clock to time a scan.
+    if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
+        return FontIndex::default();
+    }
     let t0 = Instant::now();
     let mut index = FontLookup::new();
     // Mac-Roman-only faces fill in only the families nothing else provides, so
