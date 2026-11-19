@@ -176,7 +176,7 @@ pub fn convert_docx_bytes_to_pdf_with(
 pub fn layout_docx_bytes_with(
     input: &[u8],
     options: &ConvertOptions,
-) -> Result<display::DisplayDocument, Error> {
+) -> Result<display::Document, Error> {
     reject_old_env_vars()?;
     let doc = docx::parse_bytes(input, options.revisions)?;
     let recording = pdf::canvas::Recording::start();

@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 
 use crate::display::{
-    DisplayDocument, FillRule, Font, FontSource, Glyph, GradientStop, Info, Item, LinearGradient,
-    Link, LinkTarget, Matrix, Page, Paint, Path, Segment, TextRun,
+    Document as DisplayDocument, FillRule, Font, FontSource, Glyph, GradientStop, Info, Item,
+    LinearGradient, Link, LinkTarget, Matrix, Page, Paint, Path, Segment, TextRun,
 };
 use crate::fonts::FontEntry;
 use crate::model::Document;

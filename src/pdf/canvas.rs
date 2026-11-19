@@ -17,8 +17,8 @@ use pdf_writer::writers::MarkContent;
 use pdf_writer::{Buf, Name, Primitive, Ref, Str};
 
 use crate::display::{
-    Color, DisplayDocument, FillRule, Image, LineCap, LineJoin, Matrix, Paint, Path, Segment,
-    StrokeStyle, TextMode,
+    Color, Document as DisplayDocument, FillRule, Image, LineCap, LineJoin, Matrix, Paint, Path,
+    Segment, StrokeStyle, TextMode,
 };
 
 pub(crate) const IDENTITY: Matrix = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];

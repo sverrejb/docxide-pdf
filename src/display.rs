@@ -1,7 +1,7 @@
 //! Laid-out pages, independent of PDF: what each page of a converted document
 //! draws, in painting order, with the fonts and pictures it draws them with.
 //!
-//! [`crate::layout_docx_bytes_with`] returns a [`DisplayDocument`]: the same
+//! [`crate::layout_docx_bytes_with`] returns a [`Document`]: the same
 //! layout [`crate::convert_docx_bytes_to_pdf_bytes_with`] writes as PDF, for a
 //! caller that writes or renders pages itself. Coordinates are PDF user space:
 //! points, origin at the page's bottom-left corner, y up.
@@ -16,7 +16,7 @@ pub type Matrix = [f32; 6];
 
 /// The whole document, laid out.
 #[derive(Debug, Clone, Default)]
-pub struct DisplayDocument {
+pub struct Document {
     pub pages: Vec<Page>,
     /// The fonts [`TextRun::font`] indexes.
     pub fonts: Vec<Font>,
@@ -81,7 +81,7 @@ pub enum Item {
         gradient: LinearGradient,
     },
     Text(TextRun),
-    /// A picture of [`DisplayDocument::images`], drawn into the unit square
+    /// A picture of [`Document::images`], drawn into the unit square
     /// of the current transform (as a PDF image XObject is).
     Image(usize),
 }
@@ -169,7 +169,7 @@ pub enum LineJoin {
 /// Glyphs of one font on one baseline.
 #[derive(Debug, Clone)]
 pub struct TextRun {
-    /// Index into [`DisplayDocument::fonts`].
+    /// Index into [`Document::fonts`].
     pub font: usize,
     /// Font size, in text space units.
     pub size: f32,
