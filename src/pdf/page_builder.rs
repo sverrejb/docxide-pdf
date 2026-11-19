@@ -424,8 +424,8 @@ impl PageBuilder {
             self.lists.close();
             let toc = *self
                 .toc
-                .get_or_insert_with(|| self.tags.add(tagging::ROOT, "TOC"));
-            return (None, self.tags.add(toc, "TOCI"));
+                .get_or_insert_with(|| self.tags.add(tagging::ROOT, StructType::Toc));
+            return (None, self.tags.add(toc, StructType::Toci));
         }
         self.toc = None;
         self.toc_field = para.starts_toc_field;

@@ -14,6 +14,7 @@ use pdf_writer::types::{ListNumbering, TableHeaderScope};
 use pdf_writer::writers::StructTreeRoot;
 use pdf_writer::{Name, Pdf, Ref, Str, TextStr};
 
+use crate::display::StructType;
 use crate::model::ListItem;
 
 pub(super) const ROOT: usize = 0;
@@ -23,9 +24,8 @@ enum Kid {
     Mcid { page: usize, mcid: i32 },
 }
 
-#[derive(Default)]
 struct Node {
-    kind: &'static str,
+    kind: StructType,
     parent: usize,
     kids: Vec<Kid>,
     /// Table cell attributes: header scope and column span.
@@ -42,11 +42,17 @@ struct Node {
 }
 
 impl Node {
-    fn new(kind: &'static str, parent: usize) -> Self {
+    fn new(kind: StructType, parent: usize) -> Self {
         Self {
             kind,
             parent,
-            ..Default::default()
+            kids: Vec::new(),
+            cell: None,
+            alt: None,
+            id: None,
+            actual: None,
+            lang: None,
+            numbering: None,
         }
     }
 
@@ -114,7 +120,7 @@ impl TableTags {
     pub(super) fn for_table(tags: &mut Tags, parent: usize, table: &crate::model::Table) -> Self {
         let repeated = table.rows.iter().take_while(|r| r.is_header).count();
         Self {
-            table: tags.add(parent, "Table"),
+            table: tags.add(parent, StructType::Table),
             head_rows: if repeated > 0 {
                 repeated
             } else {
@@ -128,7 +134,7 @@ impl TableTags {
     /// Word gives a table whose rows are all headers an empty TBody (PDF/UA 7.2-14).
     pub(super) fn finish(&mut self, tags: &mut Tags) {
         if self.head.is_some() && self.body.is_none() {
-            self.body = Some(tags.add(self.table, "TBody"));
+            self.body = Some(tags.add(self.table, StructType::TBody));
         }
     }
 
@@ -142,23 +148,23 @@ impl TableTags {
             None => {
                 let table = self.table;
                 let (slot, kind) = if in_head {
-                    (&mut self.head, "THead")
+                    (&mut self.head, StructType::THead)
                 } else {
-                    (&mut self.body, "TBody")
+                    (&mut self.body, StructType::TBody)
                 };
                 let section = *slot.get_or_insert_with(|| tags.add(table, kind));
-                let tr = tags.add(section, "TR");
+                let tr = tags.add(section, StructType::Tr);
                 self.rows.insert(row, tr);
                 tr
             }
         };
         // Word leaves TH without /Scope (PDF/UA 7.5-1); the scope is known here.
         let (kind, scope) = if in_head {
-            ("TH", Some(TableHeaderScope::Column))
+            (StructType::Th, Some(TableHeaderScope::Column))
         } else if cell == 0 && self.first_col_header {
-            ("TH", Some(TableHeaderScope::Row))
+            (StructType::Th, Some(TableHeaderScope::Row))
         } else {
-            ("TD", None)
+            (StructType::Td, None)
         };
         let c = tags.add(tr, kind);
         tags.nodes[c].cell = Some((scope, col_span));
@@ -176,7 +182,7 @@ impl TableTags {
         item: usize,
         list_item: Option<ListItem>,
         labelled: bool,
-        kind: &'static str,
+        kind: StructType,
     ) -> (Option<usize>, usize) {
         if let Some(&p) = self.paras.get(&(row, cell, item)) {
             return (None, p);
@@ -208,7 +214,7 @@ impl CellTagger<'_> {
         item: usize,
         list_item: Option<ListItem>,
         labelled: bool,
-        kind: &'static str,
+        kind: StructType,
     ) -> (Option<usize>, usize) {
         let at = (self.row, self.cell, self.col_span);
         let nodes = self
@@ -255,7 +261,7 @@ impl CellTagger<'_> {
     /// anchor paragraph (Word: `TD > Sect > P`). It ends the cell's list.
     pub(super) fn sect(&mut self) -> usize {
         let cell = self.close_list();
-        self.tags.add(cell, "Sect")
+        self.tags.add(cell, StructType::Sect)
     }
 
     /// End the cell's list and return the cell element.
@@ -277,7 +283,7 @@ impl CellTagger<'_> {
     /// A cell with nothing tagged inside still gets its element with an empty
     /// P, like Word, so every row has all its columns.
     pub(super) fn empty_para(mut self, content: &mut Content) {
-        self.begin(content, 0, None, false, "P");
+        self.begin(content, 0, None, false, StructType::P);
         Tags::end(content);
     }
 }
@@ -334,7 +340,7 @@ pub(super) fn finish_artifact_content(content: Content) -> Vec<u8> {
 impl Tags {
     pub(super) fn new() -> Self {
         Self {
-            nodes: vec![Node::new("Document", ROOT)],
+            nodes: vec![Node::new(StructType::Document, ROOT)],
             next_mcid: Vec::new(),
             notes: HashMap::new(),
             hoisted: Vec::new(),
@@ -347,12 +353,12 @@ impl Tags {
         self.nodes.len() == 1
     }
 
-    fn push(&mut self, kind: &'static str, parent: usize) -> usize {
+    fn push(&mut self, kind: StructType, parent: usize) -> usize {
         self.nodes.push(Node::new(kind, parent));
         self.nodes.len() - 1
     }
 
-    pub(super) fn add(&mut self, parent: usize, kind: &'static str) -> usize {
+    pub(super) fn add(&mut self, parent: usize, kind: StructType) -> usize {
         let id = self.push(kind, parent);
         self.nodes[parent].kids.push(Kid::Node(id));
         id
@@ -360,7 +366,7 @@ impl Tags {
 
     /// A document-level element that joins the tree at `attach_hoisted`, in
     /// `anchor_seq` order.
-    pub(super) fn hoist(&mut self, kind: &'static str, anchor_seq: u32) -> usize {
+    pub(super) fn hoist(&mut self, kind: StructType, anchor_seq: u32) -> usize {
         let id = self.push(kind, ROOT);
         self.hoisted.push((anchor_seq, id));
         id
@@ -368,7 +374,7 @@ impl Tags {
 
     /// A hoisted Figure with the picture's alt text when it has one.
     pub(super) fn hoist_figure(&mut self, alt: Option<&str>, anchor_seq: u32) -> usize {
-        let id = self.hoist("Figure", anchor_seq);
+        let id = self.hoist(StructType::Figure, anchor_seq);
         self.nodes[id].alt = alt.map(str::to_string);
         id
     }
@@ -390,7 +396,7 @@ impl Tags {
         if let Some(&n) = self.notes.get(&(endnote, id)) {
             return n;
         }
-        let n = self.add(parent, "Note");
+        let n = self.add(parent, StructType::Note);
         self.nodes[n].id = Some(format!("Note {}", self.notes.len() + 1));
         self.notes.insert((endnote, id), n);
         n
@@ -398,7 +404,7 @@ impl Tags {
 
     /// A Figure under `parent`, with the picture's alt text when it has one.
     pub(super) fn add_figure(&mut self, parent: usize, alt: Option<&str>) -> usize {
-        let id = self.add(parent, "Figure");
+        let id = self.add(parent, StructType::Figure);
         self.nodes[id].alt = alt.map(str::to_string);
         id
     }
@@ -406,10 +412,10 @@ impl Tags {
     /// A Formula under `parent`, read by its `/Alt` (PDF/UA 7.7-1); a
     /// paragraph that is itself the Formula (`sole_formula`) takes the `/Alt`.
     pub(super) fn add_formula(&mut self, parent: usize, alt: &str) -> usize {
-        let id = if self.nodes[parent].kind == "Formula" {
+        let id = if self.nodes[parent].kind == StructType::Formula {
             parent
         } else {
-            self.add(parent, "Formula")
+            self.add(parent, StructType::Formula)
         };
         self.nodes[id].alt = Some(alt.to_string());
         id
@@ -424,7 +430,7 @@ impl Tags {
         lang: Option<&str>,
         actual: Option<&str>,
     ) -> usize {
-        let span = self.add(parent, "Span");
+        let span = self.add(parent, StructType::Span);
         self.nodes[span].lang = lang.map(str::to_string);
         self.nodes[span].actual = actual.map(str::to_string);
         span
@@ -452,7 +458,7 @@ impl Tags {
         parent: usize,
         list_item: Option<ListItem>,
         labelled: bool,
-        kind: &'static str,
+        kind: StructType,
     ) -> (Option<usize>, usize) {
         match list_item {
             Some(item) => self.list_item(lists, parent, item, labelled),
@@ -486,14 +492,14 @@ impl Tags {
                 list
             }
             top => {
-                let list = self.add(top.map_or(parent, |&(.., body)| body), "L");
+                let list = self.add(top.map_or(parent, |&(.., body)| body), StructType::L);
                 self.nodes[list].numbering = Some(item.numbering);
                 list
             }
         };
-        let li = self.add(list, "LI");
-        let label = labelled.then(|| self.add(li, "Lbl"));
-        let body = self.add(li, "LBody");
+        let li = self.add(list, StructType::Li);
+        let label = labelled.then(|| self.add(li, StructType::Lbl));
+        let body = self.add(li, StructType::LBody);
         lists.stack.push((item.level, list, body));
         (label, body)
     }
@@ -526,7 +532,7 @@ impl Tags {
         self.nodes[node].kids.push(Kid::Mcid { page, mcid });
         content.end_marked_content();
         content
-            .begin_marked_content_with_properties(Name(self.nodes[node].kind.as_bytes()))
+            .begin_marked_content_with_properties(Name(self.nodes[node].kind.name().as_bytes()))
             .properties()
             .identify(mcid);
     }
@@ -544,14 +550,10 @@ impl Tags {
         let mut stack = vec![ROOT];
         while let Some(n) = stack.pop() {
             let node = &self.nodes[n];
-            if node.kind == "Figure" && node.alt.is_none() {
+            if node.kind == StructType::Figure && node.alt.is_none() {
                 return false;
             }
-            if let Some(l) = node
-                .kind
-                .strip_prefix('H')
-                .and_then(|d| d.parse::<u8>().ok())
-            {
+            if let Some(l) = heading_level(node.kind) {
                 if l > level + 1 {
                     return false;
                 }
@@ -593,7 +595,7 @@ impl Tags {
 
         for (i, node) in self.nodes.iter().enumerate() {
             let mut elem = pdf.struct_element(refs[i]);
-            elem.custom_kind(Name(node.kind.as_bytes()));
+            elem.custom_kind(Name(node.kind.name().as_bytes()));
             elem.parent(if i == ROOT { root } else { refs[node.parent] });
             if let Some(alt) = &node.alt {
                 elem.alt(TextStr(alt));
@@ -683,6 +685,19 @@ impl Tags {
     }
 }
 
+/// The level of a heading type, 1 for H1.
+fn heading_level(kind: StructType) -> Option<u8> {
+    match kind {
+        StructType::H1 => Some(1),
+        StructType::H2 => Some(2),
+        StructType::H3 => Some(3),
+        StructType::H4 => Some(4),
+        StructType::H5 => Some(5),
+        StructType::H6 => Some(6),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -690,7 +705,7 @@ mod tests {
     #[test]
     fn tagged_regions_leave_no_empty_artifacts() {
         let mut tags = Tags::new();
-        let p = tags.add(ROOT, "P");
+        let p = tags.add(ROOT, StructType::P);
         let mut content = artifact_content();
         tags.begin(&mut content, 0, p);
         Tags::end(&mut content);
@@ -710,12 +725,12 @@ mod tests {
     #[test]
     fn hoisted_elements_follow_their_anchor() {
         let mut tags = Tags::new();
-        let before = tags.add(ROOT, "P");
+        let before = tags.add(ROOT, StructType::P);
         // Drawn picture-first, but the textbox's anchor comes first in the XML.
         let figure = tags.hoist_figure(None, 1);
-        let sect = tags.hoist("Sect", 0);
-        tags.add(sect, "P");
-        let anchor = tags.add(ROOT, "P");
+        let sect = tags.hoist(StructType::Sect, 0);
+        tags.add(sect, StructType::P);
+        let anchor = tags.add(ROOT, StructType::P);
         tags.attach_hoisted();
         let order: Vec<usize> = tags.nodes[ROOT].child_nodes().collect();
         assert_eq!(order, [before, anchor, sect, figure]);
@@ -725,22 +740,23 @@ mod tests {
 
     #[test]
     fn ua_structure_needs_alt_and_unskipped_headings() {
-        let doc = |kinds: &[&'static str]| {
+        use StructType::{H1, H2, H3, P};
+        let doc = |kinds: &[StructType]| {
             let mut tags = Tags::new();
-            let sect = tags.add(ROOT, "Sect");
+            let sect = tags.add(ROOT, StructType::Sect);
             for &k in kinds {
                 tags.add(sect, k);
             }
             tags
         };
-        assert!(doc(&["H1", "P", "H2", "H3", "H1", "H2"]).ua_structure_ok());
-        assert!(doc(&["P"]).ua_structure_ok());
+        assert!(doc(&[H1, P, H2, H3, H1, H2]).ua_structure_ok());
+        assert!(doc(&[P]).ua_structure_ok());
         assert!(
-            !doc(&["H2", "H3"]).ua_structure_ok(),
+            !doc(&[H2, H3]).ua_structure_ok(),
             "first heading must be H1"
         );
-        assert!(!doc(&["H1", "H3"]).ua_structure_ok(), "skipped H2");
-        let mut tags = doc(&["H1"]);
+        assert!(!doc(&[H1, H3]).ua_structure_ok(), "skipped H2");
+        let mut tags = doc(&[H1]);
         let figure = tags.add_figure(ROOT, None);
         assert!(!tags.ua_structure_ok(), "Figure without alt");
         tags.nodes[figure].alt = Some("A chart".into());
@@ -764,7 +780,7 @@ mod tests {
         let kids = |n: usize| -> Vec<&str> {
             tags.nodes[n]
                 .child_nodes()
-                .map(|c| tags.nodes[c].kind)
+                .map(|c| tags.nodes[c].kind.name())
                 .collect()
         };
         // A new list id starts a new L; the sub-list sits in the first item's body.

@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use super::canvas::Content;
+use crate::display::StructType;
 use pdf_writer::Rect;
 
 use super::layout::WordChunk;
@@ -176,7 +177,7 @@ impl<'a> LinkTagger<'a> {
         self.inline = None;
         let node = match url {
             Some(u) => {
-                let n = self.tags.add(self.para, "Link");
+                let n = self.tags.add(self.para, StructType::Link);
                 self.link = Some((u.to_string(), n));
                 n
             }
@@ -254,7 +255,7 @@ mod tests {
     fn caps_span_groups_chunks_and_returns_to_the_paragraph() {
         use super::super::tagging::{self, ROOT, Tags};
         let mut tags = Tags::new();
-        let p = tags.add(ROOT, "P");
+        let p = tags.add(ROOT, StructType::P);
         let mut content = tagging::artifact_content();
         tags.begin(&mut content, 0, p);
         content.begin_text();
@@ -293,7 +294,7 @@ mod tests {
         use super::super::tagging::{self, ROOT, Tags};
         let mut tags = Tags::new();
         tags.lang = "en-US".into();
-        let p = tags.add(ROOT, "P");
+        let p = tags.add(ROOT, StructType::P);
         let mut content = tagging::artifact_content();
         tags.begin(&mut content, 0, p);
         content.begin_text();

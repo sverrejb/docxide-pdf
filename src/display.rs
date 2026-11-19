@@ -329,6 +329,76 @@ pub enum ImageFilter {
     None,
 }
 
+/// A standard structure type of tagged PDF (ISO 32000-1, 14.8.4): what an
+/// element of the document's logical structure is.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StructType {
+    Document,
+    Sect,
+    /// A table of contents, of [`StructType::Toci`] items.
+    Toc,
+    Toci,
+    P,
+    H1,
+    H2,
+    H3,
+    H4,
+    H5,
+    H6,
+    /// A list, of [`StructType::Li`] items, each a [`StructType::Lbl`] and a
+    /// [`StructType::LBody`].
+    L,
+    Li,
+    Lbl,
+    LBody,
+    Table,
+    THead,
+    TBody,
+    Tr,
+    Th,
+    Td,
+    Figure,
+    Formula,
+    Note,
+    Span,
+    Link,
+}
+
+impl StructType {
+    /// The type's name in PDF: `"P"`, `"H1"`, `"TOCI"`...
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Document => "Document",
+            Self::Sect => "Sect",
+            Self::Toc => "TOC",
+            Self::Toci => "TOCI",
+            Self::P => "P",
+            Self::H1 => "H1",
+            Self::H2 => "H2",
+            Self::H3 => "H3",
+            Self::H4 => "H4",
+            Self::H5 => "H5",
+            Self::H6 => "H6",
+            Self::L => "L",
+            Self::Li => "LI",
+            Self::Lbl => "Lbl",
+            Self::LBody => "LBody",
+            Self::Table => "Table",
+            Self::THead => "THead",
+            Self::TBody => "TBody",
+            Self::Tr => "TR",
+            Self::Th => "TH",
+            Self::Td => "TD",
+            Self::Figure => "Figure",
+            Self::Formula => "Formula",
+            Self::Note => "Note",
+            Self::Span => "Span",
+            Self::Link => "Link",
+        }
+    }
+}
+
 /// A link area on a page.
 #[non_exhaustive]
 #[derive(Debug, Clone)]

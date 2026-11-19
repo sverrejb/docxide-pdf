@@ -3,6 +3,7 @@ use std::ops::Range;
 
 use super::canvas::Content;
 
+use crate::display::StructType;
 use crate::model::{Footnote, LineSpacing, Paragraph, Run};
 
 use super::RenderContext;
@@ -466,7 +467,7 @@ fn render_notes_downward(
             let baseline_y = fn_y - (layout.ascent - layout.label_boost + label_boost);
             let lines = &layout.lines[from..to];
 
-            let p = notes.tags.add(note, "P");
+            let p = notes.tags.add(note, StructType::P);
             notes.tags.begin(content, notes.page, p);
             if from == 0 {
                 render_list_label(

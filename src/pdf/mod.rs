@@ -49,6 +49,7 @@ use canvas::Content;
 use pdf_writer::{Name, Pdf, Ref};
 
 use crate::ConvertOptions;
+use crate::display::StructType;
 use crate::error::Error;
 use crate::fonts::FontEntry;
 use crate::model::{
@@ -646,14 +647,21 @@ fn draw_change_bars(
 
 /// Structure type of a body paragraph. Word tags outline levels as H1–H6
 /// (deeper levels stay H6) and its Title style as Title, role-mapped to H1.
-pub(super) fn para_tag_kind(para: &Paragraph, style_name: Option<&String>) -> &'static str {
+pub(super) fn para_tag_kind(para: &Paragraph, style_name: Option<&String>) -> StructType {
     if style_name.is_some_and(|n| n.eq_ignore_ascii_case("title")) {
-        return "H1";
+        return StructType::H1;
     }
     match para.outline_level {
-        Some(l) => ["H1", "H2", "H3", "H4", "H5", "H6"][usize::from(l).min(5)],
-        None if sole_formula(para) => "Formula",
-        None => "P",
+        Some(l) => [
+            StructType::H1,
+            StructType::H2,
+            StructType::H3,
+            StructType::H4,
+            StructType::H5,
+            StructType::H6,
+        ][usize::from(l).min(5)],
+        None if sole_formula(para) => StructType::Formula,
+        None => StructType::P,
     }
 }
 
@@ -1975,7 +1983,7 @@ fn render_pass(
         };
         for link in links.chunk_by_mut(untagged) {
             if link[0].node.is_none() {
-                let node = state.pb.tags.add(tagging::ROOT, "Link");
+                let node = state.pb.tags.add(tagging::ROOT, StructType::Link);
                 link.iter_mut().for_each(|l| l.node = Some(node));
             }
         }

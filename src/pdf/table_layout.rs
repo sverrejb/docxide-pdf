@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::display::StructType;
 use crate::fonts::{FontEntry, font_key_buf};
 
 use crate::model::{
@@ -152,8 +153,12 @@ pub(super) struct CellParagraphLayout {
 }
 
 impl CellParagraphLayout {
-    pub(super) fn tag_kind(&self) -> &'static str {
-        if self.sole_formula { "Formula" } else { "P" }
+    pub(super) fn tag_kind(&self) -> StructType {
+        if self.sole_formula {
+            StructType::Formula
+        } else {
+            StructType::P
+        }
     }
 
     /// (ascent, descent) that size this paragraph's picture lines.
