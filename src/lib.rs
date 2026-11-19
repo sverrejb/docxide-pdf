@@ -180,6 +180,7 @@ pub fn layout_docx_bytes_with(
     input: &[u8],
     options: &ConvertOptions,
 ) -> Result<display::Document, Error> {
+    reset_conversion_metadata();
     reject_old_env_vars()?;
     let doc = docx::parse_bytes(input, options.revisions)?;
     let recording = pdf::canvas::Recording::start();

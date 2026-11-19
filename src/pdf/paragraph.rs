@@ -2167,7 +2167,12 @@ pub(super) fn render_paragraph_block(
 
             // The column ends below the lines that stay (its separator reaches them).
             state.pb.slot_top -= text_drop + lines_height(first_part, line_h, para_metrics);
-            bookmarks::mark(&mut state.pb.links, para, bookmark_top, state.pb.slot_top);
+            bookmarks::mark(
+                &mut state.pb.links,
+                &para.bookmarks,
+                bookmark_top,
+                state.pb.slot_top,
+            );
             state.advance_column_or_page(col_count, sect_idx, sp, ctx);
 
             let baseline_offset2 = if grid_snapped {
@@ -2446,7 +2451,12 @@ pub(super) fn render_paragraph_block(
                         grid,
                     );
                     let top = seg_baseline + baseline_offset2;
-                    bookmarks::mark(&mut state.pb.links, para, top, top - seg_h(from, to));
+                    bookmarks::mark(
+                        &mut state.pb.links,
+                        &para.bookmarks,
+                        top,
+                        top - seg_h(from, to),
+                    );
                 }
                 state.pb.end_tag();
 
@@ -3196,7 +3206,12 @@ pub(super) fn render_paragraph_block(
     }
 
     state.pb.slot_top -= content_h + bdr_top_pad + bdr_bottom_extent;
-    bookmarks::mark(&mut state.pb.links, para, bookmark_top, state.pb.slot_top);
+    bookmarks::mark(
+        &mut state.pb.links,
+        &para.bookmarks,
+        bookmark_top,
+        state.pb.slot_top,
+    );
     state.prev_between_below = if bottom_collapses {
         between_space(para)
     } else {

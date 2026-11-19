@@ -204,11 +204,8 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         None
     };
 
-    let bookmarks: Vec<String> = if opts.resolve_bookmarks {
-        node.children()
-            .filter(|n| n.has_tag_name((WML_NS, "bookmarkStart")))
-            .filter_map(|n| n.attribute((WML_NS, "name")).map(|s| s.to_string()))
-            .collect()
+    let bookmarks = if opts.resolve_bookmarks {
+        bookmark_names(node)
     } else {
         vec![]
     };
@@ -314,6 +311,13 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         frame_props,
         ..numbering.into_paragraph()
     }
+}
+
+pub(super) fn bookmark_names(p: roxmltree::Node) -> Vec<String> {
+    p.children()
+        .filter(|n| n.has_tag_name((WML_NS, "bookmarkStart")))
+        .filter_map(|n| n.attribute((WML_NS, "name")).map(str::to_string))
+        .collect()
 }
 
 fn mirrored(alignment: crate::model::Alignment) -> crate::model::Alignment {

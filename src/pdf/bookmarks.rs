@@ -4,7 +4,6 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use super::LinkAnnotation;
-use crate::model::Paragraph;
 
 /// The first and last laid-out fragments of a bookmarked body/cell paragraph.
 /// Pages are zero-based; coordinates are PDF points measured up from the bottom
@@ -32,8 +31,8 @@ pub fn take_bookmark_positions() -> Vec<BookmarkPosition> {
 
 const MARKER: &str = "\0docxide-bookmark:";
 
-pub(super) fn mark(links: &mut Vec<LinkAnnotation>, para: &Paragraph, top: f32, bottom: f32) {
-    for name in &para.bookmarks {
+pub(super) fn mark(links: &mut Vec<LinkAnnotation>, bookmarks: &[String], top: f32, bottom: f32) {
+    for name in bookmarks {
         links.push(LinkAnnotation {
             rect: pdf_writer::Rect::new(0.0, bottom, 0.0, top),
             url: format!("{MARKER}{name}"),
@@ -72,5 +71,5 @@ pub(super) fn store(mut positions: Vec<BookmarkPosition>, offsets: &[f32]) {
         position.top -= offsets[position.page];
         position.bottom -= offsets[position.end_page];
     }
-    POSITIONS.with_borrow_mut(|current| *current = positions);
+    POSITIONS.set(positions);
 }
