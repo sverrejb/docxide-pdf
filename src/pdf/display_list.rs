@@ -6,8 +6,9 @@
 use std::collections::HashMap;
 
 use crate::display::{
-    Document as DisplayDocument, FillRule, Font, FontSource, Glyph, GradientStop, Info, Item,
-    LinearGradient, Link, LinkTarget, Matrix, Page, Paint, Path, Segment, TextRun,
+    Document as DisplayDocument, FillRule, Font, FontSource, Glyph, GlyphId, GradientStop, Info,
+    Item, LinearGradient, Link, LinkTarget, Matrix, Page, Paint, Path, Segment, TextRun,
+    TextStroke, Unsupported,
 };
 use crate::fonts::FontEntry;
 use crate::model::Document;
@@ -124,7 +125,7 @@ impl<'a> Builder<'a> {
         self.document
     }
 
-    fn unsupported(&mut self, what: &'static str) {
+    fn unsupported(&mut self, what: Unsupported) {
         *self.document.unsupported.entry(what).or_default() += 1;
     }
 
@@ -158,7 +159,7 @@ impl<'a> Builder<'a> {
                         fill_rule,
                         gradient: gradient.clone(),
                     }),
-                    None => self.unsupported("pattern not described"),
+                    None => self.unsupported(Unsupported::Pattern),
                 },
                 Rec::Fill {
                     path,
@@ -190,7 +191,7 @@ impl<'a> Builder<'a> {
                     };
                     match reference {
                         Some(r) => out.extend(self.xobject(r, depth)),
-                        None => self.unsupported("xobject without a name"),
+                        None => self.unsupported(Unsupported::UnnamedXObject),
                     }
                 }
             }
@@ -203,7 +204,7 @@ impl<'a> Builder<'a> {
         match paint {
             RecPaint::Solid(paint) => Some(paint),
             RecPaint::Pattern(_) => {
-                self.unsupported("gradient text or stroke");
+                self.unsupported(Unsupported::GradientTextOrStroke);
                 None
             }
         }
@@ -218,7 +219,7 @@ impl<'a> Builder<'a> {
                 xobjects,
             }) => {
                 if depth >= MAX_FORM_DEPTH {
-                    self.unsupported("form nested too deep");
+                    self.unsupported(Unsupported::FormTooDeep);
                     return None;
                 }
                 let local: HashMap<String, i32> = xobjects.iter().cloned().collect();
@@ -233,7 +234,7 @@ impl<'a> Builder<'a> {
                 Some(Item::Group(group))
             }
             None => {
-                self.unsupported("xobject not recorded");
+                self.unsupported(Unsupported::UnrecordedXObject);
                 None
             }
         }
@@ -252,7 +253,7 @@ impl<'a> Builder<'a> {
         if let Some(mask) = mask {
             match self.xobjects.get(mask) {
                 Some(Captured::Image(mask, _)) => image.soft_mask = Some(Box::new(mask.clone())),
-                _ => self.unsupported("soft mask not recorded"),
+                _ => self.unsupported(Unsupported::UnrecordedSoftMask),
             }
         }
         let index = self.document.images.len();
@@ -278,7 +279,7 @@ impl<'a> Builder<'a> {
                 index: entry.face_index,
             }
         } else {
-            self.unsupported("font without a source");
+            self.unsupported(Unsupported::FontWithoutSource);
             return None;
         };
         let name = entry
@@ -297,7 +298,7 @@ impl<'a> Builder<'a> {
     fn text(&mut self, text: RecText) -> Option<TextRun> {
         let fonts = &self.fonts;
         let Some(&entry) = fonts.get(text.font.as_str()) else {
-            self.unsupported("text in an unknown font");
+            self.unsupported(Unsupported::UnknownFont);
             return None;
         };
         let font = self.font(entry)?;
@@ -331,8 +332,11 @@ impl<'a> Builder<'a> {
         self.text_ends
             .insert(text.text_object, concat(translate(pen, 0.0), matrix));
         let fill = self.text_paint(text.fill);
-        let (stroke_paint, line_width) = text.stroke;
-        let stroke = self.text_paint(stroke_paint);
+        let (stroke_paint, width) = text.stroke;
+        let stroke = TextStroke {
+            paint: self.text_paint(stroke_paint),
+            width,
+        };
         Some(TextRun {
             font,
             size,
@@ -340,7 +344,7 @@ impl<'a> Builder<'a> {
             horizontal_scaling: scale,
             mode: text.mode,
             fill,
-            stroke: Some((stroke, line_width)),
+            stroke,
             glyphs,
         })
     }
@@ -377,7 +381,7 @@ fn gradient(spec: &GradientSpec) -> LinearGradient {
 /// The glyphs `bytes` show in `entry`: two-byte codes of an embedded font
 /// (`FontEntry::code_glyphs`), WinAnsi bytes of a standard one. A code the
 /// font has no glyph for draws `.notdef`, which advances by nothing.
-fn decode(entry: &FontEntry, bytes: &[u8]) -> Vec<(u16, String, f32)> {
+fn decode(entry: &FontEntry, bytes: &[u8]) -> Vec<(GlyphId, String, f32)> {
     if entry.standard_font.is_some() || entry.char_to_gid.is_none() {
         return bytes
             .iter()
@@ -388,7 +392,7 @@ fn decode(entry: &FontEntry, bytes: &[u8]) -> Vec<(u16, String, f32)> {
                     .copied()
                     .unwrap_or(0.0);
                 let text = crate::fonts::winansi_to_char(byte).to_string();
-                (u16::from(byte), text, width)
+                (GlyphId::WinAnsi(byte), text, width)
             })
             .collect();
     }
@@ -397,8 +401,12 @@ fn decode(entry: &FontEntry, bytes: &[u8]) -> Vec<(u16, String, f32)> {
         .map(|pair| {
             let code = u16::from_be_bytes([pair[0], pair.get(1).copied().unwrap_or(0)]);
             match entry.code_glyphs.get(&code) {
-                Some(glyph) => (glyph.gid, glyph.text.clone(), glyph.width_1000),
-                None => (0, String::new(), 0.0),
+                Some(glyph) => (
+                    GlyphId::Gid(glyph.gid),
+                    glyph.text.clone(),
+                    glyph.width_1000,
+                ),
+                None => (GlyphId::Gid(0), String::new(), 0.0),
             }
         })
         .collect()
@@ -442,7 +450,7 @@ mod tests {
     fn decodes_winansi_with_standard_widths() {
         let entry = FontEntry::stub();
         let glyphs = decode(&entry, b"A ");
-        assert_eq!(glyphs[0].0, u16::from(b'A'));
+        assert_eq!(glyphs[0].0, GlyphId::WinAnsi(b'A'));
         assert_eq!(glyphs[0].1, "A");
         assert_eq!(glyphs[1].2, 500.0);
     }

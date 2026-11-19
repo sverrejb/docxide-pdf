@@ -316,7 +316,10 @@ impl Content {
     ) -> &mut Self {
         let array: Vec<f32> = array.into_iter().collect();
         self.inner.set_dash_pattern(array.iter().copied(), phase);
-        self.record(|r| r.state.line.dash = (array, phase));
+        self.record(|r| {
+            r.state.line.dash = array;
+            r.state.line.dash_phase = phase;
+        });
         self
     }
 
@@ -617,7 +620,8 @@ impl Default for State {
                 cap: LineCap::Butt,
                 join: LineJoin::Miter,
                 miter_limit: 10.0,
-                dash: (Vec::new(), 0.0),
+                dash: Vec::new(),
+                dash_phase: 0.0,
             },
             font: None,
             char_spacing: 0.0,
