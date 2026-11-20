@@ -555,16 +555,14 @@ pub(super) fn draw_cell_label(
     let single = if para.label_pieces.len() > 1 {
         None
     } else {
-        let Some(entry) = para
-            .label_pieces
-            .first()
-            .and_then(|(k, _)| k.as_deref())
-            .and_then(|k| fonts.get(k))
+        let key = para.label_pieces.first().and_then(|(k, _)| k.as_deref());
+        let body_key = para.label_body_key.as_deref();
+        let Some((entry, label)) =
+            super::list_label::label_face(&para.list_label, key, body_key, fonts)
         else {
             return;
         };
-        let bytes = super::list_label::encode_label(entry, &para.list_label)
-            .unwrap_or_else(|| entry.encode(&para.list_label));
+        let bytes = super::list_label::encode_label(entry, &label).unwrap_or_default();
         Some((entry, bytes))
     };
 
@@ -584,6 +582,7 @@ pub(super) fn draw_cell_label(
             super::list_label::show_label_pieces(
                 content,
                 &para.label_pieces,
+                para.label_body_key.as_deref(),
                 fonts,
                 para.label_font_size,
             );
