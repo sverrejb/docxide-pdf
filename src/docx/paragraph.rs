@@ -111,7 +111,13 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         indent_chars,
         indent_char_widths(&parsed.runs, para_style, &ctx.styles, ctx.grid_char_delta),
     );
-    let (indent_left, indent_right, indent_hanging, indent_first_line) = indents;
+    let (indent_left, indent_right, mut indent_hanging, mut indent_first_line) = indents;
+    // Display math takes the left indent only: Word centres x=1 the same
+    // under a 1in first-line indent as under none, and under left 1in with a
+    // 1in hanging indent as under left 1in (online probe mp_display_indent).
+    if super::runs::display_math(node).is_some() {
+        (indent_hanging, indent_first_line) = (0.0, 0.0);
+    }
     let mut runs = parsed.runs;
 
     let mark_deleted = ppr_rpr.is_some_and(|rpr| super::revised_mark(rpr, "del").is_some());
