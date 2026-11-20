@@ -139,6 +139,22 @@ judge each PR on security, correctness and byte-identical output only.
   differ in the last float digit from release codegen partitioning;
   `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1` makes them identical. Verify that
   claim; don't take it on trust.
+- Reviewed 2026-11-20 on `review/pr-172`: README and CLAUDE.md edits left
+  out (user); all 1245 fixtures byte-identical here in 4 variants, case30
+  and charts_ex included.
+- **Noisy list (user: decide in step 5, merged as is).** `note_miss` sits in
+  `FontIndex::find_font_file`, so every lookup that misses is recorded:
+  - each request lists the document's name and then every fallback that
+    missed; on a host with no fonts every request ends with
+    `LAST_RESORT_FONTS` (Arial, Liberation Sans, Arimo, Helvetica, DejaVu
+    Sans);
+  - lookups outside `register_font` (the symbol/CJK rescue probes via
+    `covered_chars`, the math font via `font_file`) each become a one-name
+    request;
+  - a font the DOCX embeds is still requested (the index is checked first).
+
+  Registering any of these would change output, so none is wrong, but a host
+  cannot tell the font the document asked for from a fallback.
 
 ### Step 4: #175 (sboily), "Display list: marked content, structure tree and outline"
 
@@ -171,6 +187,12 @@ Work in a worktree. Suggested commits:
    - The display list: an option, name to pick (e.g.
      `ConvertOptions::display(true)`), that starts `canvas::Recording`
      around the same render. One render then gives both PDF and display list.
+   - `Conversion::font_requests`: decide what a request reports (see step
+     3, "Noisy list"). The cleanest shape found in review: record per
+     resolution in `fonts/resolve.rs` `register_font`, where the fallback
+     chain is walked (about +15 lines there, about −35 in `requests.rs`,
+     `note_miss` out of `find_font_file`), and mark which name the document
+     asked for and which are fallbacks or rescue probes. Ask the user.
 2. **Remove the 7 old functions, `take_bookmark_positions()`,
    `take_font_requests()` and `reset_conversion_metadata()`.**
    - Also delete `docx::parse(path)` (the path-reading parser) and
@@ -300,7 +322,7 @@ Work in a worktree. Suggested commits:
 | #169 bookmark positions | merged `a23175b1b` (2026-11-19) |
 | 1. #170 bare wasm | merged 2026-11-20 |
 | 2. #171 memory fonts | merged 2026-11-20 |
-| 3. #172 font requests | not started |
+| 3. #172 font requests | reviewed on `review/pr-172`, awaiting push |
 | 4. #175 display tags | not started |
 | 5. 0.22 refactor | not started |
 | 5.10 whole-repo `cargo fmt` | not started |
