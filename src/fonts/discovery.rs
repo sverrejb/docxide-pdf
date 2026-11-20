@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
 use std::fs;
 
@@ -30,6 +30,14 @@ pub(crate) struct FontIndex {
 impl FontIndex {
     /// One scan per distinct setup for the life of the process.
     pub(crate) fn for_setup(setup: &FontSetup) -> &'static FontIndex {
+        // Off by default on bare wasm, which has no font directories to scan.
+        if !super::memory::system_fonts_enabled() {
+            static EMPTY: LazyLock<FontIndex> = LazyLock::new(|| FontIndex {
+                lookup: HashMap::new(),
+                mac_only: HashSet::new(),
+            });
+            return &EMPTY;
+        }
         // ponytail: leaked once per distinct setup; a server cycling through
         // many font-directory sets would keep an index per set.
         static INDEXES: Mutex<Vec<(FontSetup, &'static FontIndex)>> = Mutex::new(Vec::new());
@@ -82,7 +90,7 @@ fn font_family_names(face: &Face) -> (Vec<String>, bool) {
 
 /// One face under each of its localized family names, so a lookup by any of
 /// them finds it.
-fn read_faces(data: &[u8], face_index: u32) -> Vec<CachedFace> {
+pub(super) fn read_faces(data: &[u8], face_index: u32) -> Vec<CachedFace> {
     let Ok(face) = Face::parse(data, face_index) else {
         return Vec::new();
     };
@@ -323,12 +331,17 @@ impl FontIndex {
     /// True if only a macOS system face provides this family (Helvetica, Optima…),
     /// which Windows Word, including Mac Word's online PDF export, never has.
     pub(super) fn is_mac_only_family(&self, name: &str) -> bool {
-        self.mac_only.contains(&name.to_lowercase())
+        let key = name.to_lowercase();
+        super::memory::lookup(&(key.clone(), false, false)).is_none()
+            && self.mac_only.contains(&key)
     }
 }
 
 /// Parse one face of a font file (memory-mapped, so only the tables touched are read).
 pub(super) fn probe_face<T>(path: &Path, face_index: u32, f: impl FnOnce(&Face) -> T) -> Option<T> {
+    if let Some(data) = super::memory::font_bytes(path) {
+        return Face::parse(&data, face_index).ok().map(|face| f(&face));
+    }
     let file = fs::File::open(path).ok()?;
     let data = unsafe { Mmap::map(&file) }.ok()?;
     Face::parse(&data, face_index).ok().map(|face| f(&face))
@@ -346,8 +359,12 @@ impl FontIndex {
     ) -> Option<(PathBuf, u32, bool, bool)> {
         let index = &self.lookup;
         let key = font_name.to_lowercase();
-        if let Some((path, face_index)) = index.get(&(key.clone(), bold, italic)) {
-            return Some((path.clone(), *face_index, bold, italic));
+        let lookup = |bold, italic| {
+            let key = (key.clone(), bold, italic);
+            super::memory::lookup(&key).or_else(|| index.get(&key).cloned())
+        };
+        if let Some((path, face_index)) = lookup(bold, italic) {
+            return Some((path, face_index, bold, italic));
         }
         // A plain regular request that misses falls through to a generic family
         // fallback rather than borrowing this family's bold/italic face, which would
@@ -362,8 +379,8 @@ impl FontIndex {
         // single styled face — e.g. Vivaldi is an italic-flagged script with no upright
         // or bold variant, so "Vivaldi bold" only resolves once we try (regular,italic).
         for (b, i) in [(bold, !italic), (!bold, italic), (!bold, !italic)] {
-            if let Some((path, face_index)) = index.get(&(key.clone(), b, i)) {
-                return Some((path.clone(), *face_index, b, i));
+            if let Some((path, face_index)) = lookup(b, i) {
+                return Some((path, face_index, b, i));
             }
         }
         None

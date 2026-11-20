@@ -1,9 +1,11 @@
-name: Bare wasm
+name: Host API
 
 on:
   pull_request:
     paths:
       - 'src/**'
+      - 'tests/suite/host.rs'
+      - 'tests/suite/main.rs'
       - 'tests/host/**'
       - 'tools/*wasm*'
       - 'Cargo.toml'
@@ -17,7 +19,7 @@ permissions:
   contents: read
 
 jobs:
-  wasm:
+  host:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -28,5 +30,7 @@ jobs:
         run: rustup toolchain install 1.96.0 --profile minimal --target wasm32-unknown-unknown
       - name: Check native library
         run: cargo check --locked --lib --no-default-features
+      - name: Test host API
+        run: ./tools/run-tests.sh --test host
       - name: Convert in WebAssembly
         run: ./tools/check-wasm-host.sh

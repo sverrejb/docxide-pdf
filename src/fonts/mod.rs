@@ -2,6 +2,7 @@ mod cache;
 mod discovery;
 mod embed;
 mod encoding;
+pub(crate) mod memory;
 mod resolve;
 
 use std::cell::RefCell;
@@ -362,7 +363,7 @@ pub(crate) fn font_file(
         return Some((data.to_vec(), 0));
     }
     let (path, index, ..) = font_index.find_font_file(name, false, false)?;
-    Some((std::fs::read(path).ok()?, index))
+    Some((memory::read_font(&path)?, index))
 }
 
 pub(crate) fn primary_font_name(name: &str) -> &str {

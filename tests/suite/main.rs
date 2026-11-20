@@ -8,6 +8,7 @@ mod accessibility;
 mod bookmark_positions;
 mod file_size;
 mod font_validation;
+mod host;
 mod image_count;
 mod libreoffice_comparison;
 mod page_geometry;
