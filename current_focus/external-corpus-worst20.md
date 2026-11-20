@@ -1,7 +1,11 @@
 # External corpus — worst 20
 
 Handover for the 20 lowest-Jaccard documents of the neurotic_docx_bench corpus
-(`~/workspace/docxside/corpora/neurotic_docx_bench`, 6427 docx+pdf pairs).
+(`~/workspace/docxside/corpora/neurotic_docx_bench`). The list was made on
+6427 pairs; 662 duplicates were deleted afterwards (pixel-identical Word pages,
+same folder, same revision and comment counts; list in
+`_fetch/purged_duplicates.txt`), leaving 5766. Of the 20, `834c9f9f35_file_57`
+went.
 Initial analysis only: each cause below comes from page 1–2 side by side,
 `pdftotext -bbox` positions and the document XML, not from a fix.
 
@@ -60,16 +64,32 @@ same text, and three redline pairs appear twice with different redline ids.
 
 ## Causes, most promising first
 
-### A. Math inside tracked revisions is not drawn (4 rows)
+### A. Math inside tracked revisions — DONE (branch `math-revisions`)
 
-`d0281643d2` (eqArr, 9 `m:oMath`) and `970e9bbbcc` (all math objects, 22
-`m:oMath`). Word draws every equation in its revision colour. We draw the
-surrounding text and none of the math: no fraction, no quadratic formula, no
-sums. The revisions sit in `m:r`'s `w:rPr` (26 and 48 runs carry `w:ins`/`w:del`),
-and in two places a `w:del` wraps an `m:` element. The likely cause is that
-math runs with a revision mark are dropped in the markup view. First check
-whether the final view draws the inserted math. Cheap to probe: one fixture
-with one inserted `m:r` and one deleted `m:r`.
+Word saves a revised math run with the revision inside it,
+`<m:r><w:ins|w:del><w:rPr/><m:t/></w:ins|w:del></m:r>`; we read `m:t` and
+`w:rPr` only as direct children, so every revised math run was empty. Fixed:
+text and properties are read through the wrapper (and through wrappers
+around `m:r`); the final view drops deleted math; the markup view draws
+revised math in the author colour, deleted math struck through run by run
+across operator spacing, inserted math not underlined (Word). The 107 corpus
+documents with revised math: mean Jaccard 36.5 → 54.3 (94 up, 4 down by at
+most 2.1); the four worst-20 rows 5.4–5.7 → 33.5–54.9.
+
+Found on the way, also on the branch:
+- Display math takes only the left indent; first-line and hanging indents
+  don't apply (online probe `tests/output/probes/mathind/mp_display_indent`,
+  five indents, every zone within 0.3 pt of Word).
+- U+3000 in math (Japanese papers pad equations with it) is an em of space;
+  Cambria Math has no glyph and we drew .notdef boxes.
+
+Open:
+- Fraction bars, radical signs and overbars of revised math stay black; Word
+  colours them (their `m:ctrlPr` carries the revision). Needs a colour on
+  structure nodes.
+- Display math on a `docGrid type="lines"` page is about 67 pt per line where
+  Word takes about 37 (two 18 pt pitches): `9d67577d29` (the −2.1 above).
+- Formula speech leaves deleted math out in both views.
 
 ### B. Body starts too high under the header (3 rows)
 
@@ -153,8 +173,7 @@ that is not code, see memory `tracked-changes-work`.
 
 ## Next steps
 
-1. A (math in revisions): two-run probe, then fix. It touches 4 of the 20 and
-   likely many more in the tracking groups.
+1. A follow-ups above (structure colour, grid line height).
 2. B (header extent): measure CCPR and `c1a1763682` against a header-height
    model, and check one with an online export first.
 3. D, E: one probe each.
