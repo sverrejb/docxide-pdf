@@ -1951,8 +1951,8 @@
     "a11y_text": 1.0
   },
   "cases/case41": {
-    "jaccard": 0.9593,
-    "ssim": 0.969,
+    "jaccard": 0.967,
+    "ssim": 0.9797,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1962,7 +1962,7 @@
   },
   "cases/case42": {
     "jaccard": 0.9406,
-    "ssim": 0.9531,
+    "ssim": 0.953,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -4623,8 +4623,8 @@
     "a11y_text": 1.0
   },
   "cases/frame-continuous-columns": {
-    "jaccard": 0.9319,
-    "ssim": 0.9874,
+    "jaccard": 0.9369,
+    "ssim": 0.988,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -4753,8 +4753,8 @@
     "a11y_text": 0.9773
   },
   "cases/frame-moves-exact-height": {
-    "jaccard": 0.8177,
-    "ssim": 0.9309,
+    "jaccard": 0.8185,
+    "ssim": 0.9312,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -4763,8 +4763,8 @@
     "a11y_text": 0.9456
   },
   "cases/frame-moves-no-offset": {
-    "jaccard": 0.8162,
-    "ssim": 0.9303,
+    "jaccard": 0.8167,
+    "ssim": 0.9305,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -4773,8 +4773,8 @@
     "a11y_text": 0.9456
   },
   "cases/frame-moves-picture-caption": {
-    "jaccard": 0.9779,
-    "ssim": 0.9954,
+    "jaccard": 0.9784,
+    "ssim": 0.9978,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -4793,8 +4793,8 @@
     "a11y_text": 1.0
   },
   "cases/frame-moves-to-next-column": {
-    "jaccard": 0.9351,
-    "ssim": 0.9876,
+    "jaccard": 0.9319,
+    "ssim": 0.9859,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -4813,8 +4813,8 @@
     "a11y_text": 0.9456
   },
   "cases/frame-page-break-before": {
-    "jaccard": 0.971,
-    "ssim": 0.9941,
+    "jaccard": 0.9753,
+    "ssim": 0.995,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -4823,8 +4823,8 @@
     "a11y_text": 0.9043
   },
   "cases/frame-page-break-opens-column": {
-    "jaccard": 0.9351,
-    "ssim": 0.9874,
+    "jaccard": 0.9319,
+    "ssim": 0.9858,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7397,8 +7397,8 @@
     "a11y_text": 0.72
   },
   "cases/paragraph-offset-frame-immediate-long": {
-    "jaccard": 0.9071,
-    "ssim": 0.9603,
+    "jaccard": 0.9069,
+    "ssim": 0.9597,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9595,8 +9595,8 @@
     "a11y_text": 0.9844
   },
   "cases/textbox-wrap-beside": {
-    "jaccard": 0.9615,
-    "ssim": 0.9758,
+    "jaccard": 0.9643,
+    "ssim": 0.9787,
     "text_boundary": 0.9955,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -9605,8 +9605,8 @@
     "a11y_text": 0.9788
   },
   "cases/textbox-wrap-beside-compat14": {
-    "jaccard": 0.9396,
-    "ssim": 0.9621,
+    "jaccard": 0.957,
+    "ssim": 0.981,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -9626,7 +9626,7 @@
   },
   "cases/through-picture-band": {
     "jaccard": 0.9839,
-    "ssim": 0.9852,
+    "ssim": 0.9851,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -9729,8 +9729,8 @@
     "a11y_text": 1.0
   },
   "cases/torture_test": {
-    "jaccard": 0.8859,
-    "ssim": 0.9353,
+    "jaccard": 0.8892,
+    "ssim": 0.9379,
     "text_boundary": 0.9821,
     "ua_fail": 3,
     "a11y_missing": 39,
@@ -10667,8 +10667,8 @@
     "a11y_text": 1.0
   },
   "scraped/belgian_youth_program_certificate": {
-    "jaccard": 0.7552,
-    "ssim": 0.9409,
+    "jaccard": 0.7592,
+    "ssim": 0.9427,
     "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -11278,8 +11278,8 @@
     "a11y_text": 1.0
   },
   "scraped/french_sexual_health_youth_strategy": {
-    "jaccard": 0.6525,
-    "ssim": 0.8441,
+    "jaccard": 0.6523,
+    "ssim": 0.8428,
     "text_boundary": 0.9423,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -12153,8 +12153,8 @@
     "a11y_text": 0.8932
   },
   "scraped/stiavnicke_bane_assembly_minutes": {
-    "jaccard": 0.9102,
-    "ssim": 0.9544,
+    "jaccard": 0.911,
+    "ssim": 0.9549,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -12183,8 +12183,8 @@
     "a11y_text": 0.8008
   },
   "scraped/super_editor_dropcaps": {
-    "jaccard": 0.9038,
-    "ssim": 0.9569,
+    "jaccard": 0.9452,
+    "ssim": 0.9766,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,

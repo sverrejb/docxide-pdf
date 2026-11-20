@@ -1340,13 +1340,25 @@ pub(super) fn render_paragraph_lines(
         // Only lines like the probes': left to right, no East Asian text,
         // justified by widening the spaces only.
         // The rest keep exact positions until each gets its own probe.
+        // A line wholly beside a float is drawn on the device grid too, from
+        // the pixel nearest the float's edge (Word probes: beside drop caps
+        // 37.15, 31.80 and 28.35pt wide the lines start 37.25, 31.75 and
+        // 28.25pt in). Beside pictures and text boxes Word's start is off
+        // the grid by a part of a pixel no probe explains yet.
+        // ponytail: a line with text on both sides of a float keeps exact
+        // positions; no probe has one.
+        let beside_float = line
+            .right_region
+            .as_ref()
+            .is_some_and(|rr| rr.first_chunk_idx == 0);
         let plain_line = line.draw_order.is_empty()
             && !line.rtl_paragraph
-            && line.right_region.is_none()
+            && (line.right_region.is_none() || beside_float)
             && mixed.is_none()
             && !is_char_justified
             && extra_per_gap >= 0.0;
         let line_start = match alignment {
+            _ if beside_float => (right_start_x, right_start_x),
             Alignment::Left | Alignment::Justify | Alignment::Distribute
                 if line_start_x == eff_margin =>
             {
@@ -1359,7 +1371,11 @@ pub(super) fn render_paragraph_lines(
                 line,
                 &pdf_name_to_entry,
                 &chunk_abs_x,
-                extra_per_gap,
+                if beside_float {
+                    right_extra_per_gap
+                } else {
+                    extra_per_gap
+                },
                 line_start,
             )
         } else {

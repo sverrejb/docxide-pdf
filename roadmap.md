@@ -551,10 +551,22 @@ Open queue from the large-corpus and focus-fixture rounds:
 - Text-anchored body frames without an explicit offset (`lifted_frame` lifts
   only offset frames), and wrap-around frames reaching into the text
   (croatian_grant's two), still flow inline.
-- Drop caps (`super_editor_dropcaps`): lines beside a `dropCap="drop"` cap
-  start 0.15–0.2pt left of Word's; `w:hSpace` on a margin cap that fits the
-  margin, the next paragraph's own space before and indents, and `w:position`
-  other than the −5pt Word writes are unprobed.
+- Lines wholly beside a float are drawn on the glyph device grid from the
+  pixel nearest the float's edge, verified beside drop caps only. Beside
+  pictures, text boxes and explicit-width frames Word's line start sits a
+  part of a pixel off the grid (case41 +0.08pt, frame-moves-to-next-column
+  +0.18pt, paragraph-offset-frame-immediate-long +0.11pt): the float's edge
+  or the column x is rounded by a rule no probe has yet. Lines with text on
+  both sides of a float still keep exact positions.
+  Accepted regressions from snapping those starts to the nearest pixel:
+  frame-moves-to-next-column and frame-page-break-opens-column (J 93.5 →
+  93.2, S −0.2: the "AFTER FRAME" line at the top of column 2, Word 360.20,
+  ours 360.02), paragraph-offset-frame-immediate-long (S 96.0 → 95.9: two
+  lines beside the frame, Word 321.13, ours 321.02),
+  french_sexual_health_youth_strategy (S 84.4 → 84.3: one line on page 2,
+  Word 175.33, ours 175.27).
+- Drop caps: the next paragraph's own space before and indents, and
+  `w:position` other than the −5pt Word writes, are unprobed.
 - `content_h` in `render_paragraph_block` includes the room reserved for a
   topAndBottom float below the lines; borders still use it (shading doesn't).
   Unverified against Word.

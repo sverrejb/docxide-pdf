@@ -1167,10 +1167,14 @@ pub(super) fn auto_frame_width(
                         tab_stops: &p.tab_stops,
                         ..Default::default()
                     };
-                    build_lines(&p.runs, ctx, col_w, ctx.cjk(true, p), &opts)
+                    let text_w = build_lines(&p.runs, ctx, col_w, ctx.cjk(true, p), &opts)
                         .iter()
                         .map(|l| l.total_width)
-                        .fold(0.0, f32::max)
+                        .fold(0.0, f32::max);
+                    // Word sizes the frame in whole twips, rounding the text
+                    // up (probes: drop caps 148.44 and 187.44 px wide push the
+                    // lines beside them 149 and 188 px in, a 138.38 px one 138).
+                    (text_w * 20.0 - 1e-3).ceil() / 20.0
                         + p.indent_left
                         + p.indent_right
                         // The first-line indent widens the frame: an indented
