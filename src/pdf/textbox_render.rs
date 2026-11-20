@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use super::canvas::Content;
+use crate::display::StructType;
 
 use crate::model::{
     EmbeddedImage, ImageGlow, ImageReflection, LineSpacing, Paragraph, Run, SectionProperties,
@@ -501,7 +502,7 @@ pub(super) fn render_single_textbox(
     {
         return;
     }
-    let sect = tags.hoist("Sect", tb.anchor_seq);
+    let sect = tags.hoist(StructType::Sect, tb.anchor_seq);
     let tb_x = resolve_h_position(
         tb.h_relative_from,
         &tb.h_position,
@@ -600,7 +601,7 @@ pub(super) fn render_single_textbox(
         if wordart::render_wordart(tb, content, ctx.fonts, tb_x, tb_y_top, align_w) {
             // The outlines stay artifacts; the text reads as one P (Word:
             // Sect > P with the text).
-            let p = tags.add(sect, "P");
+            let p = tags.add(sect, StructType::P);
             tags.begin(content, page, p);
             let (x, top) = (tb_x + tb.margin_left, tb_y_top - tb.margin_top);
             wordart::invisible_text(tb, content, ctx.fonts, x, top);

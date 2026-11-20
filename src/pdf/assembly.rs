@@ -647,7 +647,29 @@ pub(super) fn assemble_pdf_pages(
                     .map_or(&[][..], Vec::as_slice);
                 builder.add_page(page, links, gradients);
             }
-            let document = builder.finish(doc, lang);
+            // A tagged link's index among its page's links: the display list
+            // keeps the links that get an annotation, in the same order.
+            let tagged_links: Vec<(usize, usize, usize)> = tagged_annots
+                .iter()
+                .filter_map(|&(node, page, annot)| {
+                    let link = page_annot_refs
+                        .get(page)?
+                        .iter()
+                        .position(|&r| r == annot)?;
+                    Some((node, page, link))
+                })
+                .collect();
+            let structure = (!tags.is_empty()).then(|| tags.describe(&tagged_links));
+            let outline = heading_entries
+                .iter()
+                .map(|entry| crate::display::OutlineEntry {
+                    level: entry.level,
+                    title: entry.title.clone(),
+                    page: entry.page_idx,
+                    top: entry.y_position,
+                })
+                .collect();
+            let document = builder.finish(doc, lang, structure, outline, claims_ua);
             session.document = Some(document);
         });
     }
