@@ -237,6 +237,16 @@ Work in a worktree. Suggested commits:
 9. **Version bump to 0.22.0, with release notes.** The release notes list
    the API change with a before/after snippet and thank banduk (#169–#172)
    and sboily (#168, #175) by PR.
+10. **Whole-repo `cargo fmt`, at the very end (user, 2026-11-20).** The tree
+    has drifted from rustfmt (`cargo fmt --check` flags files nobody
+    touched, e.g. `pdf/comments.rs`, `pdf/layout.rs`, `pdf/paragraph.rs`).
+    - The last commit before the release, after every other step: a
+      formatting-only commit with nothing else in it, so review and
+      `git blame --ignore-rev` can skip it.
+    - Check that no other session has open branches first: they would
+      conflict on every reformatted line.
+    - Proof: `cargo fmt --check` clean, then the byte-identical check
+      (formatting must not move a single byte of output).
 
 **Checks for step 5:**
 - The byte-identical check against the main commit before the refactor, on
@@ -249,6 +259,10 @@ Work in a worktree. Suggested commits:
 - The wasm smoke check from #170, if the user kept it.
 
 ## Rules while the steps are in flight
+
+- **No whole-tree `cargo fmt` until step 5.10.** Format only the lines you
+  change (`rustfmt --edition 2024 --check` and read the diff for your files;
+  revert the reformatting of anything else).
 
 - **No crate release between step 1 and the end of step 5.** Main briefly
   carries three thread-local APIs. docxide-demo auto-deploys on a new crate
@@ -289,4 +303,5 @@ Work in a worktree. Suggested commits:
 | 3. #172 font requests | not started |
 | 4. #175 display tags | not started |
 | 5. 0.22 refactor | not started |
+| 5.10 whole-repo `cargo fmt` | not started |
 | Release 0.22.0 | not started |
