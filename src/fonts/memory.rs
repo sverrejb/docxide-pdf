@@ -13,7 +13,7 @@ type FontKey = (String, bool, bool);
 struct MemoryFonts {
     // The rank preserves the directory scanner's regular/Mac Roman/off-weight order.
     index: HashMap<FontKey, (PathBuf, u32, u8)>,
-    data: HashMap<PathBuf, Arc<[u8]>>,
+    data: HashMap<PathBuf, Arc<Vec<u8>>>,
 }
 
 thread_local! {
@@ -26,7 +26,7 @@ thread_local! {
 /// family and style. Returns the number of valid faces with usable names.
 /// Fonts persist across conversions until [`clear_fonts`] on this thread.
 pub fn register_font(data: Vec<u8>) -> usize {
-    let data: Arc<[u8]> = data.into();
+    let data = Arc::new(data);
     FONTS.with_borrow_mut(|fonts| {
         let path = PathBuf::from(format!("memory:{}", fonts.data.len()));
         let mut count = 0;
@@ -77,7 +77,7 @@ pub(super) fn lookup(key: &FontKey) -> Option<(PathBuf, u32)> {
     })
 }
 
-pub(super) fn font_bytes(path: &Path) -> Option<Arc<[u8]>> {
+pub(crate) fn font_bytes(path: &Path) -> Option<Arc<Vec<u8>>> {
     FONTS.with_borrow(|fonts| fonts.data.get(path).cloned())
 }
 

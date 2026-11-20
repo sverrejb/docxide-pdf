@@ -2,12 +2,16 @@
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Barrier};
 
+use docxide_pdf::display::FontSource;
 use docxide_pdf::{
-    ConvertOptions, clear_fonts, convert_docx_bytes_to_pdf_bytes_with, register_font,
-    use_system_fonts,
+    ConvertOptions, clear_fonts, layout_docx_bytes_with, register_font, use_system_fonts,
 };
 
+use crate::common::{convert_bytes as convert, pdf_contains};
+
+/// Its family name is "NB Hyphen Fixture native".
 const FONT: &[u8] = include_bytes!("../../src/fonts/testdata/nb-hyphen-native.ttf");
+const FONT_NAME: &str = "NB Hyphen Fixture native";
 
 /// Only registered fonts on this thread, from a clean registry.
 struct Host;
@@ -27,17 +31,6 @@ impl Drop for Host {
     }
 }
 
-fn font_name() -> String {
-    ttf_parser::Face::parse(FONT, 0)
-        .unwrap()
-        .names()
-        .into_iter()
-        .find(|n| n.name_id == ttf_parser::name_id::FAMILY && n.is_unicode())
-        .unwrap()
-        .to_string()
-        .unwrap()
-}
-
 /// One paragraph in `font`, with `rpr` added to its run properties.
 fn document(font: &str, rpr: &str) -> Vec<u8> {
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
@@ -50,30 +43,6 @@ fn document(font: &str, rpr: &str) -> Vec<u8> {
     zip.finish().unwrap().into_inner()
 }
 
-fn convert(input: &[u8]) -> Vec<u8> {
-    let pdf = convert_docx_bytes_to_pdf_bytes_with(input, &ConvertOptions::new().font_cache(false))
-        .unwrap();
-    assert!(pdf.starts_with(b"%PDF-"));
-    pdf
-}
-
-fn pdf_contains(pdf: &[u8], needle: &[u8]) -> bool {
-    let contains = |bytes: &[u8]| bytes.windows(needle.len()).any(|w| w == needle);
-    contains(pdf)
-        || pdf
-            .windows(7)
-            .enumerate()
-            .filter(|(_, w)| *w == b"stream\n")
-            .any(|(start, _)| {
-                let data = &pdf[start + 7..];
-                let Some(end) = data.windows(10).position(|w| w == b"\nendstream") else {
-                    return false;
-                };
-                miniz_oxide::inflate::decompress_to_vec_zlib(&data[..end])
-                    .is_ok_and(|data| contains(&data))
-            })
-}
-
 /// A real font subset, not only the standard-14 fallback, reached the PDF.
 fn embeds_font(pdf: &[u8]) -> bool {
     pdf_contains(pdf, b"/FontFile2")
@@ -82,7 +51,7 @@ fn embeds_font(pdf: &[u8]) -> bool {
 #[test]
 fn host_fonts_can_be_registered_and_cleared() {
     let _host = Host::new();
-    let doc = document(&font_name(), "");
+    let doc = document(FONT_NAME, "");
     assert!(!embeds_font(&convert(&doc)));
     assert_eq!(register_font(vec![0, 1, 2]), 0);
     assert_eq!(register_font(FONT.to_vec()), 1);
@@ -95,7 +64,7 @@ fn host_fonts_can_be_registered_and_cleared() {
 fn host_fonts_cover_a_missing_style_with_the_registered_face() {
     let _host = Host::new();
     register_font(FONT.to_vec());
-    assert!(embeds_font(&convert(&document(&font_name(), "<w:b/>"))));
+    assert!(embeds_font(&convert(&document(FONT_NAME, "<w:b/>"))));
 }
 
 #[test]
@@ -110,7 +79,7 @@ fn host_fonts_belong_to_the_registering_thread() {
                     register_font(FONT.to_vec());
                 }
                 barrier.wait();
-                let pdf = convert(&document(&font_name(), ""));
+                let pdf = convert(&document(FONT_NAME, ""));
                 assert_eq!(embeds_font(&pdf), i == 0);
             })
         })
@@ -118,4 +87,24 @@ fn host_fonts_belong_to_the_registering_thread() {
     for thread in threads {
         thread.join().unwrap();
     }
+}
+
+#[test]
+fn host_fonts_reach_the_display_list_as_bytes() {
+    let _host = Host::new();
+    register_font(FONT.to_vec());
+    let options = ConvertOptions::new().font_cache(false);
+    let layout = layout_docx_bytes_with(&document(FONT_NAME, ""), &options).unwrap();
+    assert!(
+        layout
+            .fonts
+            .iter()
+            .any(|f| matches!(f.source, FontSource::Data { .. }))
+    );
+    assert!(
+        !layout
+            .fonts
+            .iter()
+            .any(|f| matches!(f.source, FontSource::File { .. }))
+    );
 }

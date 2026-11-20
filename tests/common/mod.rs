@@ -546,3 +546,32 @@ pub fn ensure_libreoffice_pdf(fixture_dir: &Path, soffice: &Path) -> Result<Path
     fs::rename(&lo_default, &lo_pdf).map_err(|e| format!("rename: {e}"))?;
     Ok(lo_pdf)
 }
+
+/// Converts in-memory DOCX bytes without the font cache; the result must be a PDF.
+pub fn convert_bytes(input: &[u8]) -> Vec<u8> {
+    let pdf = docxide_pdf::convert_docx_bytes_to_pdf_bytes_with(
+        input,
+        &docxide_pdf::ConvertOptions::new().font_cache(false),
+    )
+    .unwrap();
+    assert!(pdf.starts_with(b"%PDF-"));
+    pdf
+}
+
+/// Whether `needle` occurs in the PDF, also inside its Flate-compressed streams.
+pub fn pdf_contains(pdf: &[u8], needle: &[u8]) -> bool {
+    let contains = |bytes: &[u8]| bytes.windows(needle.len()).any(|w| w == needle);
+    contains(pdf)
+        || pdf
+            .windows(7)
+            .enumerate()
+            .filter(|(_, w)| *w == b"stream\n")
+            .any(|(start, _)| {
+                let data = &pdf[start + 7..];
+                let Some(end) = data.windows(10).position(|w| w == b"\nendstream") else {
+                    return false;
+                };
+                miniz_oxide::inflate::decompress_to_vec_zlib(&data[..end])
+                    .is_ok_and(|data| contains(&data))
+            })
+}

@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
-use std::fs;
 
 use memmap2::Mmap;
 use ttf_parser::Face;
@@ -32,10 +32,7 @@ impl FontIndex {
     pub(crate) fn for_setup(setup: &FontSetup) -> &'static FontIndex {
         // Off by default on bare wasm, which has no font directories to scan.
         if !super::memory::system_fonts_enabled() {
-            static EMPTY: LazyLock<FontIndex> = LazyLock::new(|| FontIndex {
-                lookup: HashMap::new(),
-                mac_only: HashSet::new(),
-            });
+            static EMPTY: LazyLock<FontIndex> = LazyLock::new(FontIndex::default);
             return &EMPTY;
         }
         // ponytail: leaked once per distinct setup; a server cycling through

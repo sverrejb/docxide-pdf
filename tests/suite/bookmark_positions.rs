@@ -8,6 +8,8 @@ use docxide_pdf::{
     take_bookmark_positions,
 };
 
+use crate::common::{convert_bytes as convert, pdf_contains};
+
 fn document(body: &str, section: &str) -> Vec<u8> {
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
     zip.start_file(
@@ -27,30 +29,6 @@ fn paragraph(name: &str, runs: &str) -> String {
 
 fn lines(count: usize) -> String {
     "<w:t>Line</w:t><w:br/>".repeat(count)
-}
-
-fn convert(input: &[u8]) -> Vec<u8> {
-    let pdf = convert_docx_bytes_to_pdf_bytes_with(input, &ConvertOptions::new().font_cache(false))
-        .unwrap();
-    assert!(pdf.starts_with(b"%PDF-"));
-    pdf
-}
-
-fn pdf_contains(pdf: &[u8], needle: &[u8]) -> bool {
-    let contains = |bytes: &[u8]| bytes.windows(needle.len()).any(|w| w == needle);
-    contains(pdf)
-        || pdf
-            .windows(7)
-            .enumerate()
-            .filter(|(_, w)| *w == b"stream\n")
-            .any(|(start, _)| {
-                let data = &pdf[start + 7..];
-                let Some(end) = data.windows(10).position(|w| w == b"\nendstream") else {
-                    return false;
-                };
-                miniz_oxide::inflate::decompress_to_vec_zlib(&data[..end])
-                    .is_ok_and(|data| contains(&data))
-            })
 }
 
 fn position(name: &str) -> BookmarkPosition {
