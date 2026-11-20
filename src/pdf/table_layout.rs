@@ -120,6 +120,8 @@ pub(super) struct CellParagraphLayout {
     pub(super) list_label: String,
     /// The label by font (`list_label::label_pieces`), empty without one.
     pub(super) label_pieces: Vec<(Option<String>, String)>,
+    /// `list_label::body_font_key`: the text font a Symbol bullet falls back to.
+    pub(super) label_body_key: Option<String>,
     pub(super) label_font_size: f32,
     /// For L/LI tagging inside the cell.
     pub(super) list_item: Option<crate::model::ListItem>,
@@ -1198,6 +1200,7 @@ pub(super) fn compute_row_layouts(
                                             .map(|(k, t)| (k, t.to_string()))
                                             .collect()
                                     },
+                                    label_body_key: super::list_label::body_font_key(para),
                                     label_font_size: para.list_label_font_size.unwrap_or(font_size),
                                     list_item: para.list_item,
                                     label_color: para.list_label_color,

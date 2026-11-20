@@ -1,0 +1,12 @@
+{
+  "case": "scraped/victorian_universal_design_policy",
+  "page": 10,
+  "source": "Generated",
+  "x_pt": 291.4,
+  "y_pt": 20.9,
+  "note": "Word offset of this (I assume double print?) is smaller than docxide's.",
+  "author": "anonymous",
+  "created": "2026-11-20T09:16:39Z",
+  "generated": "0.21.4 @18d97d73",
+  "fixed": false
+}

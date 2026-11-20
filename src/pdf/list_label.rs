@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use super::canvas::Content;
@@ -70,14 +71,16 @@ pub(super) fn label_pieces(para: &Paragraph) -> Vec<(Option<String>, &str)> {
 pub(super) fn show_label_pieces<S: AsRef<str>>(
     content: &mut Content,
     pieces: &[(Option<String>, S)],
+    body_key: Option<&str>,
     fonts: &HashMap<String, FontEntry>,
     size: f32,
 ) {
     for (i, (key, text)) in pieces.iter().enumerate() {
-        let Some(entry) = key.as_deref().and_then(|k| fonts.get(k)) else {
+        let Some((entry, text)) = label_face(text.as_ref(), key.as_deref(), body_key, fonts)
+        else {
             continue;
         };
-        let mut bytes = entry.encode(text.as_ref());
+        let mut bytes = entry.encode(&text);
         if i + 1 == pieces.len() && entry.has_char(' ') {
             bytes.extend(entry.encode(" "));
         }
@@ -126,32 +129,53 @@ pub(super) fn encode_label(entry: &FontEntry, label: &str) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
-fn label_for_paragraph<'a>(
-    para: &Paragraph,
-    seen_fonts: &'a HashMap<String, FontEntry>,
-) -> Option<(&'a FontEntry, Vec<u8>)> {
-    let key = label_font_key(para);
-    let entry = key.as_deref().and_then(|k| seen_fonts.get(k));
+/// The first run's font key: the text font a Symbol bullet falls back to.
+pub(super) fn body_font_key(para: &Paragraph) -> Option<String> {
+    para.runs.first().map(font_key)
+}
 
-    if let Some(entry) = entry
-        && let Some(bytes) = encode_label(entry, &para.list_label)
+/// The face that draws a label, or one piece of it, and the text shown in it.
+/// None when no font draws it.
+pub(super) fn label_face<'a, 't>(
+    label: &'t str,
+    key: Option<&str>,
+    body_key: Option<&str>,
+    fonts: &'a HashMap<String, FontEntry>,
+) -> Option<(&'a FontEntry, Cow<'t, str>)> {
+    // A piece of spaces draws nothing in any font but still has to advance.
+    let draws =
+        |e: &FontEntry, text: &str| text.trim().is_empty() || !is_all_notdef(&e.encode(text));
+    if let Some(entry) = key.and_then(|k| fonts.get(k))
+        && draws(entry, label)
     {
-        return Some((entry, bytes));
+        return Some((entry, Cow::Borrowed(label)));
     }
 
     // Either the labeled font is missing, or it produced only .notdef
     // glyphs (typical for Symbol-PUA chars when the font's cmap can't
     // round-trip them). Fall back to the surrounding body-run font with
     // Symbol-PUA chars mapped to their Unicode equivalents.
-    if let Some(mapped) = map_symbol_pua(&para.list_label)
-        && let Some(run) = para.runs.first()
-        && let Some(body_entry) = seen_fonts.get(&font_key(run))
+    let mapped = map_symbol_pua(label);
+    if let Some(mapped) = &mapped
+        && let Some(body_entry) = body_key.and_then(|k| fonts.get(k))
+        && draws(body_entry, mapped)
     {
-        let bytes = encode_label(body_entry, &mapped).unwrap_or_else(|| body_entry.encode(&mapped));
-        return Some((body_entry, bytes));
+        return Some((body_entry, Cow::Owned(mapped.clone())));
     }
 
-    None
+    // Like run text: the face registered for the glyphs the document's own
+    // fonts lack (a "●" bullet whose font and substitute both miss it, or a
+    // Symbol check mark whose "✓" the text font lacks).
+    let fallbacks = super::line_sizing::glyph_fallbacks(fonts);
+    mapped
+        .map(Cow::Owned)
+        .into_iter()
+        .chain([Cow::Borrowed(label)])
+        .find_map(|text| {
+            let has = |e: &FontEntry, c| e.char_to_gid.as_ref().is_some_and(|m| m.contains_key(&c));
+            let face = fallbacks.iter().find(|e| text.chars().all(|c| has(e, c)))?;
+            Some((*face, text))
+        })
 }
 
 /// `encode_as_gids` writes the .notdef glyph (gid 0) for any char missing
@@ -207,22 +231,28 @@ pub(super) fn render_list_label(
         baseline_y + para.list_label_rise - centred_label_drop(para, fonts, fallback_font_size);
     let x = label_x + label_shift(para, fonts);
     let pieces = label_pieces(para);
+    let body_key = body_font_key(para);
     if pieces.len() > 1 && !para.bidi {
         let label_fs = para.list_label_font_size.unwrap_or(fallback_font_size);
         if let Some(c) = para.list_label_color {
             fill_rgb(content, c);
         }
         content.begin_text().next_line(x, baseline_y);
-        show_label_pieces(content, &pieces, fonts, label_fs);
+        show_label_pieces(content, &pieces, body_key.as_deref(), fonts, label_fs);
         content.end_text();
         if para.list_label_color.is_some() {
             content.set_fill_gray(0.0);
         }
         return;
     }
-    let (entry, label_bytes) = label_for_paragraph(para, fonts).unzip();
-    let label_bytes = label_bytes.unwrap_or_default();
-    let label_font_name = entry.map_or("", |e| e.pdf_name.as_str());
+    // No font draws the label (its font is missing and nothing substitutes):
+    // a text object naming no font is invalid PDF, so nothing is written.
+    let key = label_font_key(para);
+    let Some((entry, label)) =
+        label_face(&para.list_label, key.as_deref(), body_key.as_deref(), fonts)
+    else {
+        return;
+    };
     let label_color = para.list_label_color;
     if let Some(c) = label_color {
         fill_rgb(content, c);
@@ -230,12 +260,13 @@ pub(super) fn render_list_label(
     let label_fs = para.list_label_font_size.unwrap_or(fallback_font_size);
     content
         .begin_text()
-        .set_font(Name(label_font_name.as_bytes()), label_fs);
-    if let Some(entry) = entry.filter(|_| para.bidi) {
+        .set_font(Name(entry.pdf_name.as_bytes()), label_fs);
+    if para.bidi {
         // Laid out right to left ("3." draws ".3"), read in logical order.
         content.next_line(label_x, baseline_y);
-        super::layout::show_visual(content, entry, &para.list_label);
+        super::layout::show_visual(content, entry, &label);
     } else {
+        let label_bytes = encode_label(entry, &label).unwrap_or_default();
         content.next_line(x, baseline_y).show(Str(&label_bytes));
     }
     content.end_text();
@@ -252,13 +283,13 @@ pub(super) fn render_list_label(
                 .get(&crate::fonts::font_key(r))
                 .map(|e| (e, r.font_size))
         });
-    let underline_font = text_font.or(entry.map(|e| (e, label_fs)));
+    let underline_font = text_font.unwrap_or((entry, label_fs));
     let underline = |_: &FontEntry| {
-        let (entry, size) = underline_font?;
+        let (entry, size) = underline_font;
         super::layout::post_underline(entry, size)
             .map(|(offset, th)| (baseline_y - offset - th, th))
     };
-    if let (Some(rev), Some(entry)) = (para.list_label_revision, entry) {
+    if let Some(rev) = para.list_label_revision {
         // Struck or underlined as a run of the same font would be (Word for
         // Mac probe p11b: 0.72pt lines, 2.16 above / 1.92 below the baseline
         // at Calibri 11), over the label's width; the tab gap to the text
@@ -277,15 +308,13 @@ pub(super) fn render_list_label(
             let lines = match (rev.deleted, line) {
                 (true, Some((bottom, th))) => vec![(bottom - th, th), (bottom + th, th)],
                 (true, None) => vec![],
-                (false, _) => underline_font.map_or(vec![], |(entry, size)| {
-                    super::layout::underline_lines(
-                        Some(entry),
-                        size,
-                        crate::model::UnderlineStyle::Double,
-                        false,
-                        baseline_y,
-                    )
-                }),
+                (false, _) => super::layout::underline_lines(
+                    Some(underline_font.0),
+                    underline_font.1,
+                    crate::model::UnderlineStyle::Double,
+                    false,
+                    baseline_y,
+                ),
             };
             for (bottom, th) in lines {
                 let w_all = w.max(para.indent_hanging);
@@ -300,7 +329,7 @@ pub(super) fn render_list_label(
             }
         }
     }
-    if let (Some(split), Some(entry)) = (para.list_label_renumbered, entry) {
+    if let Some(split) = para.list_label_renumbered {
         // "4.2.": the original number struck, the final one underlined.
         let orig: String = para.list_label.chars().take(split).collect();
         let w_orig = label_text_width(para, fonts, label_font_key(para), &orig);
@@ -454,5 +483,69 @@ pub(super) fn label_x(
         box_x + box_w - label_offset(para) - label_width(para, fonts)
     } else {
         box_x + label_offset(para)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn label_without_a_font_writes_no_text() {
+        let para = Paragraph {
+            list_label: "\u{F084}".into(),
+            list_label_font: Some("Wingdings 3".into()),
+            ..Default::default()
+        };
+        let mut content = Content::new();
+        render_list_label(&mut content, &para, &HashMap::new(), 72.0, 700.0, 11.0);
+        assert!(content.finish().is_empty());
+    }
+
+    #[test]
+    fn label_missing_from_its_font_takes_the_glyph_fallback() {
+        let para = Paragraph {
+            list_label: "●".into(),
+            list_label_font: Some("Noto Sans Symbols".into()),
+            ..Default::default()
+        };
+        let label_font = FontEntry {
+            char_to_gid: Some(HashMap::new()),
+            ..FontEntry::stub()
+        };
+        let rescue = FontEntry {
+            pdf_name: "F2".into(),
+            char_to_gid: Some([('●', 1)].into_iter().collect()),
+            ..FontEntry::stub()
+        };
+        let fonts = HashMap::from([
+            ("Noto Sans Symbols".to_string(), label_font),
+            (format!("{}0", super::super::fonts::GLYPH_FALLBACK), rescue),
+        ]);
+        let mut content = Content::new();
+        render_list_label(&mut content, &para, &fonts, 72.0, 700.0, 11.0);
+        let stream = String::from_utf8_lossy(&content.finish()).into_owned();
+        assert!(stream.contains("/F2 11 Tf"), "{stream}");
+    }
+
+    #[test]
+    fn symbol_bullet_the_text_font_lacks_takes_the_glyph_fallback() {
+        // Symbol's check mark maps to "✓", which Arial lacks.
+        let lacks = || FontEntry {
+            char_to_gid: Some(HashMap::new()),
+            ..FontEntry::stub()
+        };
+        let rescue = FontEntry {
+            pdf_name: "F3".into(),
+            char_to_gid: Some([('✓', 1)].into_iter().collect()),
+            ..FontEntry::stub()
+        };
+        let fonts = HashMap::from([
+            ("Symbol".to_string(), lacks()),
+            ("Arial".to_string(), lacks()),
+            (format!("{}0", super::super::fonts::GLYPH_FALLBACK), rescue),
+        ]);
+        let (face, text) = label_face("\u{F0FC}", Some("Symbol"), Some("Arial"), &fonts).unwrap();
+        assert_eq!((face.pdf_name.as_str(), &*text), ("F3", "✓"));
     }
 }
