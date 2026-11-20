@@ -607,6 +607,18 @@ impl<'a> Ctx<'a> {
         }
         text.chars()
             .map(|ch| {
+                // An ideographic space pads equations in Japanese papers; the
+                // math font has no glyph for it. It is an em of nothing.
+                if ch == '\u{3000}' {
+                    return B {
+                        w: size,
+                        first: Class::Space,
+                        last: Class::Space,
+                        character: true,
+                        strike: run.strike.then_some(run.color),
+                        ..B::empty()
+                    };
+                }
                 let (drawn, italic) = alphanumeric::styled(ch, run.style, run.script);
                 let drawn = match drawn {
                     // Word draws a hyphen-minus in math as the minus sign.
