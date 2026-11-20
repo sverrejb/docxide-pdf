@@ -91,26 +91,41 @@ Open:
   Word takes about 37 (two 18 pt pitches): `9d67577d29` (the −2.1 above).
 - Formula speech leaves deleted math out in both views.
 
-### B. Body starts too high under the header (3 rows)
+### B. Body starts too high under the header (3 rows; 2 real)
 
-Same lines, same breaks, same x positions (`text_sim` 1.0). The whole body
-sits a constant distance lower in Word on every page. A constant offset beyond
-the ±8 px (3.8 pt) SSIM search sinks both metrics.
+Re-exported online (probes in `tests/output/probes/hdrB/`, gitignored):
 
-| document | offset | header |
-|---|---|---|
-| Kant `b50d7a1bf1` | 14.9 pt | one empty Normal paragraph (Calibri 11, 1.15 lines, 10 pt after), header at 36 pt, top margin 72 pt |
-| CCPR `b1eac08c1e` | ~21 pt | logo `w:drawing` + text line |
-| `c1a1763682` | ~4.3 pt | table with logos |
+| document | online | Mac ref | ours | verdict |
+|---|---|---|---|---|
+| Kant `b50d7a1bf1` | 88.1 | 102.8 | 88.1 | Mac-only (a second empty header line); not code, moved to H |
+| CCPR `b1eac08c1e` | 156.5 | 156.5 | 133.0 | real: header tab wrap, below |
+| `c1a1763682` | 122.3 | 122.5 | 115.8 | real, not looked at yet: header table with logos (re-measure on the online PDF) |
 
-For CCPR and `c1a1763682`, the header is taller than the top margin and pushes
-the body down in Word; we under-measure it. See memory
-`header-float-extent-open`: narrow wrapping header floats do not extend the
-header. Check whether these logos are inline or floats. The Kant header should
-end near 61.5 pt by our model, but Word puts the body top near 87 pt. Measure
-that before trusting either model; it may be Mac-only. Side note:
-`c1a1763682` has a DATE field that Word re-evaluates at export (25/09/2026),
-while we print the saved result (04/02/2022).
+**CCPR: a tab that overflows right after a right stop on the margin.** Header
+paragraphs `logo⇥(V1, 25 May 2019)⇥CCPR 19/03⇥⇥` and `⇥⇥⇥⇥` (Kopfzeile:
+centre 4536, right 9072 = the text width; margins 1417; compat 15). Word
+breaks *before the last unit* of the right-aligned segment, not before the
+overflowing tab: "19/03" moves down with the tabs, and the tabs-only
+paragraph takes 3 lines (`⇥ | ⇥ | ⇥⇥`), where we give 2. The second paragraph
+is the 11.5 pt; the first takes 2 lines either way.
+
+That carry happens only sometimes: probes with the same shapes in the body,
+or in headers with 1440 margins, give Word our 2 lines. A margin sweep
+(1400–1445 twips, symmetric, header) flips the line count with a 5-twip
+(0.25 pt) period (1432, 1437, 1442 add a line; 1400–1414 take one line fewer),
+but the same paragraph as the header's first (sweep s1417: 2 lines) or third
+(`hmarg/letter_m1417`: 3 lines) also differs, so the trigger is not settled.
+It looks like the device grid: the right stop on the margin compares as one
+288-dpi pixel past the header's limit, depending on the margin's grid
+phase. Next step: derive that comparison (glyph_grid's rounding?) before
+coding the carry rule: break before the last word of the aligned segment, or
+before the aligned tab itself when the segment is empty.
+
+**Side finding, compat 14 (probe `tabs3/tabwrap14`):** Word keeps a tab that
+overflows after a right or centre segment on the margin *on the line*, past
+the margin (4 tabs = 1 line; `⇥Z` lands at 576, off the text area); we wrap.
+After left/default stops it wraps as we do. Our compat < 15 branch only covers
+explicit stops past the margin.
 
 ### C. Vertical text not supported (1 row)
 
@@ -168,6 +183,8 @@ that is not code, see memory `tracked-changes-work`.
 - H3 `98af75f057` / `4ade5f9207`: Palatino-Roman from the Mac. Our lines are
   taller (12 pages against 8). Memory `tracked-changes-work` already records
   "Palatino Mac hhea" as not code.
+- H5 Kant `b50d7a1bf1`: the Mac export draws a second empty header line
+  (body 14.9 pt lower); the online export and ours agree to 0.1 pt.
 - H4 `file_57` ×2: Word used Mac Helvetica; we substitute Arial, which is what
   the online export does. Positions match; glyph shapes differ.
 
