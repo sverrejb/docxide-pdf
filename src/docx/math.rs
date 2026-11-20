@@ -2,12 +2,26 @@
 
 use crate::model::{FracKind, MathNode, MathRow, MathRun, MathScript, MathSettings, MathStyle};
 
-use super::{MATH_NS, math_bool, math_child, math_run_text, math_val, wml};
+use super::{
+    MATH_NS, is_revision_wrapper, math_bool, math_child, math_run_text, math_val, revision_of, wml,
+};
 
 /// Builds math rows. `format` resolves a math run's `w:rPr` (its colour)
-/// against the paragraph's formatting.
+/// against the paragraph's formatting; `revisions` says whether deleted math
+/// shows and in which author colour.
 pub(super) struct MathParser<'f> {
     pub(super) format: &'f dyn Fn(Option<roxmltree::Node>) -> crate::model::Run,
+    pub(super) revisions: &'f super::Revisions,
+}
+
+/// A math run's `w:rPr`, also inside the revision wrapper Word saves revised
+/// math runs with (`<m:r><w:ins><w:rPr/><m:t/></w:ins></m:r>`).
+pub(super) fn run_rpr<'a>(r: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
+    wml(r, "rPr").or_else(|| {
+        r.children()
+            .filter(|c| is_revision_wrapper(*c))
+            .find_map(|c| wml(c, "rPr"))
+    })
 }
 
 fn flag(node: roxmltree::Node, pr: &str, name: &str) -> bool {
@@ -26,6 +40,13 @@ fn chr(node: roxmltree::Node, pr: &str, name: &str, default: char) -> Option<cha
 impl MathParser<'_> {
     pub(super) fn row(&self, node: roxmltree::Node) -> MathRow {
         node.children()
+            .flat_map(|c| {
+                if is_revision_wrapper(c) {
+                    c.children().collect()
+                } else {
+                    vec![c]
+                }
+            })
             .filter(|c| c.tag_name().namespace() == Some(MATH_NS))
             .flat_map(|c| self.node(c))
             .collect()
@@ -176,11 +197,20 @@ impl MathParser<'_> {
     }
 
     fn run(&self, r: roxmltree::Node) -> Option<MathNode> {
-        let text = math_run_text(r);
+        let markup = self.revisions.markup;
+        let text = math_run_text(r, markup);
         if text.is_empty() {
             return None;
         }
-        let fmt = (self.format)(wml(r, "rPr"));
+        let fmt = (self.format)(run_rpr(r));
+        // Markup view: revised math takes the author's colour, deleted math
+        // is struck through and inserted math is not underlined (Word for
+        // Mac, corpus redlines 970e9bbbcc and d0281643d2).
+        let revision = r
+            .descendants()
+            .find(|t| t.has_tag_name((MATH_NS, "t")))
+            .and_then(revision_of)
+            .filter(|_| markup);
         let val = |name| math_val(r, "rPr", name);
         Some(MathNode::Run(MathRun {
             text,
@@ -205,7 +235,10 @@ impl MathParser<'_> {
                 italic: fmt.italic,
                 size: fmt.font_size,
             }),
-            color: fmt.color,
+            color: revision.map_or(fmt.color, |(_, rev)| {
+                Some(self.revisions.revision_color(rev))
+            }),
+            strike: revision.is_some_and(|(deleted, _)| deleted),
         }))
     }
 }
@@ -246,14 +279,51 @@ mod tests {
     use super::*;
 
     fn parse(xml: &str) -> MathRow {
+        parse_in(xml, &crate::docx::Revisions::default())
+    }
+
+    fn parse_in(xml: &str, revisions: &crate::docx::Revisions) -> MathRow {
         let doc = format!(
             r#"<m:oMath xmlns:m="{MATH_NS}" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{xml}</m:oMath>"#
         );
         let tree = roxmltree::Document::parse(&doc).unwrap();
         MathParser {
             format: &|_| crate::model::Run::default(),
+            revisions,
         }
         .row(tree.root_element())
+    }
+
+    /// How Word saves revised math: the revision inside the run, around its
+    /// properties and text.
+    const REVISED: &str = r#"<m:r><w:del w:id="1" w:author="A"><w:rPr/><m:t>a</m:t></w:del></m:r><m:r><w:ins w:id="2" w:author="A"><w:rPr/><m:t>b</m:t></w:ins></m:r>"#;
+
+    fn runs(row: &MathRow) -> Vec<(String, bool, bool)> {
+        row.iter()
+            .filter_map(|n| match n {
+                MathNode::Run(r) => Some((r.text.clone(), r.strike, r.color.is_some())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn revised_math_final_view() {
+        // Deleted math is gone, inserted math stays, plain.
+        assert_eq!(runs(&parse(REVISED)), [("b".into(), false, false)]);
+    }
+
+    #[test]
+    fn revised_math_markup_view() {
+        // Both in the author's colour; only the deletion is struck through.
+        let markup = crate::docx::Revisions {
+            markup: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            runs(&parse_in(REVISED, &markup)),
+            [("a".into(), true, true), ("b".into(), false, true)]
+        );
     }
 
     #[test]

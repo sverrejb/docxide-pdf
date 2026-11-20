@@ -154,6 +154,8 @@ pub struct MathRun {
     /// operator spacing.
     pub normal: Option<TextFont>,
     pub color: Option<[u8; 3]>,
+    /// Struck through: deleted math in the markup view.
+    pub strike: bool,
 }
 
 /// The font an `m:nor` run is drawn in: its `w:rPr` resolved like a text

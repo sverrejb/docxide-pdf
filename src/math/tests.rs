@@ -12,6 +12,7 @@ fn run(text: &str) -> MathNode {
         script: MathScript::Roman,
         normal: None,
         color: None,
+        strike: false,
     })
 }
 
@@ -213,6 +214,7 @@ fn normal_text_in_its_own_font() {
             size: 12.0,
         }),
         color: None,
+        strike: false,
     });
     let root = vec![MathNode::Scripts {
         base: vec![run("e")],
@@ -403,4 +405,35 @@ fn inline_zones_break_after_operators() {
     // its line (Word, probe mp16_brk).
     assert!(head.ascent < tail.ascent && head.descent < tail.descent);
     assert_eq!((tail.ascent, tail.descent), (b.ascent, b.descent));
+}
+
+#[test]
+fn struck_run_strikes_through_operator_spacing() {
+    // Word strikes deleted math in one line per run, across the space around
+    // the relation (corpus redline 970e9bbbcc).
+    let struck = MathNode::Run(MathRun {
+        text: "x=y".into(),
+        style: None,
+        script: MathScript::Roman,
+        normal: None,
+        color: Some([1, 2, 3]),
+        strike: true,
+    });
+    let b = layout_at(vec![struck], false, 12.0);
+    let rules: Vec<_> = b
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            MathItem::Rule { x, w, color, .. } => Some((*x, *w, *color)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(rules.len(), 1, "one strike for the run: {rules:?}");
+    let (x, w, color) = rules[0];
+    assert!(
+        x.abs() < 0.01 && (x + w - b.width).abs() < 0.5,
+        "{rules:?} in {}",
+        b.width
+    );
+    assert_eq!(color, Some([1, 2, 3]));
 }

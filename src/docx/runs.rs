@@ -21,7 +21,7 @@ use super::vml_object::{is_vml_picture, parse_object_floating_image, parse_objec
 use super::vml_shape::{parse_connector_from_vml, parse_textbox_from_vml};
 use super::{
     MATH_NS, MC_NS_TOP, OFFICE_NS, ParseContext, REL_NS, VML_NS, WML_NS, math_run_text, math_val,
-    parse_hex_color, parse_pt, twips_attr, wml, wml_attr, wml_bool,
+    parse_hex_color, parse_pt, revision_of, twips_attr, wml, wml_attr, wml_bool,
 };
 use super::{is_complex_script_char, is_east_asian_char};
 
@@ -895,19 +895,6 @@ pub(super) const AUTHOR_COLORS: [[u8; 3]; 20] = [
     [0x8E, 0x56, 0x2E],
 ];
 
-/// The innermost `w:ins` / `w:moveTo` / `w:del` / `w:moveFrom` around a run
-/// node, as (deleted, element).
-fn revision_of<'a>(node: roxmltree::Node<'a, 'a>) -> Option<(bool, roxmltree::Node<'a, 'a>)> {
-    node.ancestors()
-        .skip(1)
-        .take_while(|n| !n.has_tag_name((WML_NS, "p")))
-        .find_map(|n| match n.tag_name().name() {
-            "ins" | "moveTo" if n.tag_name().namespace() == Some(WML_NS) => Some((false, n)),
-            "del" | "moveFrom" if n.tag_name().namespace() == Some(WML_NS) => Some((true, n)),
-            _ => None,
-        })
-}
-
 /// Markup view: inserted text is underlined and deleted text struck through,
 /// both in the author's colour, which replaces the run's own colour and its
 /// underline or strike style (Word for Mac probes 2026-11-05: a double-
@@ -1195,9 +1182,11 @@ fn math_zone_run(
     omath: roxmltree::Node,
     defaults: &ParagraphRunDefaults,
     theme: &ThemeFonts,
+    revisions: &super::Revisions,
 ) -> Option<Run> {
     let parser = super::math::MathParser {
         format: &|rpr| defaults.resolve_run_format(rpr, None, None, theme),
+        revisions,
     };
     let root = parser.row(omath);
     if root.is_empty() {
@@ -1206,13 +1195,13 @@ fn math_zone_run(
     let text: String = omath
         .descendants()
         .filter(|n| n.has_tag_name((MATH_NS, "r")))
-        .map(math_run_text)
+        .map(|r| math_run_text(r, revisions.markup))
         .collect();
     // The zone takes its first run's size (and the paragraph's otherwise).
     let first_rpr = omath
         .descendants()
         .find(|n| n.has_tag_name((MATH_NS, "r")))
-        .and_then(|r| wml(r, "rPr"));
+        .and_then(super::math::run_rpr);
     let mut run = (parser.format)(first_rpr).text_run(text, None);
     let spoken = super::math_speech::speak(omath);
     run.formula = (!spoken.is_empty()).then(|| std::sync::Arc::<str>::from(spoken));
@@ -1298,7 +1287,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     {
         attach_comment_anchors(&mut runs, &mut ref_anchors, node_idx);
         if run_node.has_tag_name((MATH_NS, "oMath")) {
-            runs.extend(math_zone_run(run_node, &defaults, ctx.theme));
+            runs.extend(math_zone_run(run_node, &defaults, ctx.theme, ctx.revisions));
             continue;
         }
         let runs_before = runs.len();
