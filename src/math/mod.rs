@@ -111,31 +111,34 @@ impl MathBox {
         let x = |it: &MathItem| match it {
             MathItem::Glyph { x, .. } | MathItem::Rule { x, .. } | MathItem::Text { x, .. } => *x,
         };
-        // A strikethrough across the break is cut in two: up to the end of
-        // the first part, and on from the start of the second.
-        let items = self.items.iter().cloned().flat_map(|it| match it {
-            MathItem::Rule { x, y, w, h, color } if x < end && x + w > end => vec![
-                MathItem::Rule {
-                    x,
-                    y,
-                    w: end - x,
-                    h,
-                    color,
-                },
-                MathItem::Rule {
-                    x: start,
-                    y,
-                    w: x + w - start,
-                    h,
-                    color,
-                },
-            ]
-            .into_iter()
-            .filter(|r| matches!(r, MathItem::Rule { w, .. } if *w > 0.0))
-            .collect(),
-            it => vec![it],
-        });
-        let (head, tail): (Vec<_>, Vec<_>) = items.partition(|it| x(it) < end);
+        let (mut head, mut tail) = (Vec::new(), Vec::new());
+        for it in self.items.iter().cloned() {
+            match it {
+                // A strikethrough across the break is cut in two: up to the
+                // end of the first part, and on from the start of the second.
+                MathItem::Rule { x, y, w, h, color } if x < end && x + w > end => {
+                    head.push(MathItem::Rule {
+                        x,
+                        y,
+                        w: end - x,
+                        h,
+                        color,
+                    });
+                    if x + w > start {
+                        let w = x + w - start;
+                        tail.push(MathItem::Rule {
+                            x: start,
+                            y,
+                            w,
+                            h,
+                            color,
+                        });
+                    }
+                }
+                it if x(&it) < end => head.push(it),
+                it => tail.push(it),
+            }
+        }
         let i = self.atoms.partition_point(|a| a.0 < end);
         let head_atoms = self.atoms[..i].to_vec();
         let tail_atoms = self.atoms[i..]
@@ -507,6 +510,9 @@ impl<'a> Ctx<'a> {
             assemble(atoms, &xs, false).0
         };
         b.items.extend(strikes);
+        // Drawn: a single struck atom returned as the box must not be struck
+        // again by the row it sits in.
+        b.strike = None;
         b
     }
 

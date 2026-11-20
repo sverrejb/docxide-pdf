@@ -66,7 +66,8 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     // Word never splits display math over pages: a wrapped equation that
     // doesn't fit moves whole (probe `mp20_relpos`).
-    let keep_lines = keep_lines(ppr, para_style) || super::runs::display_math(node).is_some();
+    let display_math = super::runs::display_math(node).is_some();
+    let keep_lines = keep_lines(ppr, para_style) || display_math;
 
     let widow_control = widow_control(ppr, para_style, &ctx.styles.defaults);
     // ponytail: direct formatting only; read the style's when a fixture sets it there.
@@ -115,7 +116,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     // Display math takes the left indent only: Word centres x=1 the same
     // under a 1in first-line indent as under none, and under left 1in with a
     // 1in hanging indent as under left 1in (online probe mp_display_indent).
-    if super::runs::display_math(node).is_some() {
+    if display_math {
         (indent_hanging, indent_first_line) = (0.0, 0.0);
     }
     let mut runs = parsed.runs;

@@ -4,7 +4,9 @@
 // ponytail: the structures and symbols the corpus uses; matrices and accents
 // are read as their contents in order
 
-use super::{MATH_NS, find_children, math_bool, math_child, math_run_text, math_val};
+use super::{
+    MATH_NS, find_children, math_bool, math_child, math_children, math_run_text, math_val,
+};
 
 /// The spoken form of an `m:oMath` zone; empty when it has nothing to say.
 pub(super) fn speak(omath: roxmltree::Node) -> String {
@@ -14,10 +16,7 @@ pub(super) fn speak(omath: roxmltree::Node) -> String {
 }
 
 fn speak_into(node: roxmltree::Node, out: &mut Vec<String>) {
-    for c in node
-        .children()
-        .filter(|n| n.tag_name().namespace() == Some(MATH_NS))
-    {
+    for c in math_children(node, false).filter(|n| n.tag_name().namespace() == Some(MATH_NS)) {
         let part = |name: &str, out: &mut Vec<String>| {
             if let Some(n) = math_child(c, name) {
                 speak_into(n, out);
