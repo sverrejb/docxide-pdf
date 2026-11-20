@@ -251,7 +251,7 @@ Work in a worktree. Suggested commits:
 | Step | State |
 |---|---|
 | #169 bookmark positions | merged `a23175b1b` (2026-11-19) |
-| 1. #170 bare wasm | reviewed on `review/pr-170`, awaiting push |
+| 1. #170 bare wasm | merged 2026-11-20 |
 | 2. #171 memory fonts | not started |
 | 3. #172 font requests | not started |
 | 4. #175 display tags | not started |
