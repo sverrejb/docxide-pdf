@@ -551,6 +551,10 @@ Open queue from the large-corpus and focus-fixture rounds:
 - Text-anchored body frames without an explicit offset (`lifted_frame` lifts
   only offset frames), and wrap-around frames reaching into the text
   (croatian_grant's two), still flow inline.
+- Drop caps (`super_editor_dropcaps`): lines beside a `dropCap="drop"` cap
+  start 0.15–0.2pt left of Word's; `w:hSpace` on a margin cap that fits the
+  margin, the next paragraph's own space before and indents, and `w:position`
+  other than the −5pt Word writes are unprobed.
 - `content_h` in `render_paragraph_block` includes the room reserved for a
   topAndBottom float below the lines; borders still use it (shading doesn't).
   Unverified against Word.

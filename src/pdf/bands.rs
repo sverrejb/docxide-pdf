@@ -878,11 +878,22 @@ impl<'a> OpenFrame<'a> {
         take_frame_break(blocks, state, sp, ctx, (sect_idx, col_geometry.len()));
         let width = frame_width(props, blocks, ctx, sp.text_width());
         // A drop cap is as tall as the next paragraph's first `lines` lines.
-        // ponytail: that paragraph's space before and indents are not added;
-        // the probed drop cap has neither.
+        // ponytail: that paragraph's indents are not added; no probed drop
+        // cap has them.
+        let next = props
+            .drop_cap
+            .and_then(|_| block_para(blocks, frame_blocks(props, blocks).count()));
         let wrap_height = props.drop_cap.map_or(props.height, |dc| {
-            let next = block_para(blocks, frame_blocks(props, blocks).count());
             dc.lines as f32 * next.map_or(0.0, |p| table_layout::spacer_line_h(p, ctx))
+        });
+        // The cap starts where that paragraph's first line does, below the
+        // gap from the paragraph above (Word probe: under a heading with 4pt
+        // of space after, the cap's exact line starts 4pt lower).
+        let cap_gap = next.map_or(0.0, |p| {
+            state
+                .pb
+                .page_top_gap(sp, p.space_before, state.prev_space_after)
+                .unwrap_or(inter_gap(state.prev_space_after, p.space_before, ctx))
         });
         // Empty frames draw nothing but keep their marks' lines as their box:
         // text wraps on both sides of it (empty-frame-control, Word online).
@@ -921,7 +932,11 @@ impl<'a> OpenFrame<'a> {
         }
         let (col_x, col_w) = col_geometry[state.current_col];
         let x = match props.drop_cap {
-            Some(dc) if dc.in_margin => col_x - props.h_space - width,
+            // A cap too wide for the margin stays on the page and reaches into
+            // the text, which wraps at its right edge (Word probe: a 76pt cap
+            // in a 72pt margin starts at the page edge, the lines beside it
+            // 4pt in).
+            Some(dc) if dc.in_margin => (col_x - props.h_space - width).max(0.0),
             Some(_) => col_x,
             None => resolve_h_position(
                 props.h_relative_from,
@@ -933,7 +948,7 @@ impl<'a> OpenFrame<'a> {
                 sp.text_width(),
             ),
         };
-        let top = sp.page_height - top_y(state.pb.slot_top);
+        let top = sp.page_height - top_y(state.pb.slot_top - cap_gap);
         let flow = SavedFlow {
             slot_top: std::mem::replace(&mut state.pb.slot_top, sp.page_height - top),
             // A frame never breaks across pages: 3ec631ca50's bottom-aligned
@@ -1158,6 +1173,9 @@ pub(super) fn auto_frame_width(
                         .fold(0.0, f32::max)
                         + p.indent_left
                         + p.indent_right
+                        // The first-line indent widens the frame: an indented
+                        // drop cap sits that far inside it (Word probe).
+                        + p.indent_first_line.max(0.0)
                 },
                 |img| img.box_width(),
             ),

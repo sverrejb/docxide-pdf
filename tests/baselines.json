@@ -12182,6 +12182,16 @@
     "a11y_struct": 0.7185,
     "a11y_text": 0.8008
   },
+  "scraped/super_editor_dropcaps": {
+    "jaccard": 0.9038,
+    "ssim": 0.9569,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8333,
+    "a11y_text": 1.0
+  },
   "scraped/swiss_materials_extraction_zone_guidance": {
     "jaccard": 0.5908,
     "ssim": 0.8024,
