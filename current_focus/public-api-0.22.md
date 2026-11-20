@@ -285,7 +285,7 @@ Work in a worktree. Suggested commits:
 |---|---|
 | #169 bookmark positions | merged `a23175b1b` (2026-11-19) |
 | 1. #170 bare wasm | merged 2026-11-20 |
-| 2. #171 memory fonts | reviewed on `review/pr-171`, awaiting push |
+| 2. #171 memory fonts | merged 2026-11-20 |
 | 3. #172 font requests | not started |
 | 4. #175 display tags | not started |
 | 5. 0.22 refactor | not started |
