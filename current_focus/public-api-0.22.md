@@ -173,6 +173,13 @@ judge each PR on security, correctness and byte-identical output only.
   `BookmarkPosition.top` includes it. Our PDF's outline destinations have the
   same offset. It is a separate fix: apply `valign_offsets` to
   `heading_entries` the way `bookmarks::store` does.
+- Reviewed and merged 2026-11-20 (`bdf5fd103` merge, `c336d95f2` simplify).
+  PDFs byte-identical on all fixtures, 4 variants. The display list drops
+  empty artifacts that the PDF still writes (empty header `BDC…EMC`); they
+  draw nothing. Left for step 5: the `tagged_links` position scan in
+  `assembly.rs` (index could be recorded when the annotation is pushed) and
+  `display_list::links` repeating the annotation loop's missing-bookmark
+  filter.
 
 ### Step 5: our 0.22 refactor (separate commits, one concern each)
 
@@ -323,7 +330,7 @@ Work in a worktree. Suggested commits:
 | 1. #170 bare wasm | merged 2026-11-20 |
 | 2. #171 memory fonts | merged 2026-11-20 |
 | 3. #172 font requests | merged 2026-11-20 |
-| 4. #175 display tags | not started |
+| 4. #175 display tags | merged `c336d95f2` (2026-11-20) |
 | 5. 0.22 refactor | not started |
 | 5.10 whole-repo `cargo fmt` | not started |
 | Release 0.22.0 | not started |
