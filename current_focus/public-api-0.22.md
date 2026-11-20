@@ -322,7 +322,7 @@ Work in a worktree. Suggested commits:
 | #169 bookmark positions | merged `a23175b1b` (2026-11-19) |
 | 1. #170 bare wasm | merged 2026-11-20 |
 | 2. #171 memory fonts | merged 2026-11-20 |
-| 3. #172 font requests | reviewed on `review/pr-172`, awaiting push |
+| 3. #172 font requests | merged 2026-11-20 |
 | 4. #175 display tags | not started |
 | 5. 0.22 refactor | not started |
 | 5.10 whole-repo `cargo fmt` | not started |
