@@ -108,6 +108,19 @@ judge each PR on security, correctness and byte-identical output only.
   `tests/suite/host.rs`.
 - This is an *input* side channel. See the open question below. Merge it as
   is.
+- Reviewed 2026-11-20 on `review/pr-171`. User decisions: keep the CI step
+  (`./tools/run-tests.sh --test host`) and the smoke-host font check; leave
+  out its README and CLAUDE.md edits.
+- **Fake paths (user: replace in step 5, not before).** A registered font
+  travels as a made-up `PathBuf` `memory:N`. Every place that turns a font
+  path into bytes asks the registry first: `probe_face` (discovery.rs) and
+  `memory::read_font` in `fonts/mod.rs` `font_file`, `fonts/resolve.rs`
+  `try_font` and `pdf/wordart.rs` `load_font_data`, plus
+  `pdf/display_list.rs` (where the fake path leaked into the public
+  `display::FontSource::File { path: "memory:0" }`; fixed in the review with
+  a test, `host_fonts_reach_the_display_list_as_bytes`).
+- Also from the review: `use_system_fonts(false)` disables the caller's own
+  `ConvertOptions::font_dirs` too, silently.
 - Built on #170's original commit, so expect conflicts: it still imports
   `crate::clock::Instant` (in context lines) and its CLAUDE.md line mentions
   `clock.rs`. Both are gone after the #170 review; use `std::time::Instant`
@@ -163,14 +176,33 @@ Work in a worktree. Suggested commits:
    - Also delete `docx::parse(path)` (the path-reading parser) and
      `render_and_write` if nothing else uses them.
    - Make `pdf::bookmarks` and `fonts::requests` crate-private again.
-3. **Environment.**
+3. **Font input (#171): real bytes, no fake paths.**
+   - Decide open question 1 first (registry vs `ConvertOptions`).
+   - Registered fonts carry their bytes the way DOCX-embedded fonts already
+     do (`FontEntry::embedded_data`, `Arc<Vec<u8>>`): the font lookup returns
+     a source (path or bytes) instead of a path, and the `memory:N` paths,
+     `memory::read_font`, the `probe_face` registry check and the
+     `display_list.rs` special case go.
+   - The measurements that today need a file path must take bytes too, or
+     registered fonts lay out differently from the same font on disk:
+     `hhea_box` (called from `pdf/fonts.rs`) and `face_is_script_design`
+     (`fonts/resolve.rs`). Check for others: grep `font_path` and
+     `probe_face`.
+   - Fold `use_system_fonts` into the options (e.g.
+     `ConvertOptions::system_fonts(bool)`), so it cannot silently override
+     `font_dirs`.
+   - Proof: the host tests, the wasm smoke test, and the byte-identical
+     check (no fixture uses registered fonts, so native output must not
+     move). Add a test that a registered font and the same font in a
+     directory give the same PDF.
+4. **Environment.**
    - `convert()` reads no environment.
    - The old-`DOCXSIDE_` check moves into `ConvertOptions::from_env()`. It
      can no longer return an error from there, so pick one: `from_env`
      returns `Result`, or it panics, or it logs. **Ask the user.**
    - The check uses `std::env::vars_os`, which panics on bare wasm: keep
      #170's `cfg!` guard when it moves into `from_env`.
-4. **`Error`.**
+5. **`Error`.**
    - Add `#[non_exhaustive]`.
    - Replace `Zip(ZipError)` and `Xml(roxmltree::Error)` with variants that
      don't expose the crate types (e.g. fold them into `InvalidDocx` with the
@@ -179,15 +211,15 @@ Work in a worktree. Suggested commits:
    - `Io` is only produced by file reading and writing (`docx/mod.rs` opens
      the input path; `render_and_write` writes). With no library file I/O
      left, check whether `Io` is still reachable and drop it if not.
-5. **`RevisionView`: `#[non_exhaustive]`.**
-6. **`debug_wrap`.**
+6. **`RevisionView`: `#[non_exhaustive]`.**
+7. **`debug_wrap`.**
    - Remove it from the public `ConvertOptions` builder/fields.
    - The CLI flag `--debug-wrap` and `DOCXIDE_DEBUG_WRAP` must keep working,
      because the case browser and wrap debugging use them. `src/main.rs` is
      a separate crate and cannot see `pub(crate)`.
    - Options: a `#[doc(hidden)] pub` field/method, or only `from_env()` sets
      it and the CLI exports the variable. Pick the smaller one.
-7. **Callers.**
+8. **Callers.**
    - In this repo:
      - `src/main.rs` (CLI);
      - `tests/common/mod.rs` (the harness's conversion);
@@ -202,7 +234,7 @@ Work in a worktree. Suggested commits:
        a new function or side channel.
    - Other repos (ask the user before touching them): docxide-template's
      README example and the docxide-demo site's conversion call.
-8. **Version bump to 0.22.0, with release notes.** The release notes list
+9. **Version bump to 0.22.0, with release notes.** The release notes list
    the API change with a before/after snippet and thank banduk (#169–#172)
    and sboily (#168, #175) by PR.
 
@@ -241,7 +273,8 @@ Work in a worktree. Suggested commits:
    - Ask the user. The lowest-effort version: `ConvertOptions::fonts(&FontSet)`
      installs the existing thread-local registry for the duration of
      `convert()`.
-2. **`from_env()` and the old-variable error** (see step 5.3).
+   - Either way, step 5.3 replaces the `memory:N` fake paths with bytes.
+2. **`from_env()` and the old-variable error** (see step 5.4).
 3. **The name of the display option** and whether `Conversion::display`
    always carries the outline/structure from #175 (it does, once the
    recording runs).
@@ -252,7 +285,7 @@ Work in a worktree. Suggested commits:
 |---|---|
 | #169 bookmark positions | merged `a23175b1b` (2026-11-19) |
 | 1. #170 bare wasm | merged 2026-11-20 |
-| 2. #171 memory fonts | not started |
+| 2. #171 memory fonts | reviewed on `review/pr-171`, awaiting push |
 | 3. #172 font requests | not started |
 | 4. #175 display tags | not started |
 | 5. 0.22 refactor | not started |
