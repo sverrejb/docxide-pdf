@@ -207,7 +207,7 @@ pub fn convert_docx_bytes_to_pdf_bytes_with(
 
 fn reset_conversion_metadata() {
     take_bookmark_positions();
-    fonts::requests::reset();
+    take_font_requests();
 }
 
 /// The variables lost their old `DOCXSIDE_` prefix; failing loudly beats silently

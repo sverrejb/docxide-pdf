@@ -21,7 +21,6 @@ impl Host {
     fn new() -> Self {
         clear_fonts();
         use_system_fonts(false);
-        take_font_requests();
         Self
     }
 }

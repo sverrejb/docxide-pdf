@@ -16,7 +16,8 @@ pub struct FontRequest {
 
 #[derive(Default)]
 struct Requests {
-    current: Vec<FontRequest>,
+    // register_font never nests, so one resolution is open at a time.
+    current: Option<FontRequest>,
     completed: Vec<FontRequest>,
 }
 
@@ -32,16 +33,12 @@ pub fn take_font_requests() -> Vec<FontRequest> {
     REQUESTS.with_borrow_mut(|requests| std::mem::take(&mut requests.completed))
 }
 
-pub(crate) fn reset() {
-    REQUESTS.with_borrow_mut(|requests| *requests = Requests::default());
-}
-
 /// One font resolution: the misses noted while it lives form one request.
 pub(super) struct RequestScope;
 
 pub(super) fn begin(bold: bool, italic: bool) -> RequestScope {
     REQUESTS.with_borrow_mut(|requests| {
-        requests.current.push(FontRequest {
+        requests.current = Some(FontRequest {
             names: Vec::new(),
             bold,
             italic,
@@ -59,7 +56,7 @@ fn record(requests: &mut Requests, request: FontRequest) {
 impl Drop for RequestScope {
     fn drop(&mut self) {
         REQUESTS.with_borrow_mut(|requests| {
-            if let Some(request) = requests.current.pop() {
+            if let Some(request) = requests.current.take() {
                 record(requests, request);
             }
         });
@@ -68,7 +65,7 @@ impl Drop for RequestScope {
 
 pub(super) fn note_miss(name: &str, bold: bool, italic: bool) {
     REQUESTS.with_borrow_mut(|requests| {
-        if let Some(current) = requests.current.last_mut() {
+        if let Some(current) = requests.current.as_mut() {
             if !current.names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
                 current.names.push(name.to_owned());
             }
