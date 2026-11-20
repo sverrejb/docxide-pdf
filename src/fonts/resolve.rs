@@ -579,6 +579,7 @@ pub(crate) fn register_font(
     // Bare wasm has no clock: no timings there.
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     let t0 = std::time::Instant::now();
+    let _request = requests::begin(bold, italic);
     let refs = FontRefs {
         font: alloc(),
         descriptor: alloc(),

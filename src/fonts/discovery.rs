@@ -363,6 +363,7 @@ impl FontIndex {
         if let Some((path, face_index)) = lookup(bold, italic) {
             return Some((path, face_index, bold, italic));
         }
+        super::requests::note_miss(font_name, bold, italic);
         // A plain regular request that misses falls through to a generic family
         // fallback rather than borrowing this family's bold/italic face, which would
         // render unexpectedly heavy/slanted.
