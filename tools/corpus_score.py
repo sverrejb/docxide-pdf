@@ -37,7 +37,7 @@ def raster(pdf: Path, dest: Path) -> None:
                        capture_output=True)
 
 
-def score(docx: Path, ref: Path, cli: str, out: Path) -> dict | None:
+def score(docx: Path, ref: Path, cli: str, out: Path, metric_flags: tuple = (), cli_flags: tuple = ()) -> dict | None:
     name = docx.stem
     work = out / name
     shutil.rmtree(work, ignore_errors=True)
@@ -45,22 +45,23 @@ def score(docx: Path, ref: Path, cli: str, out: Path) -> dict | None:
     pdf = work / 'generated.pdf'
     env = dict(os.environ, DOCXIDE_FONTS=str(ROOT / 'fonts'), DOCXIDE_NO_FONT_CACHE='1')
     try:
-        subprocess.run([cli, str(docx), str(pdf)], env=env, capture_output=True, timeout=300)
+        c = subprocess.run([cli, *cli_flags, str(docx), str(pdf)], env=env, capture_output=True, text=True, timeout=300)
+        error = f"exit {c.returncode}: {(c.stderr.strip().splitlines() or [''])[-1][:200]}"
     except subprocess.TimeoutExpired:
-        pass
+        error = 'timeout after 300 s'
     if not pdf.exists():
-        return {'jaccard': 0, 'ssim': 0, 'failed': True}
+        return {'jaccard': 0, 'ssim': 0, 'failed': True, 'error': error}
     # Keyed by content too: print and online exports of one document share its name.
     refpng = OUT / '_refpng' / f'{name}-{hashlib.sha1(ref.read_bytes()).hexdigest()[:8]}'
     raster(ref, refpng)
     raster(pdf, work / 'png')
-    r = subprocess.run([str(PAGE_METRICS), str(ref), str(pdf), str(refpng), str(work / 'png')],
+    r = subprocess.run([str(PAGE_METRICS), *metric_flags, str(ref), str(pdf), str(refpng), str(work / 'png')],
                        capture_output=True, text=True)
     shutil.rmtree(work / 'png', ignore_errors=True)
     try:
         return json.loads(r.stdout)
     except json.JSONDecodeError:
-        return {'jaccard': 0, 'ssim': 0, 'failed': True}
+        return {'jaccard': 0, 'ssim': 0, 'failed': True, 'error': f'page-metrics exit {r.returncode}'}
 
 
 def main() -> None:

@@ -42,7 +42,8 @@ Python helpers in `tools/` (each has a docstring):
   starts), `word_x_diff.py` (per-word x drift), `ink_diff.py` (blue ref-only,
   red ours-only), `docx_edit.py` (literal edit of one part for what-ifs),
   `convert_scan.py` (hangs/crashes), `corpus_score.py` / `corpus_compare.py` /
-  `corpus_view.py` (external docx+pdf corpora).
+  `corpus_view.py` (external docx+pdf corpora), `score_external.py` (whole
+  neurotic_docx_bench corpus, one row per document, worst Jaccard first).
 
 ## Planning documents
 

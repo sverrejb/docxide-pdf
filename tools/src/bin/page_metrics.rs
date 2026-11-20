@@ -1,7 +1,7 @@
 //! Harness-identical metrics for one PDF pair: Jaccard, SSIM, text boundary, accessibility.
 //!
 //! Usage:
-//!   page-metrics <ref.pdf> <other.pdf> <ref_png_dir> <other_png_dir>
+//!   page-metrics [--no-text] [--no-a11y] <ref.pdf> <other.pdf> <ref_png_dir> <other_png_dir>
 //!   page-metrics --a11y <pdf> <png_dir> [<pdf> <png_dir>...]
 //!
 //! The second form only runs the accessibility analyses, all in one veraPDF process, and leaves
@@ -64,13 +64,21 @@ fn prefetch_a11y(pairs: &[String]) {
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
+    // Text boundary and veraPDF cost far more than the raster metrics; a whole-corpus run skips them.
+    let (no_text, no_a11y) = (
+        args.contains(&"--no-text".into()),
+        args.contains(&"--no-a11y".into()),
+    );
+    args.retain(|a| a != "--no-text" && a != "--no-a11y");
     if args.get(1).map(String::as_str) == Some("--a11y") && args.len().is_multiple_of(2) {
         prefetch_a11y(&args[2..]);
         return;
     }
     if args.len() != 5 {
-        eprintln!("usage: page-metrics <ref.pdf> <other.pdf> <ref_png_dir> <other_png_dir>");
+        eprintln!(
+            "usage: page-metrics [--no-text] [--no-a11y] <ref.pdf> <other.pdf> <ref_png_dir> <other_png_dir>"
+        );
         eprintln!("       page-metrics --a11y <pdf> <png_dir> [<pdf> <png_dir>...]");
         std::process::exit(1);
     }
@@ -93,16 +101,21 @@ fn main() {
         (!pages.is_empty()).then(|| pages.iter().map(pick).sum::<f64>() / pages.len() as f64)
     };
 
-    let tb = text_boundary::analyze(ref_pdf, other_pdf);
+    let tb = (!no_text).then(|| text_boundary::analyze(ref_pdf, other_pdf));
+    let a11y = if no_a11y {
+        None
+    } else {
+        a11y_metrics(ref_pdf, other_pdf, Path::new(&args[3]), Path::new(&args[4]))
+    };
     let out = serde_json::json!({
         "jaccard": mean(|p| p.0),
         "ssim": mean(|p| p.1),
-        "text_boundary": tb.line_match_pct(),
+        "text_boundary": tb.as_ref().map(|tb| tb.line_match_pct()),
         "ref_pages": ref_pngs.len(),
         "pages": other_pngs.len(),
         "scored_pages": pages.len(),
-        "max_break_drift": tb.max_break_drift,
-        "a11y": a11y_metrics(ref_pdf, other_pdf, Path::new(&args[3]), Path::new(&args[4])),
+        "max_break_drift": tb.as_ref().map(|tb| tb.max_break_drift),
+        "a11y": a11y,
     });
     println!("{out}");
 }
