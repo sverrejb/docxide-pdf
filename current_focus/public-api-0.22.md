@@ -1,7 +1,7 @@
 # Public API 0.22: one `convert()`, one `Conversion` (handover)
 
 Planned 2026-11-19 with the user; public API reviewed with the user
-2026-11-20 (decisions 6–13, open questions 1–2). Status: **planning done,
+2026-11-20 (decisions 6–15, none open). Status: **planning done,
 step 5 not coded.**
 Main was at `475c1e95f` when this was written. Update the status table at the
 bottom as each step lands.
@@ -147,6 +147,12 @@ std::fs::write("out.pdf", &out.pdf)?;
     - Considered and rejected for 0.22: a parse-only "fonts this document
       uses" call before converting (saves the second render for a host that
       downloads fonts on demand). No stated user; it would be additive.
+14. **`display` stays an ordinary public module** (user, 2026-11-21: "this
+    crate is a moving target"). No `unstable-display` feature.
+15. **No `Conversion::save(path)` in 0.22** (recommended 2026-11-20; the
+    user did not object). `std::fs::write(path, &out.pdf)?` is the same
+    length; a save would bring file I/O back into the library and could only
+    fail on bare wasm. Adding it later is non-breaking.
 
 ## Order of operations
 
@@ -429,24 +435,11 @@ callers moved). Suggested commits:
   `pgrep -fl "claude|cargo"` first, and never switch branches in the main
   checkout.
 
-## Open questions (decide before step 5; none blocks steps 1–4)
+## Open questions
 
-The 2026-11-19 questions (font input, `from_env`, the display option's
-name) are decided: decisions 6, 8 and 10; `#[non_exhaustive]` on the output
-structs is decision 11; the `cli` default feature is decision 12; what `missing_fonts` reports is decision 13. Still
-open, each with a recommendation:
-
-1. **Is `display` stable?** It is the largest public surface (#175 adds about
-   10 types). Its types are already `#[non_exhaustive]` where they can grow,
-   but changing or removing a field still breaks. Option: an
-   `unstable-display` feature exempt from semver.
-2. **`Conversion::save(path)`.** Recommended: no.
-   - `std::fs::write(path, &out.pdf)?` is the same length and is the
-     standard idiom; a `save` would wrap exactly that.
-   - A `.save()` on the bytes would need an extension trait on `Vec<u8>`.
-   - It would bring file I/O back into the library, and on bare wasm it
-     could only return an error.
-   - Adding a method later is non-breaking, so nothing is lost by waiting.
+None. Every question from 2026-11-19 and 2026-11-20 is decided
+(decisions 6–15). Ask the user about anything new that changes the public
+surface.
 
 ## Status
 
