@@ -653,14 +653,7 @@ pub(super) fn para_tag_kind(para: &Paragraph, style_name: Option<&String>) -> St
         return StructType::H1;
     }
     match para.outline_level {
-        Some(l) => [
-            StructType::H1,
-            StructType::H2,
-            StructType::H3,
-            StructType::H4,
-            StructType::H5,
-            StructType::H6,
-        ][usize::from(l).min(5)],
+        Some(l) => tagging::HEADINGS[usize::from(l).min(5)],
         None if sole_formula(para) => StructType::Formula,
         None => StructType::P,
     }

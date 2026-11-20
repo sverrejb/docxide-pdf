@@ -42,6 +42,11 @@ struct Node {
 }
 
 impl Node {
+    /// The cell attributes worth writing: a header scope or a span over 1.
+    fn cell_attrs(&self) -> Option<(Option<TableHeaderScope>, i32)> {
+        self.cell.filter(|&(s, span)| s.is_some() || span > 1)
+    }
+
     fn new(kind: StructType, parent: usize) -> Self {
         Self {
             kind,
@@ -590,16 +595,14 @@ impl Tags {
                 lang: node.lang.clone(),
                 id: node.id.clone(),
                 // As `write` writes them: no attribute that says nothing.
-                table_cell: node.cell.filter(|&(s, span)| s.is_some() || span > 1).map(
-                    |(scope, span)| display::TableCell {
-                        header_scope: scope.map(|scope| match scope {
-                            TableHeaderScope::Row => display::HeaderScope::Row,
-                            TableHeaderScope::Column => display::HeaderScope::Column,
-                            TableHeaderScope::Both => display::HeaderScope::Both,
-                        }),
-                        col_span: u32::try_from(span).unwrap_or(1).max(1),
-                    },
-                ),
+                table_cell: node.cell_attrs().map(|(scope, span)| display::TableCell {
+                    header_scope: scope.map(|scope| match scope {
+                        TableHeaderScope::Row => display::HeaderScope::Row,
+                        TableHeaderScope::Column => display::HeaderScope::Column,
+                        TableHeaderScope::Both => display::HeaderScope::Both,
+                    }),
+                    col_span: u32::try_from(span).unwrap_or(1).max(1),
+                }),
                 list_numbering: node.numbering.and_then(list_numbering),
             })
             .collect();
@@ -651,8 +654,7 @@ impl Tags {
             if let Some(id) = &node.id {
                 elem.id(Str(id.as_bytes()));
             }
-            if let Some((scope, col_span)) = node.cell.filter(|&(s, span)| s.is_some() || span > 1)
-            {
+            if let Some((scope, col_span)) = node.cell_attrs() {
                 let mut attrs = elem.attributes();
                 let mut table = attrs.push().table();
                 if let Some(scope) = scope {
@@ -727,17 +729,21 @@ impl Tags {
     }
 }
 
+pub(super) const HEADINGS: [StructType; 6] = [
+    StructType::H1,
+    StructType::H2,
+    StructType::H3,
+    StructType::H4,
+    StructType::H5,
+    StructType::H6,
+];
+
 /// The level of a heading type, 1 for H1.
 fn heading_level(kind: StructType) -> Option<u8> {
-    match kind {
-        StructType::H1 => Some(1),
-        StructType::H2 => Some(2),
-        StructType::H3 => Some(3),
-        StructType::H4 => Some(4),
-        StructType::H5 => Some(5),
-        StructType::H6 => Some(6),
-        _ => None,
-    }
+    HEADINGS
+        .iter()
+        .position(|&h| h == kind)
+        .map(|i| i as u8 + 1)
 }
 
 /// A list's numbering as the display list names it; `None` says nothing.

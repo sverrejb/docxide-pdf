@@ -153,7 +153,6 @@ impl<'a> Builder<'a> {
     /// `tagging::finish_artifact_content` closes).
     fn stream(&mut self, items: Vec<Rec>) -> Vec<Item> {
         let saved = std::mem::take(&mut self.text_ends);
-        let saved_marks = std::mem::take(&mut self.marks);
         let mut resolved = self.items(items, None, 0);
         while let Some(described) = self.marks.pop() {
             if described {
@@ -161,7 +160,6 @@ impl<'a> Builder<'a> {
             }
         }
         self.text_ends = saved;
-        self.marks = saved_marks;
         resolved
     }
 
