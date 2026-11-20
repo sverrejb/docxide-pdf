@@ -1,6 +1,8 @@
 # Public API 0.22: one `convert()`, one `Conversion` (handover)
 
-Planned 2026-11-19 with the user. Status: **planning done, nothing coded.**
+Planned 2026-11-19 with the user; public API reviewed with the user
+2026-11-20 (decisions 6–13, open questions 1–2). Status: **planning done,
+step 5 not coded.**
 Main was at `475c1e95f` when this was written. Update the status table at the
 bottom as each step lands.
 
@@ -16,32 +18,67 @@ and contributor PRs add per-thread side channels next to the conversion call:
 | `convert_docx_bytes_to_pdf_bytes[_with]` (bytes → bytes) | |
 | `layout_docx_bytes_with` (bytes → `display::Document`) | renders the PDF too, then throws it away |
 | `take_bookmark_positions()` (#169, thread-local) | hidden state read after the call; reset in every entry point |
-| `take_font_requests()` (#172, thread-local, not merged yet) | same |
+| `take_font_requests()` (#172, thread-local) | same |
 | `Error::Zip(zip::ZipError)`, `Error::Xml(roxmltree::Error)` | a `zip` or `roxmltree` major bump is a breaking release for us; `Error` is not `#[non_exhaustive]` |
 | `reject_old_env_vars()` inside the `_with` functions | "explicit options never read the environment" is not quite true; #170 has to skip it on wasm |
 | `RevisionView` not `#[non_exhaustive]` | Word also has Simple Markup and Original |
 | `ConvertOptions::debug_wrap`, `Error::RenamedEnvVar` | a developer knob and a leftover from the `DOCXSIDE_` rename, both public |
 
-Target for 0.22 (pre-1.0, so a breaking release is allowed):
+Target for 0.22 (pre-1.0, so a breaking release is allowed). **After 0.22
+we try to avoid breaking changes**, so every public item below is shaped so
+that later additions are additive (user, 2026-11-20).
 
 ```rust
+// The only function.
 pub fn convert(docx: &[u8], options: &ConvertOptions) -> Result<Conversion, Error>;
 
 #[non_exhaustive]
+#[derive(Debug, Clone)]
 pub struct Conversion {
     pub pdf: Vec<u8>,
     pub bookmarks: Vec<BookmarkPosition>,      // from #169
-    pub font_requests: Vec<FontRequest>,       // from #172
-    pub display: Option<display::Document>,    // from #168/#175, only when the options ask for it
+    pub missing_fonts: Vec<MissingFont>,       // from #172 (its take_font_requests); decision 13
+    pub display: Option<display::Document>,    // from #168/#175; Some only with .display_list(true)
 }
+
+#[non_exhaustive]
+#[derive(Clone, Debug, Default)]
+pub struct ConvertOptions { /* all fields private */ }
+
+impl ConvertOptions {
+    pub fn new() -> Self;                       // Word's online export
+    pub fn revisions(self, RevisionView) -> Self;
+    pub fn resample_pictures(self, bool) -> Self;
+    pub fn font_dirs(self, impl IntoIterator<Item = impl Into<PathBuf>>) -> Self;
+    pub fn font(self, data: Vec<u8>) -> Self;   // replaces register_font/clear_fonts (#171)
+    pub fn system_fonts(self, bool) -> Self;    // replaces use_system_fonts (#171)
+    pub fn font_cache(self, bool) -> Self;
+    pub fn display_list(self, bool) -> Self;
+    #[doc(hidden)] pub fn debug_wrap(self, bool) -> Self;
+}
+
+#[non_exhaustive]
+pub enum RevisionView { Final, Markup }
+
+#[non_exhaustive]
+pub enum Error { InvalidDocx(String) }          // Zip, Xml, Pdf, Io, RenamedEnvVar gone
+
+#[non_exhaustive]
+pub struct BookmarkPosition { .. }
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MissingFont { pub name: String, pub bold: bool, pub italic: bool }
+pub mod display;                                // + #175's structure/outline types
 ```
 
-The public surface afterwards: `convert`, `ConvertOptions`, `Conversion`,
-`Error`, `RevisionView`, `BookmarkPosition`, `FontRequest` and the `display`
-module. The caller does file I/O with `std::fs`:
+Gone: the 7 `convert_*`/`layout_*` functions, `ConvertOptions::from_env`,
+the public option fields, `take_bookmark_positions`, `take_font_requests`,
+`register_font`, `clear_fonts`, `use_system_fonts`. **The library reads no
+environment variables**; the `DOCXIDE_*` variables become a CLI feature. The
+caller does file I/O with `std::fs`:
 
 ```rust
-let out = convert(&std::fs::read("in.docx")?, &ConvertOptions::from_env())?;
+let out = convert(&std::fs::read("in.docx")?, &ConvertOptions::new())?;
 std::fs::write("out.pdf", &out.pdf)?;
 ```
 
@@ -54,8 +91,8 @@ std::fs::write("out.pdf", &out.pdf)?;
    first: pre-1.0 clean break.
 3. **These go into the same 0.22 break:**
    - `Error`: hide the dependency error types and add `#[non_exhaustive]`.
-   - No environment read in `convert()`: the old-`DOCXSIDE_` check moves
-     into `ConvertOptions::from_env()`.
+   - No environment read in `convert()` (superseded by decision 6: no
+     environment read in the library at all).
    - `RevisionView` becomes `#[non_exhaustive]`.
    - Drop `debug_wrap` from the public options, and drop `Error::RenamedEnvVar`.
 4. **Contributors get credit: merge their PRs first, as they are, then
@@ -64,7 +101,52 @@ std::fs::write("out.pdf", &out.pdf)?;
 5. #169 is already merged (`a23175b1b`). `take_bookmark_positions` is **not
    in any release**: crates.io has 0.21.4, bumped 2026-11-16, before #169.
    `BookmarkPosition` stays without `#[non_exhaustive]` (user's choice
-   during the #169 review); revisit it only if the user asks.
+   during the #169 review); reversed 2026-11-20, see decision 11.
+
+## Decisions (user, 2026-11-20, public API review)
+
+6. **Drop `ConvertOptions::from_env()`.** The library reads no environment.
+   The CLI reads the `DOCXIDE_*` variables through clap's `env` attribute;
+   the test harness reads `DOCXIDE_FONTS` with `std::env::split_paths`. The
+   old-`DOCXSIDE_` check is deleted, not moved (the rename shipped
+   2026-10-15). This removes old open question 2.
+7. **Option fields become private; builders only.** A public field locks its
+   representation (e.g. `font_dirs: Vec<PathBuf>` could never become a font
+   source enum). Nothing in this repo writes the fields directly.
+8. **Fonts in the options: `ConvertOptions::font(Vec<u8>)`** and
+   `ConvertOptions::system_fonts(bool)`. Faces are parsed once when the
+   option is built and kept behind an `Arc`, so reusing one
+   `&ConvertOptions` for many conversions re-parses nothing and `clone` is
+   cheap. No `FontSet` type, no per-thread state: today a native server
+   that registers on one thread and converts on another (tokio
+   `spawn_blocking`) silently gets no fonts. Unusable data is skipped with a
+   log line; a `fonts_loaded()` getter can come later, additively. This
+   removes old open question 1.
+9. **`Conversion::missing_fonts`**, not `font_requests` (it is an output).
+10. **`display_list(bool)`** names the display option. Removes old open
+    question 3.
+11. **`#[non_exhaustive]` on `BookmarkPosition` and `MissingFont`.** After
+    0.22 a new field (an x position, a font weight) must not break callers.
+12. **`cli` stays a default feature.** The README's usage section documents
+    the opt-out for library users:
+    `docxide-pdf = { version = "0.22", default-features = false }`, which
+    skips clap and env_logger.
+13. **`missing_fonts` is feedback for the end user**, e.g. a web app that
+    says "this document uses Aptos Bold, which isn't available: upload it
+    or change the font". Each entry is a font the document asks for, with
+    the requested style; type renamed `FontRequest` → `MissingFont`
+    (`name`, `bold`, `italic`). Rules:
+    - reported: a family and style the document asks for that no embedded,
+      `.font()` or system face provides; once per (name, bold, italic);
+    - reported: a missing style even when synthetic bold/italic covers it
+      (uploading the real face changes the output);
+    - not reported: our fallback chain, the symbol/CJK/math rescue probes,
+      fonts the DOCX embeds.
+    - The face used instead (`replaced_by`) can be added later as a field
+      without a break; not now.
+    - Considered and rejected for 0.22: a parse-only "fonts this document
+      uses" call before converting (saves the second render for a host that
+      downloads fonts on demand). No stated user; it would be additive.
 
 ## Order of operations
 
@@ -106,7 +188,7 @@ judge each PR on security, correctness and byte-identical output only.
 - Public: `register_font(Vec<u8>) -> usize`, `clear_fonts()`,
   `use_system_fonts(bool)`, all thread-local; new `src/fonts/memory.rs`;
   `tests/suite/host.rs`.
-- This is an *input* side channel. See the open question below. Merge it as
+- This is an *input* side channel; decision 8 replaces it. Merge it as
   is.
 - Reviewed 2026-11-20 on `review/pr-171`. User decisions: keep the CI step
   (`./tools/run-tests.sh --test host`) and the smoke-host font check; leave
@@ -183,99 +265,139 @@ judge each PR on security, correctness and byte-identical output only.
 
 ### Step 5: our 0.22 refactor (separate commits, one concern each)
 
-Work in a worktree. Suggested commits:
+Work in a worktree. Every commit must build and pass the byte-identical
+check, so callers move in the same commit as the API they use (reviewed
+2026-11-20: the earlier order deleted functions six commits before their
+callers moved). Suggested commits:
 
-1. **`convert()` + `Conversion`.**
+1. **`convert()` + `Conversion`, and move every in-repo caller to it.**
    - Internally, keep the thread-locals the contributors wrote. `convert()`
      clears them, renders, then drains bookmarks and font requests into
      `Conversion` before returning, so no state survives the call.
-   - Ceiling: no nested conversion on the same thread (nothing does that
-     today).
-   - The display list: an option, name to pick (e.g.
-     `ConvertOptions::display(true)`), that starts `canvas::Recording`
-     around the same render. One render then gives both PDF and display list.
-   - `Conversion::font_requests`: decide what a request reports (see step
-     3, "Noisy list"). The cleanest shape found in review: record per
-     resolution in `fonts/resolve.rs` `register_font`, where the fallback
-     chain is walked (about +15 lines there, about −35 in `requests.rs`,
-     `note_miss` out of `find_font_file`), and mark which name the document
-     asked for and which are fallbacks or rescue probes. Ask the user.
+   - `// ponytail:` ceiling: no nested conversion on the same thread
+     (nothing does that today).
+   - `display_list(true)` starts `canvas::Recording` around the same render,
+     so one render gives both PDF and display list.
+   - Callers in this commit: `src/main.rs` (CLI), `tests/common/mod.rs`
+     (`:276` path → path, `:552` bytes → bytes),
+     `tests/suite/bookmark_positions.rs` and `tests/suite/host.rs` (rewrite
+     `take_*()` into `out.bookmarks` / `out.missing_fonts`, keep every
+     assertion), and `tools/wasm_host_smoke.rs`.
+   - **What the library's file I/O did moves to the CLI and the harness:**
+     the forced `.pdf` extension (`render_and_write`'s
+     `with_extension("pdf")`), the input path in NotFound/PermissionDenied
+     errors (`docx/mod.rs:1041`), and the timing log lines (keep the
+     bare-wasm `cfg` on them).
+   - Add a test: one fixture with `display_list(true)` and without gives
+     identical `pdf` bytes ("one render gives both" depends on it).
+   - Add a compile-time check that `ConvertOptions` and `Conversion` are
+     `Send + Sync` (`fn _assert<T: Send + Sync>()`), so a later `Rc` cannot
+     silently break server users.
+   - `missing_fonts` reports what decision 13 says (see step 3, "Noisy
+     list", for what #172 records today). Record per resolution in
+     `fonts/resolve.rs` `register_font`, where the document's name and the
+     fallback chain are known (about +15 lines there, about −35 in
+     `requests.rs`, `note_miss` out of `find_font_file`); push only the
+     document's name with the requested style, after the embedded fonts
+     were checked. Rename `FontRequest` to `MissingFont`. Rewrite
+     `tests/suite/host.rs`'s request tests to the new rules, and add one
+     each: a fallback is not reported, an embedded font is not reported.
 2. **Remove the 7 old functions, `take_bookmark_positions()`,
    `take_font_requests()` and `reset_conversion_metadata()`.**
+   - Pure deletion now that commit 1 moved the callers.
    - Also delete `docx::parse(path)` (the path-reading parser) and
-     `render_and_write` if nothing else uses them.
+     `render_and_write`.
    - Make `pdf::bookmarks` and `fonts::requests` crate-private again.
-3. **Font input (#171): real bytes, no fake paths.**
-   - Decide open question 1 first (registry vs `ConvertOptions`).
-   - Registered fonts carry their bytes the way DOCX-embedded fonts already
-     do (`FontEntry::embedded_data`, `Arc<Vec<u8>>`): the font lookup returns
-     a source (path or bytes) instead of a path, and the `memory:N` paths,
-     `memory::read_font`, the `probe_face` registry check and the
-     `display_list.rs` special case go.
-   - The measurements that today need a file path must take bytes too, or
-     registered fonts lay out differently from the same font on disk:
+3. **Options: private fields, no environment (decisions 6, 7).**
+   - Make every `ConvertOptions` field private; delete `from_env`,
+     `from_vars`, `reject_old_env_vars`, `old_env_var` and their unit tests
+     in `lib.rs` (`:285–318`).
+   - `debug_wrap`: `#[doc(hidden)] pub fn debug_wrap(self, bool)`. The
+     alternative (the CLI sets the variable) needs `std::env::set_var`,
+     which is `unsafe` in edition 2024.
+   - CLI: enable clap's `env` feature (part of clap, not a new crate) and put
+     `env = "DOCXIDE_…"` on each flag. Flags then override variables, which
+     fixes the README's "a flag can't undo a variable" quirk. Two details:
+     - `DOCXIDE_REVISIONS=markup` is not a boolean: either the flag becomes
+       `--revisions <final|markup>` with `env`, or the CLI reads that one
+       variable by hand. Pick the smaller one.
+     - `DOCXIDE_FONTS` is `:`-separated (`;` on Windows); split it with
+       `std::env::split_paths`, not a fixed `value_delimiter`.
+     - clap reads `""`, `0`, `false`, `no`, `off` as off for a flag: a
+       superset of today's rule, so no existing setting changes meaning.
+   - Harness (`tests/common/mod.rs:274`): `ConvertOptions::new()` plus
+     `font_dirs(std::env::split_paths(..))` from `DOCXIDE_FONTS`, so
+     `.cargo/config.toml` keeps working. Check whether the harness relies on
+     any other `DOCXIDE_*` option variable before deleting `from_env`.
+   - The byte-identical check runs through the CLI, so its four variants
+     (default, markup, debug-wrap, no-resample) prove the CLI still honours
+     the variables.
+4. **Fonts in the options (decision 8), then real bytes instead of fake
+   paths.** Two commits.
+   - 4a, API: `font(Vec<u8>)` parses into an `Arc`'d index kept in the
+     options; `convert()` installs it as the thread's registry for the
+     call and removes it afterwards. `system_fonts(bool)` replaces
+     `use_system_fonts`, so it can no longer silently override `font_dirs`.
+     Delete `register_font`, `clear_fonts`, `use_system_fonts`. Update
+     `tests/suite/host.rs` and the wasm smoke host.
+   - 4b, internal: registered fonts carry their bytes the way DOCX-embedded
+     fonts already do (`FontEntry::embedded_data`, `Arc<Vec<u8>>`): the font
+     lookup returns a source (path or bytes) instead of a path, and the
+     `memory:N` paths, `memory::read_font`, the `probe_face` registry check
+     and the `display_list.rs` special case go.
+   - The measurements that take a path must take the source instead:
      `hhea_box` (called from `pdf/fonts.rs`) and `face_is_script_design`
-     (`fonts/resolve.rs`). Check for others: grep `font_path` and
-     `probe_face`.
-   - Fold `use_system_fonts` into the options (e.g.
-     `ConvertOptions::system_fonts(bool)`), so it cannot silently override
-     `font_dirs`.
+     (`fonts/resolve.rs`). Today they work for registered fonts, because
+     both go through `probe_face`, which asks the registry first (checked
+     2026-11-21); once 4b removes the fake paths they would stop working.
+     Check for others: grep `font_path` and `probe_face`.
+   - 4b changes no public API. If it grows, it can ship in 0.22.x instead of
+     holding up the release (ask the user then).
    - Proof: the host tests, the wasm smoke test, and the byte-identical
      check (no fixture uses registered fonts, so native output must not
      move). Add a test that a registered font and the same font in a
      directory give the same PDF.
-4. **Environment.**
-   - `convert()` reads no environment.
-   - The old-`DOCXSIDE_` check moves into `ConvertOptions::from_env()`. It
-     can no longer return an error from there, so pick one: `from_env`
-     returns `Result`, or it panics, or it logs. **Ask the user.**
-   - The check uses `std::env::vars_os`, which panics on bare wasm: keep
-     #170's `cfg!` guard when it moves into `from_env`.
 5. **`Error`.**
    - Add `#[non_exhaustive]`.
-   - Replace `Zip(ZipError)` and `Xml(roxmltree::Error)` with variants that
-     don't expose the crate types (e.g. fold them into `InvalidDocx` with the
-     message, or keep the source as a boxed `dyn Error` behind `source()`).
-   - Drop `RenamedEnvVar`.
-   - `Io` is only produced by file reading and writing (`docx/mod.rs` opens
-     the input path; `render_and_write` writes). With no library file I/O
-     left, check whether `Io` is still reachable and drop it if not.
-6. **`RevisionView`: `#[non_exhaustive]`.**
-7. **`debug_wrap`.**
-   - Remove it from the public `ConvertOptions` builder/fields.
-   - The CLI flag `--debug-wrap` and `DOCXIDE_DEBUG_WRAP` must keep working,
-     because the case browser and wrap debugging use them. `src/main.rs` is
-     a separate crate and cannot see `pub(crate)`.
-   - Options: a `#[doc(hidden)] pub` field/method, or only `from_env()` sets
-     it and the CLI exports the variable. Pick the smaller one.
-8. **Callers.**
-   - In this repo:
-     - `src/main.rs` (CLI);
-     - `tests/common/mod.rs` (the harness's conversion);
-     - `tests/suite/bookmark_positions.rs` and `tests/suite/host.rs`: rewrite
-       `take_*()` into `out.bookmarks` / `out.font_requests` and keep every
-       assertion;
-     - the README "Usage" and "Bookmark positions" sections, and #171/#172's
-       README sections;
-     - the CLAUDE.md architecture line for `lib.rs`. It describes the three
-       `convert_*` functions and the `_with` convention; rewrite it, and
-       state the new rule: a new output becomes a `Conversion` field, never
-       a new function or side channel.
+   - Delete the `From<ZipError>`, `From<roxmltree::Error>` and
+     `From<io::Error>` impls and let the compiler list the sites; each
+     becomes `InvalidDocx(message)`. No boxed source: `#[non_exhaustive]`
+     lets one be added later.
+   - Delete `Pdf` (nothing constructs it, checked 2026-11-20), `Io` (only
+     `docx::parse(path)` produced it; gone in commit 2) and `RenamedEnvVar`.
+   - Expected result: `Error` has one variant, `InvalidDocx(String)`.
+6. **`#[non_exhaustive]` on `RevisionView`, `BookmarkPosition` and
+   `MissingFont`** (decision 11). `tests/suite/bookmark_positions.rs` only
+   reads fields, so it is unaffected (checked 2026-11-20).
+7. **Docs and other repos.**
+   - README: "Usage", "Bookmark positions", #171/#172's sections, and the
+     options table (the environment column becomes CLI-only), and the
+     `default-features = false` opt-out for library users (decision 12).
+   - CLAUDE.md: rewrite the `lib.rs` architecture line (three `convert_*`
+     functions, `_with` convention, "three spellings" incl. `from_vars`).
+     New rules: a new output becomes a `Conversion` field, never a new
+     function or side channel; a new option is a builder method plus a CLI
+     flag with `env = "DOCXIDE_…"`; the library never reads the environment.
+     Also the "Environment variables (library)" heading becomes CLI.
    - Other repos (ask the user before touching them): docxide-template's
-     README example and the docxide-demo site's conversion call.
-9. **Version bump to 0.22.0, with release notes.** The release notes list
-   the API change with a before/after snippet and thank banduk (#169–#172)
-   and sboily (#168, #175) by PR.
-10. **Whole-repo `cargo fmt`, at the very end (user, 2026-11-20).** The tree
-    has drifted from rustfmt (`cargo fmt --check` flags files nobody
-    touched, e.g. `pdf/comments.rs`, `pdf/layout.rs`, `pdf/paragraph.rs`).
-    - The last commit before the release, after every other step: a
-      formatting-only commit with nothing else in it, so review and
-      `git blame --ignore-rev` can skip it.
-    - Check that no other session has open branches first: they would
-      conflict on every reformatted line.
-    - Proof: `cargo fmt --check` clean, then the byte-identical check
-      (formatting must not move a single byte of output).
+     README example and the docxide-demo site's conversion call
+     (`convert_docx_bytes_to_pdf_bytes` in its `src/main.rs`; its
+     `fly.toml`/`Dockerfile` set no `DOCXIDE_` variable, so dropping the
+     environment read changes nothing there).
+8. **Version bump to 0.22.0, with release notes.** The release notes list
+   the API change with a before/after snippet, say that the library no
+   longer reads `DOCXIDE_*` (pass options; the CLI still reads them), and
+   thank banduk (#169–#172) and sboily (#168, #175) by PR.
+9. **Whole-repo `cargo fmt`, at the very end (user, 2026-11-20).** The tree
+   has drifted from rustfmt (`cargo fmt --check` flags files nobody
+   touched, e.g. `pdf/comments.rs`, `pdf/layout.rs`, `pdf/paragraph.rs`).
+   - The last commit before the release, after every other step: a
+     formatting-only commit with nothing else in it, so review and
+     `git blame --ignore-rev` can skip it.
+   - Check that no other session has open branches first: they would
+     conflict on every reformatted line.
+   - Proof: `cargo fmt --check` clean, then the byte-identical check
+     (formatting must not move a single byte of output).
 
 **Checks for step 5:**
 - The byte-identical check against the main commit before the refactor, on
@@ -283,13 +405,15 @@ Work in a worktree. Suggested commits:
   The memory file `byte-identical-refactor-check.md` has the recipe; use the
   release CLI and `DOCXIDE_NO_FONT_CACHE=1`.
 - The visual suite.
+- `./tools/run-tests.sh --test host`.
 - `cargo test --lib`.
 - `cargo clippy --all-targets`.
-- The wasm smoke check from #170, if the user kept it.
+- The wasm smoke check, `./tools/check-wasm-host.sh` (kept in step 1).
+- The display on/off byte test and the `Send + Sync` check from commit 1.
 
 ## Rules while the steps are in flight
 
-- **No whole-tree `cargo fmt` until step 5.10.** Format only the lines you
+- **No whole-tree `cargo fmt` until step 5.9.** Format only the lines you
   change (`rustfmt --edition 2024 --check` and read the diff for your files;
   revert the reformatting of anything else).
 
@@ -307,20 +431,22 @@ Work in a worktree. Suggested commits:
 
 ## Open questions (decide before step 5; none blocks steps 1–4)
 
-1. **Font input (#171).** Keep the per-thread `register_font()` registry, or
-   pass fonts in `ConvertOptions`?
-   - Options would fit "explicit options never read hidden state".
-   - But wasm hosts convert many documents with the same fonts, so options
-     would need a shared, pre-parsed `FontSet` (e.g. `Arc`) to avoid
-     re-parsing faces on every call.
-   - Ask the user. The lowest-effort version: `ConvertOptions::fonts(&FontSet)`
-     installs the existing thread-local registry for the duration of
-     `convert()`.
-   - Either way, step 5.3 replaces the `memory:N` fake paths with bytes.
-2. **`from_env()` and the old-variable error** (see step 5.4).
-3. **The name of the display option** and whether `Conversion::display`
-   always carries the outline/structure from #175 (it does, once the
-   recording runs).
+The 2026-11-19 questions (font input, `from_env`, the display option's
+name) are decided: decisions 6, 8 and 10; `#[non_exhaustive]` on the output
+structs is decision 11; the `cli` default feature is decision 12; what `missing_fonts` reports is decision 13. Still
+open, each with a recommendation:
+
+1. **Is `display` stable?** It is the largest public surface (#175 adds about
+   10 types). Its types are already `#[non_exhaustive]` where they can grow,
+   but changing or removing a field still breaks. Option: an
+   `unstable-display` feature exempt from semver.
+2. **`Conversion::save(path)`.** Recommended: no.
+   - `std::fs::write(path, &out.pdf)?` is the same length and is the
+     standard idiom; a `save` would wrap exactly that.
+   - A `.save()` on the bytes would need an extension trait on `Vec<u8>`.
+   - It would bring file I/O back into the library, and on bare wasm it
+     could only return an error.
+   - Adding a method later is non-breaking, so nothing is lost by waiting.
 
 ## Status
 
@@ -332,5 +458,5 @@ Work in a worktree. Suggested commits:
 | 3. #172 font requests | merged 2026-11-20 |
 | 4. #175 display tags | merged `c336d95f2` (2026-11-20) |
 | 5. 0.22 refactor | not started |
-| 5.10 whole-repo `cargo fmt` | not started |
+| 5.9 whole-repo `cargo fmt` | not started |
 | Release 0.22.0 | not started |
