@@ -80,13 +80,15 @@ def run(jobs: int, flags: tuple) -> dict:
         # Every reference is Word for Mac's local export, which prints All Markup (deleted text,
         # revision balloons, comments); the final view loses pages and section breaks.
         s = score(p[1], p[2], str(CLI), OUT / 'score_external' / p[0], flags, ('--markup',))
+        # Here, in the pool: a page-size miss runs pdfinfo twice, and --cached re-sorts without it.
+        s['status'] = status(f'{p[0]}/{p[1].stem}', s)
         n = next(done)
         if n % 100 == 0 or n == len(pairs):
             print(f'{n}/{len(pairs)}', file=sys.stderr, flush=True)
         return s
 
     with ThreadPoolExecutor(jobs) as ex:
-        results = {f'{g}/{d.stem}': s or {'failed': True} for (g, d, _), s in zip(pairs, ex.map(one, pairs))}
+        results = {f'{g}/{d.stem}': s for (g, d, _), s in zip(pairs, ex.map(one, pairs))}
     RESULTS.write_text(json.dumps(results, indent=1))
     return results
 
@@ -118,7 +120,7 @@ def main() -> None:
     for name, r in rows:
         cells = [('-' if r.get(c) is None else f'{r[c] * 100:.2f}' if isinstance(r[c], float) else str(r[c]))
                  for c in cols]
-        print('\t'.join([name, *cells, status(name, r)]))
+        print('\t'.join([name, *cells, r.get('status', '')]))
 
 
 if __name__ == '__main__':

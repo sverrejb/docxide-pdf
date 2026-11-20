@@ -37,7 +37,7 @@ def raster(pdf: Path, dest: Path) -> None:
                        capture_output=True)
 
 
-def score(docx: Path, ref: Path, cli: str, out: Path, metric_flags: tuple = (), cli_flags: tuple = ()) -> dict | None:
+def score(docx: Path, ref: Path, cli: str, out: Path, metric_flags: tuple = (), cli_flags: tuple = ()) -> dict:
     name = docx.stem
     work = out / name
     shutil.rmtree(work, ignore_errors=True)

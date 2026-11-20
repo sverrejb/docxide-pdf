@@ -2,9 +2,7 @@
 
 use crate::model::{FracKind, MathNode, MathRow, MathRun, MathScript, MathSettings, MathStyle};
 
-use super::{
-    MATH_NS, is_revision_wrapper, math_bool, math_child, math_run_text, math_val, revision_of, wml,
-};
+use super::{MATH_NS, math_bool, math_child, math_children, math_run_text, math_val, revision_of};
 
 /// Builds math rows. `format` resolves a math run's `w:rPr` (its colour)
 /// against the paragraph's formatting; `revisions` says whether deleted math
@@ -17,11 +15,7 @@ pub(super) struct MathParser<'f> {
 /// A math run's `w:rPr`, also inside the revision wrapper Word saves revised
 /// math runs with (`<m:r><w:ins><w:rPr/><m:t/></w:ins></m:r>`).
 pub(super) fn run_rpr<'a>(r: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
-    wml(r, "rPr").or_else(|| {
-        r.children()
-            .filter(|c| is_revision_wrapper(*c))
-            .find_map(|c| wml(c, "rPr"))
-    })
+    math_children(r, true).find(|c| c.has_tag_name((super::WML_NS, "rPr")))
 }
 
 fn flag(node: roxmltree::Node, pr: &str, name: &str) -> bool {
@@ -39,14 +33,7 @@ fn chr(node: roxmltree::Node, pr: &str, name: &str, default: char) -> Option<cha
 
 impl MathParser<'_> {
     pub(super) fn row(&self, node: roxmltree::Node) -> MathRow {
-        node.children()
-            .flat_map(|c| {
-                if is_revision_wrapper(c) {
-                    c.children().collect()
-                } else {
-                    vec![c]
-                }
-            })
+        math_children(node, self.revisions.markup)
             .filter(|c| c.tag_name().namespace() == Some(MATH_NS))
             .flat_map(|c| self.node(c))
             .collect()
