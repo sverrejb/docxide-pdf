@@ -1531,13 +1531,19 @@ pub(super) fn render_paragraph_lines(
                     let mut font = chunk.pdf_font.as_str();
                     for item in &mb.items {
                         let (gx, gy, size, color, item_font, bytes) = match item {
-                            crate::math::MathItem::Rule { x: rx, y: ry, w, h } => {
+                            crate::math::MathItem::Rule {
+                                x: rx,
+                                y: ry,
+                                w,
+                                h,
+                                color,
+                            } => {
                                 decorations.push((
                                     x + rx,
                                     cy + ry,
                                     *w,
                                     *h,
-                                    effective_color,
+                                    color.or(effective_color),
                                     DecoKind::Solid,
                                 ));
                                 continue;

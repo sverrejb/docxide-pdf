@@ -112,7 +112,8 @@ fn delimiter(chr: &str, side: &str) -> Option<String> {
 /// One `m:r`: its characters with the run's math style (`m:sty`), which Word
 /// says before each letter ("bold italic cap T") and digit ("bold 1").
 fn speak_run(r: roxmltree::Node, out: &mut Vec<String>) {
-    let text = math_run_text(r);
+    // The formula as it stands: deleted math is not spoken.
+    let text = math_run_text(r, false);
     let sty = math_val(r, "rPr", "sty");
     // Plain (upright) text is a word: a function name or a unit.
     if sty == Some("p")

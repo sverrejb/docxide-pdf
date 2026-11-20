@@ -57,9 +57,15 @@ pub enum MathItem {
         size: f32,
         color: Option<[u8; 3]>,
     },
-    /// A filled rectangle (fraction bar, radical overbar) in the text colour,
-    /// `y` its bottom.
-    Rule { x: f32, y: f32, w: f32, h: f32 },
+    /// A filled rectangle (fraction bar, radical overbar, strikethrough), `y`
+    /// its bottom; in the text colour unless it has its own.
+    Rule {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        color: Option<[u8; 3]>,
+    },
     /// An `m:nor` run's text in its own font, by the font's PDF name.
     Text {
         text: String,
@@ -105,7 +111,31 @@ impl MathBox {
         let x = |it: &MathItem| match it {
             MathItem::Glyph { x, .. } | MathItem::Rule { x, .. } | MathItem::Text { x, .. } => *x,
         };
-        let (head, tail): (Vec<_>, Vec<_>) = self.items.iter().cloned().partition(|it| x(it) < end);
+        // A strikethrough across the break is cut in two: up to the end of
+        // the first part, and on from the start of the second.
+        let items = self.items.iter().cloned().flat_map(|it| match it {
+            MathItem::Rule { x, y, w, h, color } if x < end && x + w > end => vec![
+                MathItem::Rule {
+                    x,
+                    y,
+                    w: end - x,
+                    h,
+                    color,
+                },
+                MathItem::Rule {
+                    x: start,
+                    y,
+                    w: x + w - start,
+                    h,
+                    color,
+                },
+            ]
+            .into_iter()
+            .filter(|r| matches!(r, MathItem::Rule { w, .. } if *w > 0.0))
+            .collect(),
+            it => vec![it],
+        });
+        let (head, tail): (Vec<_>, Vec<_>) = items.partition(|it| x(it) < end);
         let i = self.atoms.partition_point(|a| a.0 < end);
         let head_atoms = self.atoms[..i].to_vec();
         let tail_atoms = self.atoms[i..]
@@ -172,7 +202,9 @@ pub(crate) fn layout(
     // equation too wide for its line breaks before one unless m:brkBin is
     // after (probes `mp17_wrap`, `mp18_after`).
     let before = display && !settings.break_after;
-    let (b, breaks) = assemble(atoms, &xs, before);
+    let strikes = cx.strikes(&atoms, &xs, st);
+    let (mut b, breaks) = assemble(atoms, &xs, before);
+    b.items.extend(strikes);
     let (line_ascent, line_descent) = font.line_metrics(size);
     MathBox {
         atoms: extents,
@@ -295,6 +327,8 @@ struct B {
     character: bool,
     /// The tallest delimiter inside: an enclosing one grows past it.
     fence: f32,
+    /// A character of a struck-through run, and the run's colour.
+    strike: Option<Option<[u8; 3]>>,
 }
 
 impl B {
@@ -311,6 +345,7 @@ impl B {
             single_glyph: None,
             character: false,
             fence: 0.0,
+            strike: None,
         }
     }
 
@@ -346,7 +381,13 @@ impl B {
         self.w = self.w.max(x + w);
         self.asc = self.asc.max(y + h);
         self.desc = self.desc.max(-y);
-        self.items.push(MathItem::Rule { x, y, w, h });
+        self.items.push(MathItem::Rule {
+            x,
+            y,
+            w,
+            h,
+            color: None,
+        });
     }
 }
 
@@ -459,10 +500,41 @@ impl<'a> Ctx<'a> {
 
     fn hbox(&self, mut atoms: Vec<B>, st: St) -> B {
         let (xs, _) = self.place(&mut atoms, st);
-        if atoms.len() == 1 {
-            return atoms.pop().unwrap();
+        let strikes = self.strikes(&atoms, &xs, st);
+        let mut b = if atoms.len() == 1 {
+            atoms.pop().unwrap()
+        } else {
+            assemble(atoms, &xs, false).0
+        };
+        b.items.extend(strikes);
+        b
+    }
+
+    /// One strikethrough per stretch of neighbouring struck characters, across
+    /// the space between them, at the math font's strikeout position: Word
+    /// strikes deleted math run by run, through operator spacing (corpus
+    /// redline 970e9bbbcc, E = mc²).
+    fn strikes(&self, atoms: &[B], xs: &[f32], st: St) -> Vec<MathItem> {
+        let (pos, thickness) = self.font.strikeout(self.size(st));
+        let mut out: Vec<MathItem> = Vec::new();
+        for (i, (a, &x)) in atoms.iter().zip(xs).enumerate() {
+            let Some(color) = a.strike else { continue };
+            if i > 0
+                && atoms[i - 1].strike == a.strike
+                && let Some(MathItem::Rule { x: start, w, .. }) = out.last_mut()
+            {
+                *w = x + a.w - *start;
+                continue;
+            }
+            out.push(MathItem::Rule {
+                x,
+                y: pos,
+                w: a.w,
+                h: thickness,
+                color,
+            });
         }
-        assemble(atoms, &xs, false).0
+        out
     }
 
     /// Where each atom of a row goes, with TeX's spacing, and the row's width.
@@ -528,6 +600,7 @@ impl<'a> Ctx<'a> {
                         color: run.color,
                     }],
                     character: true,
+                    strike: run.strike.then_some(run.color),
                     ..B::empty()
                 }];
             }
@@ -555,6 +628,7 @@ impl<'a> Ctx<'a> {
                 b.first = class;
                 b.last = class;
                 b.character = true;
+                b.strike = run.strike.then_some(run.color);
                 b
             })
             .collect()

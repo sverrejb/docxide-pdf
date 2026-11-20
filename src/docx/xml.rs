@@ -278,9 +278,41 @@ pub(super) fn math_bool(node: roxmltree::Node, pr: &str, name: &str) -> Option<b
     Some(n.attribute((MATH_NS, "val")).is_none_or(parse_on_off))
 }
 
-/// A math run's text (its `m:t` children).
-pub(super) fn math_run_text(r: roxmltree::Node) -> String {
-    find_children(r, "t", MATH_NS)
+/// The innermost `w:ins` / `w:moveTo` / `w:del` / `w:moveFrom` around a run
+/// node, as (deleted, element).
+pub(super) fn revision_of<'a>(
+    node: roxmltree::Node<'a, 'a>,
+) -> Option<(bool, roxmltree::Node<'a, 'a>)> {
+    node.ancestors()
+        .skip(1)
+        .take_while(|n| !n.has_tag_name((WML_NS, "p")))
+        .find_map(|n| match n.tag_name().name() {
+            "ins" | "moveTo" if n.tag_name().namespace() == Some(WML_NS) => Some((false, n)),
+            "del" | "moveFrom" if n.tag_name().namespace() == Some(WML_NS) => Some((true, n)),
+            _ => None,
+        })
+}
+
+/// A tracked change wrapping math content: inside an `m:r` around its
+/// `w:rPr` and `m:t` (how Word saves revised math), or around `m:r`s.
+pub(super) fn is_revision_wrapper(n: roxmltree::Node) -> bool {
+    n.tag_name().namespace() == Some(WML_NS)
+        && matches!(n.tag_name().name(), "ins" | "del" | "moveTo" | "moveFrom")
+}
+
+/// A math run's text (its `m:t` children, also inside a revision wrapper);
+/// deleted text only in the markup view.
+pub(super) fn math_run_text(r: roxmltree::Node, markup: bool) -> String {
+    r.children()
+        .flat_map(|c| {
+            if is_revision_wrapper(c) {
+                c.children().collect()
+            } else {
+                vec![c]
+            }
+        })
+        .filter(|t| t.has_tag_name((MATH_NS, "t")))
+        .filter(|t| markup || !revision_of(*t).is_some_and(|(deleted, _)| deleted))
         .filter_map(|t| t.text())
         .collect()
 }

@@ -87,6 +87,19 @@ impl<'a> MathFont<'a> {
         self.constants.radical_degree_bottom_raise_percent() as f32
     }
 
+    /// The strikethrough's bottom above the baseline and its thickness at
+    /// `size`: the OS/2 strikeout, like a text run's (`line_render::strike_line`).
+    pub(super) fn strikeout(&self, size: f32) -> (f32, f32) {
+        // ponytail: a face without an OS/2 strikeout gets 0.3em / 0.05em.
+        let (top, th) = self
+            .face
+            .strikeout_metrics()
+            .map_or((0.3 * self.upem, 0.05 * self.upem), |m| {
+                (m.position as f32, m.thickness as f32)
+            });
+        (self.pt(top - th, size), self.pt(th, size))
+    }
+
     /// The font's line box per its hhea table at `size`: the ascent and
     /// descent Word gives a display-math line (Cambria Math's OS/2 win
     /// metrics are several ems tall and never used).
