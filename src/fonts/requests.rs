@@ -19,7 +19,7 @@ thread_local! {
 }
 
 /// Drain this thread's missing fonts.
-pub fn take_font_requests() -> Vec<MissingFont> {
+pub(crate) fn take_font_requests() -> Vec<MissingFont> {
     MISSING.with_borrow_mut(std::mem::take)
 }
 

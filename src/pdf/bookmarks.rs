@@ -25,7 +25,7 @@ thread_local! {
 /// Drain the final render pass's paragraph positions from this thread's latest
 /// conversion. A new conversion clears them, including when parsing fails.
 /// Headers, footers and text boxes are not part of this body-paragraph API.
-pub fn take_bookmark_positions() -> Vec<BookmarkPosition> {
+pub(crate) fn take_bookmark_positions() -> Vec<BookmarkPosition> {
     POSITIONS.with_borrow_mut(std::mem::take)
 }
 

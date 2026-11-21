@@ -9,10 +9,12 @@ mod pdf;
 
 pub use error::Error;
 pub use fonts::memory::{clear_fonts, register_font, use_system_fonts};
-pub use fonts::requests::{MissingFont, take_font_requests};
-pub use pdf::bookmarks::{BookmarkPosition, take_bookmark_positions};
+pub use fonts::requests::MissingFont;
+pub use pdf::bookmarks::BookmarkPosition;
 
-use std::path::{Path, PathBuf};
+use fonts::requests::take_font_requests;
+use pdf::bookmarks::take_bookmark_positions;
+use std::path::PathBuf;
 
 /// Which view of a document's tracked changes to print.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -191,137 +193,9 @@ const _: fn() = || {
     send_sync::<Conversion>();
 };
 
-/// Converts with [`ConvertOptions::from_env`].
-pub fn convert_docx_to_pdf(input: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<(), Error> {
-    convert_docx_to_pdf_with(input, path, &ConvertOptions::from_env())
-}
-
-pub fn convert_docx_to_pdf_with(
-    input: impl AsRef<Path>,
-    path: impl AsRef<Path>,
-    options: &ConvertOptions,
-) -> Result<(), Error> {
-    reset_conversion_metadata();
-    reject_old_env_vars()?;
-    let doc = docx::parse(input.as_ref(), options.revisions)?;
-    render_and_write(&doc, path, options)
-}
-
-/// Converts with [`ConvertOptions::from_env`].
-pub fn convert_docx_bytes_to_pdf(input: &[u8], path: impl AsRef<Path>) -> Result<(), Error> {
-    convert_docx_bytes_to_pdf_with(input, path, &ConvertOptions::from_env())
-}
-
-pub fn convert_docx_bytes_to_pdf_with(
-    input: &[u8],
-    path: impl AsRef<Path>,
-    options: &ConvertOptions,
-) -> Result<(), Error> {
-    reset_conversion_metadata();
-    reject_old_env_vars()?;
-    let doc = docx::parse_bytes(input, options.revisions)?;
-    render_and_write(&doc, path, options)
-}
-
-/// The pages `convert_docx_bytes_to_pdf_bytes_with` would write, laid out
-/// but not written: what each page draws, with the fonts and pictures it
-/// draws them with ([`display`]), for a caller that writes PDF (or renders
-/// pages) itself.
-pub fn layout_docx_bytes_with(
-    input: &[u8],
-    options: &ConvertOptions,
-) -> Result<display::Document, Error> {
-    reset_conversion_metadata();
-    reject_old_env_vars()?;
-    let doc = docx::parse_bytes(input, options.revisions)?;
-    let recording = pdf::canvas::Recording::start();
-    pdf::render(&doc, options)?;
-    Ok(recording.finish().unwrap_or_default())
-}
-
-/// For callers that serve or store the PDF themselves (web handlers, databases,
-/// wasm). Converts with [`ConvertOptions::from_env`].
-pub fn convert_docx_bytes_to_pdf_bytes(input: &[u8]) -> Result<Vec<u8>, Error> {
-    convert_docx_bytes_to_pdf_bytes_with(input, &ConvertOptions::from_env())
-}
-
-pub fn convert_docx_bytes_to_pdf_bytes_with(
-    input: &[u8],
-    options: &ConvertOptions,
-) -> Result<Vec<u8>, Error> {
-    reset_conversion_metadata();
-    reject_old_env_vars()?;
-    let doc = docx::parse_bytes(input, options.revisions)?;
-    pdf::render(&doc, options)
-}
-
-fn reset_conversion_metadata() {
-    take_bookmark_positions();
-    take_font_requests();
-}
-
-/// The variables lost their old `DOCXSIDE_` prefix; failing loudly beats silently
-/// dropping someone's font directories and rendering with fallbacks.
-fn reject_old_env_vars() -> Result<(), Error> {
-    // std::env::vars_os panics on bare wasm (std::env::var just finds nothing).
-    if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
-        return Ok(());
-    }
-    match old_env_var(std::env::vars_os().map(|(key, _)| key)) {
-        Some(name) => Err(Error::RenamedEnvVar(name)),
-        None => Ok(()),
-    }
-}
-
-fn old_env_var(keys: impl Iterator<Item = std::ffi::OsString>) -> Option<String> {
-    keys.filter_map(|key| key.into_string().ok())
-        .find(|key| key.starts_with("DOCXSIDE_"))
-}
-
-fn render_and_write(
-    doc: &model::Document,
-    path: impl AsRef<Path>,
-    options: &ConvertOptions,
-) -> Result<(), Error> {
-    let path = path.as_ref().with_extension("pdf");
-    // Bare wasm has no clock: no timings there.
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-    let t0 = std::time::Instant::now();
-
-    let bytes = pdf::render(doc, options)?;
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-    let t_render = t0.elapsed();
-
-    std::fs::write(&path, &bytes)?;
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-    {
-        let t_total = t0.elapsed();
-        log::info!(
-            "Timing: render={:.1}ms, write={:.1}ms, total={:.1}ms (output {} bytes)",
-            t_render.as_secs_f64() * 1000.0,
-            (t_total - t_render).as_secs_f64() * 1000.0,
-            t_total.as_secs_f64() * 1000.0,
-            bytes.len(),
-        );
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn old_prefix_is_reported_with_its_new_name() {
-        let keys = ["PATH", "DOCXIDE_FONTS", "DOCXSIDE_FONTS"].map(Into::into);
-        let old = old_env_var(keys.into_iter()).unwrap();
-        assert_eq!(
-            Error::RenamedEnvVar(old).to_string(),
-            "DOCXSIDE_FONTS is no longer read; rename it to DOCXIDE_FONTS"
-        );
-        assert_eq!(old_env_var(["DOCXIDE_FONTS".into()].into_iter()), None);
-    }
 
     #[test]
     fn env_vars_override_the_online_defaults() {

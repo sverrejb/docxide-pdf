@@ -1036,20 +1036,6 @@ mod relationships {
     }
 }
 
-pub fn parse(path: &std::path::Path, view: crate::RevisionView) -> Result<Document, Error> {
-    let file = std::fs::File::open(path).map_err(|e| match e.kind() {
-        std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => Error::Io(
-            std::io::Error::new(e.kind(), format!("{}: {}", e, path.display())),
-        ),
-        _ => Error::Io(e),
-    })?;
-
-    let mut zip = zip::ZipArchive::new(file)
-        .map_err(|_| Error::InvalidDocx("file is not a ZIP archive".into()))?;
-
-    parse_zip(&mut zip, view)
-}
-
 pub fn parse_bytes(bytes: &[u8], view: crate::RevisionView) -> Result<Document, Error> {
     let cursor = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(cursor)
