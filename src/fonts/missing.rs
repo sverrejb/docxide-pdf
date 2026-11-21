@@ -13,6 +13,10 @@ pub struct MissingFont {
     pub name: String,
     pub bold: bool,
     pub italic: bool,
+    /// The document's own name when Word draws `name` in its place: Windows
+    /// maps Helvetica, Times and Courier to Arial, Times New Roman and Courier
+    /// New, even over an installed or embedded face of the document's name.
+    pub replaces: Option<String>,
 }
 
 thread_local! {
@@ -40,7 +44,7 @@ pub(crate) fn record(font: &MissingFont) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fonts::{EmbeddedFonts, FontContext, FontFiles, discovery, register_font};
+    use crate::fonts::{EmbeddedFonts, FontContext, FontFiles, FontIndex, register_font};
     use crate::model::FontTable;
     use pdf_writer::{Pdf, Ref};
     use std::collections::HashSet;
@@ -56,7 +60,7 @@ mod tests {
             used_chars: &HashSet::new(),
             word_text: true,
             extra_glyphs: None,
-            font_index: discovery::test_index(),
+            font_index: &FontIndex::default(),
             font_files: &FontFiles::default(),
         };
         let mut next = 0;
@@ -79,7 +83,12 @@ mod tests {
         assert_eq!(missing("Synthetic Hyphen", false), None);
         let bold = missing("Synthetic Hyphen", true).expect("no bold face");
         assert!(bold.bold && bold.name == "Synthetic Hyphen");
-        assert!(missing("Helvetica", false).is_none_or(|m| m.name == "Arial"));
+        assert_eq!(bold.replaces, None);
+        let arial = missing("Helvetica", false).expect("no Arial");
+        assert_eq!(
+            (arial.name.as_str(), arial.replaces.as_deref()),
+            ("Arial", Some("Helvetica"))
+        );
         assert_eq!(missing("Bahnschrift", false), None);
 
         take_missing_fonts();

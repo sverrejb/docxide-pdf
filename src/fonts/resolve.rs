@@ -833,6 +833,7 @@ pub(crate) fn register_font(
             name: requested.to_owned(),
             bold,
             italic,
+            replaces: (requested != primary).then(|| primary.to_owned()),
         });
     }
 

@@ -159,7 +159,7 @@ std::fs::write("output.pdf", &out.pdf)?;
 Besides `pdf`, a `Conversion` carries:
 
 - `bookmarks`: where each bookmarked paragraph was laid out (below);
-- `missing_fonts`: the fonts the document asks for that no embedded, supplied or installed face provides, each with the requested bold and italic. A missing style is listed even when the regular face stands in with synthetic bold or italic. Use it to tell the user which font to supply: `ConvertOptions::font` takes the font file's bytes, and converting again uses it;
+- `missing_fonts`: the fonts the document asks for that no embedded, supplied or installed face provides, each with the requested bold and italic. A missing style is listed even when the regular face stands in with synthetic bold or italic. When Word draws a different font in place of the document's (Arial for Helvetica, Times New Roman for Times, Courier New for Courier), `name` is that font and `replaces` holds the document's name, since supplying the document's font would change nothing. Use it to tell the user which font to supply: `ConvertOptions::font` takes the font file's bytes, and converting again uses it;
 - `display`: with `.display_list(true)`, what each page draws, with the fonts and pictures it draws them with ([`display`](https://docs.rs/docxide-pdf/latest/docxide_pdf/display/)), recorded from the same render as the PDF, for a caller that writes PDF or renders pages itself.
 
 A new output becomes a new `Conversion` field, so adding one doesn't break callers.
