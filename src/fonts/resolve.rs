@@ -128,7 +128,7 @@ const BAHNSCHRIFT_ASCENT: f32 = 0.9965;
 
 const BAHNSCHRIFT_LINE_H: f32 = 1.2004;
 
-pub(super) fn is_bahnschrift(name: &str) -> bool {
+fn is_bahnschrift(name: &str) -> bool {
     name.starts_with("Bahnschrift")
 }
 
@@ -175,7 +175,7 @@ pub(crate) fn hhea_box(source: &FontSource, face_index: u32) -> Option<(f32, f32
 /// and Arial. Word's online export, which made most references, runs on Windows;
 /// local Mac Word draws macOS Helvetica. Apple's Times, Courier and Helvetica are
 /// indexed only as Mac-only faces (`discovery`).
-pub(super) fn word_substitute(name: &str) -> Option<&'static str> {
+fn word_substitute(name: &str) -> Option<&'static str> {
     match name.to_ascii_lowercase().as_str() {
         "times" => Some("Times New Roman"),
         "courier" => Some("Courier New"),
@@ -818,6 +818,22 @@ pub(crate) fn register_font(
     // Bahnschrift Light; real Calibri lines are 0.954/1.221).
     if bahnschrift && entry.font_source.is_some() {
         entry.set_line_box(BAHNSCHRIFT_ASCENT, BAHNSCHRIFT_LINE_H);
+    }
+
+    // Only the first name the document asks for, as Word looks it up (Helvetica
+    // is Arial): the fallbacks tried after it are ours. A Mac-only face the
+    // lookup skipped above is missing too. Bahnschrift is never listed; Word
+    // cannot export it, so supplying it changes nothing.
+    let requested = word_substitute(primary).unwrap_or(primary);
+    let key = (requested.to_lowercase(), bold, italic);
+    let skipped = has_alt && ctx.font_index.is_mac_only_family(requested);
+    let found = ctx.embedded_fonts.contains_key(&key) || ctx.font_index.exact_face(&key).is_some();
+    if !requested.is_empty() && !is_bahnschrift(requested) && (skipped || !found) {
+        entry.missing = Some(missing::MissingFont {
+            name: requested.to_owned(),
+            bold,
+            italic,
+        });
     }
 
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]

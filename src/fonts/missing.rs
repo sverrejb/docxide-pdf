@@ -3,9 +3,6 @@
 //! belongs to the converting thread; `convert` drains it.
 use std::cell::RefCell;
 
-use super::resolve::{is_bahnschrift, word_substitute};
-use super::{FontContext, primary_font_name};
-
 /// A family and style the document asks for that no embedded, supplied or
 /// system face provides. A missing bold or italic is listed even when the
 /// regular face stands in with synthetic bold or italic: the real face would
@@ -28,45 +25,24 @@ pub(crate) fn take_missing_fonts() -> Vec<MissingFont> {
 }
 
 /// Every render pass resolves the fonts again, so each font is kept once.
-fn record(name: &str, bold: bool, italic: bool) {
+pub(crate) fn record(font: &MissingFont) {
     MISSING.with_borrow_mut(|missing| {
-        if !missing
-            .iter()
-            .any(|m| m.bold == bold && m.italic == italic && m.name.eq_ignore_ascii_case(name))
-        {
-            missing.push(MissingFont {
-                name: name.to_owned(),
-                bold,
-                italic,
-            });
+        if !missing.iter().any(|m| {
+            m.bold == font.bold
+                && m.italic == font.italic
+                && m.name.eq_ignore_ascii_case(&font.name)
+        }) {
+            missing.push(font.clone());
         }
     });
-}
-
-/// Lists the document's own font when neither an embedded nor an installed or
-/// supplied face has its exact style. Only the name the document asks for:
-/// the fallbacks `register_font` goes on to try are ours, not the document's.
-/// The name is the one `register_font` looks up (Word draws Helvetica as
-/// Arial), and never Bahnschrift, which Word cannot export, so supplying a
-/// listed face always changes the output.
-pub(crate) fn note_if_missing(font_name: &str, bold: bool, italic: bool, ctx: &FontContext) {
-    let primary = primary_font_name(font_name);
-    let name = word_substitute(primary).unwrap_or(primary);
-    let key = (name.to_lowercase(), bold, italic);
-    if !name.is_empty()
-        && !is_bahnschrift(name)
-        && !ctx.embedded_fonts.contains_key(&key)
-        && ctx.font_index.exact_face(&key).is_none()
-    {
-        record(name, bold, italic);
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fonts::{EmbeddedFonts, FontFiles, discovery};
+    use crate::fonts::{EmbeddedFonts, FontContext, FontFiles, discovery, register_font};
     use crate::model::FontTable;
+    use pdf_writer::{Pdf, Ref};
     use std::collections::HashSet;
 
     #[test]
@@ -83,21 +59,32 @@ mod tests {
             font_index: discovery::test_index(),
             font_files: &FontFiles::default(),
         };
+        let mut next = 0;
+        let mut missing = |name: &str, bold: bool| {
+            let mut alloc = || {
+                next += 1;
+                Ref::new(next)
+            };
+            register_font(
+                &mut Pdf::new(),
+                name,
+                bold,
+                false,
+                "F1".into(),
+                &mut alloc,
+                &ctx,
+            )
+            .missing
+        };
+        assert_eq!(missing("Synthetic Hyphen", false), None);
+        let bold = missing("Synthetic Hyphen", true).expect("no bold face");
+        assert!(bold.bold && bold.name == "Synthetic Hyphen");
+        assert!(missing("Helvetica", false).is_none_or(|m| m.name == "Arial"));
+        assert_eq!(missing("Bahnschrift", false), None);
+
         take_missing_fonts();
-        note_if_missing("Synthetic Hyphen", false, false, &ctx);
-        assert!(take_missing_fonts().is_empty());
-        note_if_missing("Synthetic Hyphen", true, false, &ctx);
-        note_if_missing("Synthetic Hyphen", true, false, &ctx);
-        note_if_missing("Helvetica", false, false, &ctx);
-        note_if_missing("Bahnschrift", false, false, &ctx);
-        let mut missing = take_missing_fonts();
-        assert!(
-            missing
-                .iter()
-                .all(|m| m.name != "Helvetica" && m.name != "Bahnschrift")
-        );
-        missing.retain(|m| m.name == "Synthetic Hyphen");
-        assert_eq!(missing.len(), 1);
-        assert!(missing[0].bold && missing[0].name == "Synthetic Hyphen");
+        record(&bold);
+        record(&bold);
+        assert_eq!(take_missing_fonts(), [bold]);
     }
 }

@@ -158,6 +158,8 @@ pub(crate) struct FontEntry {
     /// The math font's laid-out Office Math zones, by `MathZone` address
     /// (`pdf::fonts::register_math_font`), drawing subset ids.
     pub(crate) math_boxes: HashMap<usize, std::sync::Arc<crate::math::MathBox>>,
+    /// The requested face when no embedded, supplied or installed file has it.
+    pub(crate) missing: Option<missing::MissingFont>,
 }
 
 #[cfg(test)]
@@ -212,6 +214,7 @@ impl FontEntry {
             embedded_data: None,
             standard_font: None,
             math_boxes: HashMap::new(),
+            missing: None,
         }
     }
 

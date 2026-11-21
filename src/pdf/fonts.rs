@@ -3,7 +3,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use pdf_writer::{Pdf, Ref};
 
 use crate::ConvertOptions;
-use crate::fonts::missing::note_if_missing;
 use crate::fonts::{FontContext, FontEntry, FontFiles, FontIndex, font_key_buf, register_font};
 use crate::model::{Block, Document, FieldCode, IfPart, ImageFormat, Paragraph, Run};
 
@@ -601,7 +600,6 @@ pub(super) fn collect_and_register_fonts(
                 word_text: true,
                 ..base_ctx
             };
-            note_if_missing(&run.font_name, run.bold, run.italic, &ctx);
             let entry = register_font(
                 pdf,
                 &run.font_name,
@@ -636,7 +634,6 @@ pub(super) fn collect_and_register_fonts(
             used_chars: used,
             ..base_ctx
         };
-        note_if_missing(base, bold, italic, &ctx);
         let entry = register_font(pdf, base, bold, italic, pdf_name, alloc, &ctx);
         seen_fonts.insert(key.clone(), entry);
         font_order.push(key.clone());
@@ -653,6 +650,13 @@ pub(super) fn collect_and_register_fonts(
             &mut font_order,
             base_ctx,
         );
+    }
+
+    // The document's fonts only: the glyph fallbacks below are ours.
+    for key in &font_order {
+        if let Some(missing) = &seen_fonts[key].missing {
+            crate::fonts::missing::record(missing);
+        }
     }
 
     // Collect all chars missing from their primary fonts and register the
