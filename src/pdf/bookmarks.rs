@@ -12,10 +12,15 @@ use super::LinkAnnotation;
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct BookmarkPosition {
+    /// The bookmark's name (`w:bookmarkStart/@w:name`).
     pub name: String,
+    /// The page of the paragraph's first fragment.
     pub page: usize,
+    /// The top of the first fragment.
     pub top: f32,
+    /// The page of the paragraph's last fragment.
     pub end_page: usize,
+    /// The bottom of the last fragment.
     pub bottom: f32,
 }
 

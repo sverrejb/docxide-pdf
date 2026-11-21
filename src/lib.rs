@@ -1,3 +1,20 @@
+//! Converts DOCX to PDF, matching Microsoft Word's PDF export (the online
+//! export: tagged, Windows fonts and metrics).
+//!
+//! [`convert`] takes the DOCX as bytes and returns a [`Conversion`]: the PDF
+//! as bytes, where bookmarked paragraphs were laid out, the fonts worth
+//! supplying, and optionally the pages as a [`display`] list. File I/O is the
+//! caller's. [`ConvertOptions::new`] reproduces Word's online export.
+//!
+//! ```no_run
+//! use docxide_pdf::{ConvertOptions, convert};
+//!
+//! let out = convert(&std::fs::read("input.docx")?, &ConvertOptions::new())?;
+//! std::fs::write("output.pdf", &out.pdf)?;
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+#![warn(missing_docs)]
+
 pub mod display;
 mod docx;
 mod error;
@@ -142,6 +159,7 @@ impl ConvertOptions {
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct Conversion {
+    /// The PDF file.
     pub pdf: Vec<u8>,
     /// Where each bookmarked body or table-cell paragraph was laid out.
     pub bookmarks: Vec<BookmarkPosition>,

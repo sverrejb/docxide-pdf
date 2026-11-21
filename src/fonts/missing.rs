@@ -10,8 +10,11 @@ use std::cell::RefCell;
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct MissingFont {
+    /// The family to supply.
     pub name: String,
+    /// Whether the missing face is bold.
     pub bold: bool,
+    /// Whether the missing face is italic.
     pub italic: bool,
     /// The document's own name when Word draws `name` in its place: Windows
     /// maps Helvetica, Times and Courier to Arial, Times New Roman and Courier

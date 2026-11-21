@@ -1,8 +1,11 @@
 use std::fmt;
 
+/// Why [`crate::convert`] failed.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// The input is not a DOCX: not a ZIP archive, or no readable
+    /// `word/document.xml` with a body. The text says which.
     InvalidDocx(String),
 }
 
