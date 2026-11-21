@@ -3370,6 +3370,8 @@ pub(super) fn build_tabbed_line(
     // decimal stop in the right indent (western_australia's "34(1), 48(3)"),
     // or anywhere after an explicit stop past the margin before compat 15.
     let mut line_reach = 0.0f32;
+    // The alignment of the stop the line's last tab went to.
+    let mut prev_alignment: Option<TabAlignment> = None;
 
     let mut tab_line_metrics: Option<(f32, Option<f32>)> = None;
     // The width of the hyphen a soft hyphen showed at the end of the word
@@ -3489,8 +3491,17 @@ pub(super) fn build_tabbed_line(
             // Otherwise a tab wraps when it lands past the margin or the word
             // after it doesn't fit (a default stop on the margin stays:
             // massachusetts' signature line keeps its fifth tab there).
+            // Before 2013 layout a tab past the margin right after a right,
+            // centre or decimal stop stays too, and what follows it (online
+            // probe tabwrap14: `left⇥mid⇥CCPR⇥Z` puts Z at 576pt on a 540pt
+            // margin; after a left stop it wraps).
             let stop_past = effective_tab_target > wrap_limit;
-            if explicit && stop_past && compat_mode < 15 {
+            let after_aligned = prev_alignment.is_some_and(|a| a != TabAlignment::Left);
+            if compat_mode < 15
+                && (line_reach == f32::INFINITY
+                    || (explicit && stop_past)
+                    || (after_aligned && seg_start > wrap_limit))
+            {
                 line_reach = f32::INFINITY;
             } else if explicit && stop_past && stop.alignment != TabAlignment::Left {
                 effective_tab_target = wrap_limit;
@@ -3525,6 +3536,9 @@ pub(super) fn build_tabbed_line(
                     resolve_tab_aligned_start(&new_stop, new_target, seg_runs, seen_fonts, 0.0);
                 resolved_leader = new_stop.leader;
                 effective_tab_target = new_target;
+                prev_alignment = Some(new_stop.alignment);
+            } else {
+                prev_alignment = Some(stop.alignment);
             }
             drop_soft_hyphen(&mut all_chunks, soft);
             pending_space_w = 0.0;
@@ -3657,6 +3671,7 @@ pub(super) fn build_tabbed_line(
                 tab_wrapped_line = false;
                 tab_line_metrics = None;
                 line_reach = 0.0;
+                prev_alignment = None;
                 current_x = 0.0;
                 is_first_line = false;
                 pending_space_w = 0.0;
@@ -3691,6 +3706,7 @@ pub(super) fn build_tabbed_line(
                         );
                         tab_wrapped_line = false;
                         line_reach = 0.0;
+                        prev_alignment = None;
                         current_x = 0.0;
                         is_first_line = false;
                         tab_stop_pos = None;
@@ -3839,6 +3855,7 @@ pub(super) fn build_tabbed_line(
                     );
                     tab_wrapped_line = false;
                     line_reach = 0.0;
+                    prev_alignment = None;
                     current_x = 0.0;
                     is_first_line = false;
                     // The stop that opened this segment belongs to the line
@@ -4824,6 +4841,53 @@ mod tests {
     fn test_effective_font_size_baseline() {
         let run = make_run(12.0, VertAlign::Baseline, false);
         assert_eq!(effective_font_size(&run, &FontEntry::stub()), 12.0);
+    }
+
+    #[test]
+    fn tab_past_margin_after_right_stop_stays_before_compat_15() {
+        let run = |text: &str| Run {
+            text: text.to_string(),
+            is_tab: text.is_empty(),
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        let runs = ["a", "", "b", "", "c", "", "Z"].map(run);
+        let mut fonts = HashMap::new();
+        fonts.insert("Arial".to_string(), FontEntry::stub());
+        let stop = |position, alignment| TabStop {
+            position,
+            alignment,
+            leader: None,
+        };
+        let lines = |stops: &[TabStop], compat| {
+            build_tabbed_line(
+                &runs,
+                &fonts,
+                stops,
+                0.0,
+                100.0,
+                0.0,
+                0.0,
+                &HashMap::new(),
+                &HashMap::new(),
+                36.0,
+                &[],
+                compat,
+                plain_layout(false),
+            )
+            .len()
+        };
+        // `a⇥b⇥c⇥Z`, c right-aligned on the margin: the next default stop is
+        // past it (probe tabwrap14).
+        let right = [
+            stop(50.0, TabAlignment::Center),
+            stop(100.0, TabAlignment::Right),
+        ];
+        assert_eq!(lines(&right, 14), 1);
+        assert_eq!(lines(&right, 15), 2);
+        // After a left stop the tab past the margin wraps, as in compat 15.
+        let left = [stop(90.0, TabAlignment::Left)];
+        assert_eq!(lines(&left, 14), 3);
+        assert_eq!(lines(&left, 15), 3);
     }
 
     #[test]
