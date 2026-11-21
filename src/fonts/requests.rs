@@ -8,6 +8,7 @@ use std::cell::RefCell;
 /// regular face stands in with synthetic bold or italic: the real face would
 /// change the output.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MissingFont {
     pub name: String,
     pub bold: bool,

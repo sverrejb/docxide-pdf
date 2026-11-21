@@ -10,6 +10,7 @@ use super::LinkAnnotation;
 /// of the page, including section vertical alignment. This describes the
 /// paragraph carrying bookmarkStart, not a multi-paragraph bookmark range.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct BookmarkPosition {
     pub name: String,
     pub page: usize,

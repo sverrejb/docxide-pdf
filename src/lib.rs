@@ -17,6 +17,7 @@ use std::path::PathBuf;
 
 /// Which view of a document's tracked changes to print.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RevisionView {
     /// Word's "No Markup": insertions plain, deletions dropped. What Word's
     /// online export prints.
