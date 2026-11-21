@@ -492,18 +492,18 @@ fn covered_chars(name: &str, chars: &HashSet<char>, font_index: &FontIndex) -> H
 /// Fonts for the characters the resolved fonts lack, each with the characters
 /// it draws. Word picks per character: kanji missing from Batang came out in
 /// MS Mincho, and in one document ⇒ came from Cambria Math while ☑ came from
-/// Segoe UI Symbol. East Asian gaps share the best-covering CJK face; every
-/// other character takes the first face in `symbol_candidates` that has it.
+/// Segoe UI Symbol. Han-only gaps go face by face through `HAN_RESCUE_FONTS`;
+/// other East Asian gaps share the best-covering CJK face; every other
+/// character takes the first face in `symbol_candidates` that has it.
 pub(crate) fn rescue_fonts(
     missing: &HashSet<char>,
     font_index: &FontIndex,
 ) -> Vec<(String, HashSet<char>)> {
-    let (cjk, other): (HashSet<char>, HashSet<char>) = missing
+    let (mut cjk, other): (HashSet<char>, HashSet<char>) = missing
         .iter()
         .partition(|&&ch| crate::docx::is_east_asian_char(ch));
     let mut groups: BTreeMap<String, HashSet<char>> = BTreeMap::new();
-    let mut cjk = cjk;
-    if script_of_chars(cjk.iter().copied()) == CjkScript::Unknown {
+    if !cjk.is_empty() && script_of_chars(cjk.iter().copied()) == CjkScript::Unknown {
         // Han alone goes per character: what MS Mincho has, then Microsoft
         // JhengHei, then Yu Gothic (corpus 150b0fad13 and c9d39a9243, Chinese
         // under Calibri with no East Asian language: Word's online and Mac

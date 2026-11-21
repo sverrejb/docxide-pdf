@@ -98,6 +98,9 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
             .find(|n| n.attribute((WML_NS, "name")) == Some(name))
             .and_then(|n| n.attribute((WML_NS, "val")))
     };
+    let compat_mode = compat_setting("compatibilityMode")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
 
     let specials = |pr: &str, note: &str| -> Vec<String> {
         wml(root, pr)
@@ -118,13 +121,8 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
         default_lang,
         compress_punctuation: wml_attr(root, "characterSpacingControl")
             .is_some_and(|v| v.starts_with("compressPunctuation")),
-        compat_mode: compat_setting("compatibilityMode")
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0),
-        cjk_space_breaks: doc.is_some()
-            && compat_setting("compatibilityMode")
-                .and_then(|v| v.parse::<u32>().ok())
-                .is_none_or(|m| m < 14),
+        compat_mode,
+        cjk_space_breaks: doc.is_some() && compat_mode < 14,
         open_type_features: compat_setting("enableOpenTypeFeatures")
             .is_some_and(super::parse_on_off),
         styles_from_normal_template: wml_bool(root, "linkStyles").unwrap_or(false)
