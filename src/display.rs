@@ -1,9 +1,9 @@
 //! Laid-out pages, independent of PDF: what each page of a converted document
 //! draws, in painting order, with the fonts and pictures it draws them with.
 //!
-//! [`crate::layout_docx_bytes_with`] returns a [`Document`]: the same
-//! layout [`crate::convert_docx_bytes_to_pdf_bytes_with`] writes as PDF, for a
-//! caller that writes or renders pages itself. Coordinates are PDF user space:
+//! [`crate::convert`] returns a [`Document`] in [`crate::Conversion::display`]
+//! (with [`crate::ConvertOptions::display_list`]): the same layout it writes
+//! as PDF, for a caller that writes or renders pages itself. Coordinates are PDF user space:
 //! points, origin at the page's bottom-left corner, y up.
 
 use std::collections::BTreeMap;
