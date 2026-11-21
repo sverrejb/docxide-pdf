@@ -1124,7 +1124,8 @@ fn parse_zip<R: Read + std::io::Seek>(
         Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into())
     })?;
 
-    let xml = roxmltree::Document::parse(&xml_content)?;
+    let xml = roxmltree::Document::parse(&xml_content)
+        .map_err(|e| Error::InvalidDocx(format!("word/document.xml: {e}")))?;
     let root = xml.root_element();
 
     let body = wml(root, "body").ok_or_else(|| Error::InvalidDocx("Missing w:body".into()))?;
