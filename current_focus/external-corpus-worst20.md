@@ -160,11 +160,14 @@ with gridCols 3068 / 6 / 7683; compare column widths.
   our lines probably take two grid pitches where Word's take one. Compare
   baselines with `tools/pdf_lines.py`. Memory: `cjk-line-height-factor`,
   `line_height_grid`.
-- F2 `c9d39a9243`: Chinese text with no eastAsia `rFonts`; the theme gives
-  Jpan MS Mincho/MS Gothic and Hans 宋体. Word drew MS Mincho, Microsoft
-  JhengHei and Yu Gothic; we drew SimSun. Check `w:lang w:eastAsia` against
-  memory `cjk-font-substitution`. Word also puts each number label ("1.") on a
-  line of its own, while ours runs inline with the text.
+- F2 `c9d39a9243` and its generator siblings (8 clean docs: Chinese under
+  Calibri, en-US, compat 12), DONE 2026-11-21: Han characters are rescued per
+  character (MS Mincho → Microsoft JhengHei → Yu Gothic), the rescue face's
+  1.3 × hhea box sizes the line, and in compat ≤ 12 East Asian text breaks only
+  at spaces (memory `word-cjk-legacy-line-breaks`). 150b0fad13 6 → 80,
+  925668451e 9 → 78, 37d8f80c24 7 → 74, c9d39a9243 5 → 68 Jaccard. Open: the
+  space-break rule is gated off for documents with an East Asian language until
+  a word glued across runs is cut at the margin (33ff98b57a, 98c8b73841).
 
 ### G. Anchored box and bar overlap the body (2 rows)
 
@@ -173,6 +176,15 @@ and a blue bar sit at the top. In Word the first paragraph starts below the
 bar. In ours it overlaps the bar, and every line pitch is smaller than
 Word's. Not measured yet. Author colours differ too (purple against red);
 that is not code, see memory `tracked-changes-work`.
+
+### Round 2026-11-21: corpus totals
+
+Whole corpus (5,765 docs, Mac references, `--markup`) against the run before
+this round: mean Jaccard 63.47 → 63.93; 125 docs up > 1 pp, 6 down > 1 pp
+(none past 2.1: two from other merges, two the display-math grid follow-up,
+two 98c8b73841 redlines). The 45 online exports in `_online/clean` showed most
+remaining worst rows are real (online scores close to Mac ones); quick triage:
+`python3 tests/output/online_score.py` in the worktree (not committed).
 
 ### H. Not converter bugs
 
