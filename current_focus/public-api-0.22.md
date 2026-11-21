@@ -2,7 +2,7 @@
 
 Planned 2026-11-19 with the user; public API reviewed with the user
 2026-11-20 (decisions 6–15, none open). Status: **step 5.1–5.8 coded
-2026-11-21, on main since `294fba237`; 5.9 in `f99ae5241`; the release open.**
+2026-11-21, on main since `294fba237`; 5.9 in `f99ae5241`; released as 0.22.0 2026-11-22.**
 Main was at `475c1e95f` when this was written. Update the status table at the
 bottom as each step lands.
 
@@ -522,4 +522,4 @@ Open after step 5:
 | third simplify pass (no changes); whole public API documented, `#![warn(missing_docs)]` | `d730a41a3` |
 | push `api-0.22` to main | done 2026-11-21, fast-forward to `294fba237` |
 | 5.9 whole-repo `cargo fmt` | `f99ae5241` (7 files; tools/ already clean) |
-| Release 0.22.0 | not started |
+| Release 0.22.0 | 2026-11-22: crates.io, GitHub release `v0.22.0` on `1b0b8c689` |
