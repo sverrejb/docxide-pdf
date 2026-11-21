@@ -283,7 +283,11 @@ impl RenderContext<'_> {
             bidi: para.bidi,
             shaped_kerning: self.open_type_features,
             break_words: para.break_words,
-            ideograph_breaks: !self.cjk_space_breaks,
+            // ponytail: Word breaks at spaces whatever the language, but a word
+            // glued across runs is not yet cut at the margin, which documents
+            // set up for East Asian text are full of (33ff98b57a, 98c8b73841):
+            // they keep ideograph breaks until that cut exists.
+            ideograph_breaks: !self.cjk_space_breaks || self.east_asian_lang,
         }
     }
 }
