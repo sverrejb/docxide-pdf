@@ -471,6 +471,8 @@ fn cjk_fallback_fonts(script: CjkScript, serif: bool) -> &'static [&'static str]
     }
 }
 
+const HAN_RESCUE_FONTS: [&str; 3] = ["MS Mincho", "Microsoft JhengHei", "Yu Gothic"];
+
 /// The chars the named font has glyphs for; none when it is not installed.
 fn covered_chars(name: &str, chars: &HashSet<char>, font_index: &FontIndex) -> HashSet<char> {
     let Some((source, face_index, ..)) = font_index.find_font_file(name, false, false) else {
@@ -500,6 +502,20 @@ pub(crate) fn rescue_fonts(
         .iter()
         .partition(|&&ch| crate::docx::is_east_asian_char(ch));
     let mut groups: BTreeMap<String, HashSet<char>> = BTreeMap::new();
+    let mut cjk = cjk;
+    if script_of_chars(cjk.iter().copied()) == CjkScript::Unknown {
+        // Han alone goes per character: what MS Mincho has, then Microsoft
+        // JhengHei, then Yu Gothic (corpus 150b0fad13 and c9d39a9243, Chinese
+        // under Calibri with no East Asian language: Word's online and Mac
+        // exports agree, where SimSun would cover it all).
+        for name in HAN_RESCUE_FONTS {
+            let have = covered_chars(name, &cjk, font_index);
+            if !have.is_empty() {
+                cjk.retain(|c| !have.contains(c));
+                groups.insert(name.to_string(), have);
+            }
+        }
+    }
     if !cjk.is_empty() {
         groups.insert(cjk_rescue_font(&cjk, font_index), cjk);
     }
