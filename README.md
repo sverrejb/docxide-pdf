@@ -143,46 +143,36 @@ The CLI never overwrites: if the output exists it writes `output(2).pdf`, `outpu
 cargo add docxide-pdf --no-default-features
 ```
 
-This avoids pulling in the CLI dependency (`clap`).
+or in `Cargo.toml`: `docxide-pdf = { version = "0.22", default-features = false }`. This skips the CLI's dependencies (`clap`, `env_logger`).
+
+One function, `convert`, takes the DOCX as bytes and returns a `Conversion` with the PDF as bytes. File I/O is yours:
 
 ```rust
-use docxide_pdf::convert_docx_to_pdf;
-use std::path::Path;
+use docxide_pdf::{ConvertOptions, convert};
 
-convert_docx_to_pdf(
-    Path::new("input.docx"),
-    Path::new("output.pdf"),
-)?;
+let out = convert(&std::fs::read("input.docx")?, &ConvertOptions::new())?;
+std::fs::write("output.pdf", &out.pdf)?;
 ```
 
-To keep everything in memory, `convert_docx_bytes_to_pdf_bytes` takes the DOCX as bytes and returns the PDF as bytes:
+`ConvertOptions::new()` reproduces Word's online export; each builder method moves one behaviour towards desktop Word or adapts the conversion to its host (see [Configuration](#configuration)). The library reads no environment variables. Build the options once and reuse them: they are cheap to clone and can be shared across threads.
 
-```rust
-let pdf: Vec<u8> = docxide_pdf::convert_docx_bytes_to_pdf_bytes(&docx_bytes)?;
-```
+Besides `pdf`, a `Conversion` carries:
 
-Each function has a `_with` variant that takes a `ConvertOptions`. The defaults reproduce Word's online export; each option moves one behaviour towards desktop Word:
+- `bookmarks`: where each bookmarked paragraph was laid out (below);
+- `missing_fonts`: the fonts the document asks for that no embedded, supplied or installed face provides, each with the requested bold and italic. A missing style is listed even when the regular face stands in with synthetic bold or italic. Use it to tell the user which font to supply: `ConvertOptions::font` takes the font file's bytes, and converting again uses it;
+- `display`: with `.display_list(true)`, what each page draws, with the fonts and pictures it draws them with ([`display`](https://docs.rs/docxide-pdf/latest/docxide_pdf/display/)), recorded from the same render as the PDF, for a caller that writes PDF or renders pages itself.
 
-```rust
-use docxide_pdf::{ConvertOptions, convert_docx_to_pdf_with};
-
-let options = ConvertOptions::new().resample_pictures(false); // keep source pixels
-convert_docx_to_pdf_with("input.docx", "output.pdf", &options)?;
-```
-
-The functions without an options argument use `ConvertOptions::from_env()`, so the same settings can come from `DOCXIDE_*` environment variables (see [Configuration](#configuration)). Options passed explicitly never read the environment.
+A new output becomes a new `Conversion` field, so adding one doesn't break callers.
 
 ### Bookmark positions
 
-After a conversion, `take_bookmark_positions` returns where each bookmarked
-paragraph was laid out, so a host can map a place in the PDF back to the
-document (to scroll to it or highlight it):
+`Conversion::bookmarks` lists where each bookmarked paragraph was laid out, so a
+host can map a place in the PDF back to the document (to scroll to it or
+highlight it):
 
 ```rust
-use docxide_pdf::{convert_docx_bytes_to_pdf_bytes, take_bookmark_positions};
-
-let pdf = convert_docx_bytes_to_pdf_bytes(&docx_bytes)?;
-for p in take_bookmark_positions() {
+let out = docxide_pdf::convert(&docx_bytes, &ConvertOptions::new())?;
+for p in &out.bookmarks {
     println!("{}: page {} top {} → page {} bottom {}", p.name, p.page, p.top, p.end_page, p.bottom);
 }
 ```
@@ -194,10 +184,6 @@ final render pass and include section vertical alignment. Pages are zero-based
 and coordinates are PDF points measured upward from the page bottom. This is
 not a multi-paragraph bookmark-range API; headers, footers and text boxes are
 excluded.
-
-Positions are **thread-local**: convert and read them on the same thread.
-Starting a conversion clears the previous positions, even if parsing fails, and
-`take_bookmark_positions` drains them.
 
 ### Hosts without a filesystem (WebAssembly)
 
@@ -212,9 +198,10 @@ This produces `target/wasm32-unknown-unknown/debug/libdocxide_pdf.rlib`, for lin
 into a Rust host that exports its own wasm interface. It does not produce a
 JavaScript package or browser bindings.
 
-On this target, environment configuration is ignored, font directories are not
-scanned, and diagnostic timings are zero. Text uses DOCX-embedded fonts, and
-standard-14 Helvetica (not embedded) for everything else.
+On this target font directories are not scanned and there are no diagnostic
+timings. Text uses DOCX-embedded fonts and the fonts passed with
+`ConvertOptions::font`, and standard-14 Helvetica (not embedded) for everything
+else; `Conversion::missing_fonts` names the fonts worth supplying.
 
 Validation from a source checkout (tested with Rust 1.96, 1.99 and 1.100, and Node.js):
 
@@ -232,9 +219,8 @@ Rust entry point and `tools/check-wasm-host.mjs` for the Node runner.
 [`docxide-template`](https://github.com/sverrejb/docxide-template) is a sibling crate for type-safe MS Word templates. It scans a folder of `.docx` files at compile time and generates a Rust struct per template, with `{Placeholder}` patterns turned into snake_case fields. Pair it with `docxide-pdf` to go from template → filled DOCX → PDF in a single, fully in-memory pipeline:
 
 ```rust
-use docxide_pdf::convert_docx_bytes_to_pdf;
+use docxide_pdf::{ConvertOptions, convert};
 use docxide_template::generate_templates;
-use std::path::Path;
 
 generate_templates!("templates");
 
@@ -245,47 +231,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let docx_bytes = doc.to_bytes()?;
-    convert_docx_bytes_to_pdf(&docx_bytes, Path::new("output/greeting.pdf"))?;
+    let out = convert(&docx_bytes, &ConvertOptions::new())?;
+    std::fs::write("output/greeting.pdf", &out.pdf)?;
     Ok(())
 }
 ```
 
-100% Rust, end to end — no temporary files, and no Word or LibreOffice install required on the host. Fill the template in memory, hand the bytes to `convert_docx_bytes_to_pdf`, and write the PDF. Combined with `docxide-template`'s `embed` feature, you get a single self-contained binary that turns structured data into a polished PDF.
+100% Rust, end to end — no temporary files, and no Word or LibreOffice install required on the host. Fill the template in memory, hand the bytes to `convert`, and write the PDF. Combined with `docxide-template`'s `embed` feature, you get a single self-contained binary that turns structured data into a polished PDF.
 
 ## Configuration
 
-Each setting can be given as a CLI flag, through `ConvertOptions`, or as a `DOCXIDE_*` environment variable. Without any of them you get Word's online export.
+Each setting is a `ConvertOptions` builder method in the library, and a CLI flag or a `DOCXIDE_*` environment variable in the CLI. Without any of them you get Word's online export. The library itself never reads the environment.
 
-| Setting | Default | CLI flag | Library (`ConvertOptions`) | Environment variable |
+| Setting | Default | Library (`ConvertOptions`) | CLI flag | CLI environment variable |
 |---|---|---|---|---|
-| Print tracked changes as Word's All Markup view: insertions underlined, deletions struck through in the author's colour, change bars in the margin | Final text, no markup | `--markup` | `.revisions(RevisionView::Markup)` | `DOCXIDE_REVISIONS=markup` |
-| Keep every picture's source pixels instead of resampling pictures above 192 ppi down to 192 ppi | Resample, like Word's online export | `--no-resample` | `.resample_pictures(false)` | `DOCXIDE_NO_RESAMPLE=1` |
-| Extra font directories, searched before the system fonts. The first one listed wins, and system fonts fill in what they lack (see [Fonts](#fonts)) | None | `--fonts DIR` (repeat for more) | `.font_dirs(["DIR", ...])` | `DOCXIDE_FONTS=DIR1:DIR2` (`;` on Windows) |
-| Scan the font directories on every conversion instead of reading the font index disk cache. Useful when debugging font resolution | Cache on | `--no-font-cache` | `.font_cache(false)` | `DOCXIDE_NO_FONT_CACHE=1` |
-| Draw the float wrap zones on the page (debugging) | Off | `--debug-wrap` | `.debug_wrap(true)` | `DOCXIDE_DEBUG_WRAP=1` |
-
-When you use docxide-pdf as a library, build a `ConvertOptions` and pass it to one of the `_with` functions:
+| Print tracked changes as Word's All Markup view: insertions underlined, deletions struck through in the author's colour, change bars in the margin | Final text, no markup | `.revisions(RevisionView::Markup)` | `--markup` | `DOCXIDE_REVISIONS=markup` |
+| Keep every picture's source pixels instead of resampling pictures above 192 ppi down to 192 ppi | Resample, like Word's online export | `.resample_pictures(false)` | `--no-resample` | `DOCXIDE_NO_RESAMPLE=1` |
+| Extra font directories, searched before the system fonts. The first one listed wins, and system fonts fill in what they lack (see [Fonts](#fonts)) | None | `.font_dirs(["DIR", ...])` | `--fonts DIR` (repeat for more) | `DOCXIDE_FONTS=DIR1:DIR2` (`;` on Windows) |
+| A font file's bytes, used before installed faces of the same family and style; repeat for more | None | `.font(bytes)` | | |
+| Search the system font directories | On (off on bare wasm) | `.system_fonts(false)` | | |
+| Scan the font directories on every conversion instead of reading the font index disk cache. Useful when debugging font resolution | Cache on | `.font_cache(false)` | `--no-font-cache` | `DOCXIDE_NO_FONT_CACHE=1` |
+| Also return the pages as a display list (`Conversion::display`) | Off | `.display_list(true)` | | |
+| Draw the float wrap zones on the page (debugging) | Off | | `--debug-wrap` | `DOCXIDE_DEBUG_WRAP=1` |
 
 ```rust
-use docxide_pdf::{ConvertOptions, RevisionView, convert_docx_to_pdf_with};
+use docxide_pdf::{ConvertOptions, RevisionView, convert};
 
 let options = ConvertOptions::new()
     .revisions(RevisionView::Markup)
     .resample_pictures(false)
     .font_dirs(["./fonts", "/opt/company-fonts"])
-    .font_cache(false)
-    .debug_wrap(true);
+    .font(std::fs::read("Aptos-Bold.ttf")?)
+    .font_cache(false);
 
-convert_docx_to_pdf_with("input.docx", "output.pdf", &options)?;
+let out = convert(&std::fs::read("input.docx")?, &options)?;
 ```
 
-How the three ways interact:
-
-- **CLI**: starts from the environment variables, then applies the flags. A flag can only switch its setting away from the default, so it can't undo a variable: with `DOCXIDE_NO_RESAMPLE=1` set, the CLI keeps source pixels whatever flags you pass. To get the default back, unset the variable or set it to `0`. `--fonts` is the exception: it replaces `DOCXIDE_FONTS` instead of adding to it.
-- **Library, plain functions** (`convert_docx_to_pdf` and friends): read the environment variables, through `ConvertOptions::from_env()`.
-- **Library, `_with` functions**: use only the `ConvertOptions` you pass and never read the environment.
-- **On/off variables** count as on unless they are empty, `0` or `false`.
-- **No configuration file**: an application that wants one fills in `ConvertOptions` from its own.
+In the CLI an on/off variable counts as off when it is empty, `0`, `false`, `no` or `off`; its flag can only switch the setting on, so to switch a variable off, unset it or set it to `0`. `--fonts` replaces `DOCXIDE_FONTS` instead of adding to it. There is no configuration file: an application that wants one fills in `ConvertOptions` from its own.
 
 Font scanning results are cached to disk (per-directory, invalidated by mtime). The cache is stored at:
 - **macOS**: `~/Library/Caches/docxide-pdf/font-index.tsv`
@@ -296,10 +278,10 @@ Font scanning results are cached to disk (per-directory, invalidated by mtime). 
 
 docxide-pdf lays text out with the fonts it finds. The PDF can only match Word's if the font files match too.
 
-- **Where fonts come from**: first fonts embedded in the DOCX, then the directories in `DOCXIDE_FONTS` (the first one listed wins), then the system font directories. Lookup is by family plus bold and italic, so a Regular you supply does not block the system's Bold.
+- **Where fonts come from**: first the fonts passed with `.font()`, then the font directories (`.font_dirs()` or `DOCXIDE_FONTS`; the first one listed wins), then the system font directories. A font embedded in the DOCX stands in for a family none of them has, as in Word. Lookup is by family plus bold and italic, so a Regular you supply does not block the system's Bold.
 - **Same name, different file, different pages.** Line height comes from numbers inside the font file, and two files of the same family can carry different numbers. For example, the Arial and Times New Roman that ship with Office for Mac give 13.4pt lines at 12pt, while the files Word itself exports with give 13.8pt. That is enough to move every page break in a long document. The version number does not tell you which one you have.
 - **A font missing some characters is still used.** If the Bold has no Greek letters, say, the Greek comes from another font, one letter at a time, with no warning.
-- **To get the same PDF everywhere**, embed the fonts in the DOCX (Word: "Embed fonts in the file"), or put a checked set of font files in one directory and point `DOCXIDE_FONTS` at it. Run with `RUST_LOG=info` to see which fonts were substituted.
+- **To get the same PDF everywhere**, embed the fonts in the DOCX (Word: "Embed fonts in the file"), or put a checked set of font files in one directory and pass it with `.font_dirs()` (CLI: `--fonts` or `DOCXIDE_FONTS`). Run with `RUST_LOG=info` to see which fonts were substituted.
 
 ## Testing
 
