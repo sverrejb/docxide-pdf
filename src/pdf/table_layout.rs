@@ -1086,6 +1086,16 @@ pub(super) fn compute_row_layouts(
                                         let pdf_name =
                                             ctx.table_cell_image_names.get(&fi.image.id)?.clone();
                                         let h_offset = match fi.h_position {
+                                            // A margin or column offset counts from the
+                                            // cell's text area, inside its left padding
+                                            // (online probe: 72pt lands 72pt past the
+                                            // cell's text with 0, 5.4 or 15pt padding,
+                                            // compat 14 and 15).
+                                            HorizontalPosition::Offset(o)
+                                                if fi.h_relative_from != crate::model::HRelativeFrom::Page =>
+                                            {
+                                                o + ecm.left
+                                            }
                                             HorizontalPosition::Offset(o) => o,
                                             HorizontalPosition::AlignCenter => {
                                                 (col_w - fi.image.display_width) / 2.0
