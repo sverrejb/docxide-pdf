@@ -2,7 +2,7 @@
 
 Planned 2026-11-19 with the user; public API reviewed with the user
 2026-11-20 (decisions 6–15, none open). Status: **step 5.1–5.8 coded
-2026-11-21 on branch `api-0.22` (not pushed); 5.9 and the release open.**
+2026-11-21, on main since `294fba237`; 5.9 and the release open.**
 Main was at `475c1e95f` when this was written. Update the status table at the
 bottom as each step lands.
 
@@ -520,6 +520,6 @@ Open after step 5:
 | missing-font recording moved into `register_font` | `d8a36d9a1` |
 | `MissingFont::replaces` (user-approved addition to the target block) | `26a6a6655` |
 | third simplify pass (no changes); whole public API documented, `#![warn(missing_docs)]` | `d730a41a3` |
-| push `api-0.22` to main | waiting for the user |
+| push `api-0.22` to main | done 2026-11-21, fast-forward to `294fba237` |
 | 5.9 whole-repo `cargo fmt` | not started |
 | Release 0.22.0 | not started |
