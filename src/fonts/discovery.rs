@@ -174,15 +174,12 @@ mod tests {
 pub(crate) fn test_index() -> &'static FontIndex {
     // The fonts/ mirror that .cargo/config.toml names, as the harness reads it.
     let dirs = std::env::var_os("DOCXIDE_FONTS").unwrap_or_default();
-    FontIndex::for_setup(&FontSetup {
-        dirs: std::env::split_paths(&dirs)
-            .filter(|d| !d.as_os_str().is_empty())
-            .collect(),
-        cache: std::env::var("DOCXIDE_NO_FONT_CACHE").map_or(true, |v| {
+    let options = crate::ConvertOptions::new()
+        .font_dirs(std::env::split_paths(&dirs).filter(|d| !d.as_os_str().is_empty()))
+        .font_cache(std::env::var("DOCXIDE_NO_FONT_CACHE").map_or(true, |v| {
             matches!(v.trim().to_ascii_lowercase().as_str(), "" | "0" | "false")
-        }),
-        system: true,
-    })
+        }));
+    FontIndex::for_setup(&options.font_setup())
 }
 
 fn is_font_file(path: &Path) -> bool {
@@ -198,6 +195,9 @@ fn is_font_file(path: &Path) -> bool {
 fn scan_font_dirs(setup: &FontSetup) -> FontIndex {
     // A bare wasm host has no font directories, and no clock to time a scan.
     if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
+        return FontIndex::default();
+    }
+    if !setup.system && setup.dirs.is_empty() {
         return FontIndex::default();
     }
     let t0 = Instant::now();
