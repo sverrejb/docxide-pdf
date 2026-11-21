@@ -325,20 +325,16 @@ impl<'a> Builder<'a> {
                 data: data.clone(),
                 index: entry.face_index,
             }
-        } else if let Some(data) = entry
-            .font_path
-            .as_deref()
-            .and_then(crate::fonts::memory::font_bytes)
-        {
-            // A host-registered font has no file the caller could open.
-            FontSource::Data {
-                data,
-                index: entry.face_index,
-            }
-        } else if let Some(path) = &entry.font_path {
-            FontSource::File {
-                path: path.clone(),
-                index: entry.face_index,
+        } else if let Some(source) = &entry.font_source {
+            match source {
+                crate::fonts::FontSource::Data(data) => FontSource::Data {
+                    data: data.clone(),
+                    index: entry.face_index,
+                },
+                crate::fonts::FontSource::File(path) => FontSource::File {
+                    path: path.clone(),
+                    index: entry.face_index,
+                },
             }
         } else {
             self.unsupported(Unsupported::FontWithoutSource);

@@ -75,6 +75,23 @@ pub(crate) struct CodeGlyph {
     pub(crate) width_1000: f32,
 }
 
+/// Where an installed or supplied face's program is.
+#[derive(Clone, Debug)]
+pub(crate) enum FontSource {
+    File(PathBuf),
+    /// Supplied with `ConvertOptions::font`.
+    Data(std::sync::Arc<Vec<u8>>),
+}
+
+impl FontSource {
+    pub(crate) fn read(&self) -> Option<std::borrow::Cow<'_, [u8]>> {
+        match self {
+            Self::File(path) => std::fs::read(path).ok().map(Into::into),
+            Self::Data(data) => Some(data.as_slice().into()),
+        }
+    }
+}
+
 pub(crate) struct FontEntry {
     pub(crate) pdf_name: String,
     pub(crate) font_ref: Ref,
@@ -123,8 +140,9 @@ pub(crate) struct FontEntry {
     /// Set when text was encoded with a character the font lacks, which draws
     /// the .notdef glyph (PDF/UA 7.21.8); the document then can't claim PDF/UA.
     pub(crate) drew_notdef: std::cell::Cell<bool>,
-    /// Font file path for glyph outline extraction (text warping).
-    pub(crate) font_path: Option<PathBuf>,
+    /// The installed or supplied face, for reading it again (text warping,
+    /// line boxes, the display list).
+    pub(crate) font_source: Option<FontSource>,
     pub(crate) face_index: u32,
     /// Subset ids of glyphs embedded by id (`FontContext::extra_glyphs`).
     pub(crate) gid_remap: HashMap<u16, u16>,
@@ -186,7 +204,7 @@ impl FontEntry {
             is_substituted: true,
             missing_chars,
             drew_notdef: Default::default(),
-            font_path: None,
+            font_source: None,
             face_index: 0,
             gid_remap: HashMap::new(),
             code_glyphs: HashMap::new(),
@@ -363,8 +381,8 @@ pub(crate) fn font_file(
     if let Some(data) = embedded.get(&(name.to_lowercase(), false, false)) {
         return Some((data.to_vec(), 0));
     }
-    let (path, index, ..) = font_index.find_font_file(name, false, false)?;
-    Some((memory::read_font(&path)?, index))
+    let (source, index, ..) = font_index.find_font_file(name, false, false)?;
+    Some((source.read()?.into_owned(), index))
 }
 
 pub(crate) fn primary_font_name(name: &str) -> &str {

@@ -7,7 +7,7 @@ struct ResolvedFont {
     metrics: FontMetrics,
     synthetic_bold: bool,
     synthetic_italic: bool,
-    font_path: Option<PathBuf>,
+    font_source: Option<FontSource>,
     /// The program, when it is the document's embedded copy.
     embedded_data: Option<std::sync::Arc<Vec<u8>>>,
     face_index: u32,
@@ -58,13 +58,13 @@ fn try_font(
     let installed = ctx
         .font_index
         .find_font_file(candidate, bold, italic)
-        .and_then(|(path, face_index, face_bold, face_italic)| {
-            let data = memory::read_font(&path)?;
+        .and_then(|(source, face_index, face_bold, face_italic)| {
+            let metrics = embed(&source.read()?, face_index)?;
             Some(ResolvedFont {
-                metrics: embed(&data, face_index)?,
+                metrics,
                 synthetic_bold: bold && !face_bold,
                 synthetic_italic: italic && !face_italic,
-                font_path: Some(path),
+                font_source: Some(source),
                 embedded_data: None,
                 face_index,
             })
@@ -78,7 +78,7 @@ fn try_font(
             metrics,
             synthetic_bold: false,
             synthetic_italic: false,
-            font_path: None,
+            font_source: None,
             embedded_data: Some(data.clone()),
             face_index: 0,
         })
@@ -145,20 +145,21 @@ fn family_fallback(family: Option<FontFamily>) -> &'static str {
 
 /// True if the face declares itself a script/handwriting design
 /// (OS/2 sFamilyClass class 10, or PANOSE family kind 3 "Latin Script").
-fn face_is_script_design(path: &std::path::Path, face_index: u32) -> bool {
-    discovery::probe_face(path, face_index, |face| {
-        // sFamilyClass high byte at offset 30, PANOSE bFamilyType at offset 32
-        face.raw_face()
-            .table(ttf_parser::Tag::from_bytes(b"OS/2"))
-            .is_some_and(|os2| os2.get(30) == Some(&10) || os2.get(32) == Some(&3))
-    })
-    .unwrap_or(false)
+fn face_is_script_design(source: &FontSource, face_index: u32) -> bool {
+    source
+        .probe(face_index, |face| {
+            // sFamilyClass high byte at offset 30, PANOSE bFamilyType at offset 32
+            face.raw_face()
+                .table(ttf_parser::Tag::from_bytes(b"OS/2"))
+                .is_some_and(|os2| os2.get(30) == Some(&10) || os2.get(32) == Some(&3))
+        })
+        .unwrap_or(false)
 }
 
 /// A face's hhea ascent and descent per em. Read from the table itself:
 /// ttf-parser's `ascender()` switches to the typo values under USE_TYPO_METRICS.
-pub(crate) fn hhea_box(path: &std::path::Path, face_index: u32) -> Option<(f32, f32)> {
-    discovery::probe_face(path, face_index, |face| {
+pub(crate) fn hhea_box(source: &FontSource, face_index: u32) -> Option<(f32, f32)> {
+    source.probe(face_index, |face| {
         let hhea = face.tables().hhea;
         let units = face.units_per_em() as f32;
         (
@@ -472,17 +473,18 @@ fn cjk_fallback_fonts(script: CjkScript, serif: bool) -> &'static [&'static str]
 
 /// The chars the named font has glyphs for; none when it is not installed.
 fn covered_chars(name: &str, chars: &HashSet<char>, font_index: &FontIndex) -> HashSet<char> {
-    let Some((path, face_index, ..)) = font_index.find_font_file(name, false, false) else {
+    let Some((source, face_index, ..)) = font_index.find_font_file(name, false, false) else {
         return HashSet::new();
     };
-    discovery::probe_face(&path, face_index, |face| {
-        chars
-            .iter()
-            .copied()
-            .filter(|&c| face.glyph_index(c).is_some())
-            .collect()
-    })
-    .unwrap_or_default()
+    source
+        .probe(face_index, |face| {
+            chars
+                .iter()
+                .copied()
+                .filter(|&c| face.glyph_index(c).is_some())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Fonts for the characters the resolved fonts lack, each with the characters
@@ -664,9 +666,9 @@ pub(crate) fn register_font(
             // SignPainter-HouseScript), but the reference machine had the real font.
             // A cursive body face is always worse than the family fallback.
             if entry.family != crate::model::FontFamily::Script
-                && m.font_path
-                    .as_deref()
-                    .is_some_and(|p| face_is_script_design(p, m.face_index))
+                && m.font_source
+                    .as_ref()
+                    .is_some_and(|s| face_is_script_design(s, m.face_index))
             {
                 log::info!("Rejecting script-classified altName \"{alt}\" for {primary}");
                 return None;
@@ -791,7 +793,7 @@ pub(crate) fn register_font(
             synthetic_bold: r.synthetic_bold,
             synthetic_italic: r.synthetic_italic,
             is_substituted: substituted.get(),
-            font_path: r.font_path,
+            font_source: r.font_source,
             face_index: r.face_index,
             gid_remap: r.metrics.gid_remap,
             code_glyphs: r.metrics.code_glyphs,
@@ -828,7 +830,7 @@ pub(crate) fn register_font(
     // probes 2026-11-07: baseline 0.9965 em below the line top, 1.2004 em lines, for
     // "Bahnschrift" and for swiss_materials' Helvetica 55 Roman with altName
     // Bahnschrift Light; real Calibri lines are 0.954/1.221).
-    if bahnschrift && entry.font_path.is_some() {
+    if bahnschrift && entry.font_source.is_some() {
         entry.set_line_box(BAHNSCHRIFT_ASCENT, BAHNSCHRIFT_LINE_H);
     }
 
@@ -884,7 +886,7 @@ mod tests {
                 &mut alloc,
                 &ctx,
             );
-            assert!(entry.font_path.is_none(), "{name} uses the embedded face");
+            assert!(entry.font_source.is_none(), "{name} uses the embedded face");
         }
         let pdf = String::from_utf8_lossy(&pdf.finish()).into_owned();
         let font_files: Vec<&str> = pdf
@@ -1048,7 +1050,9 @@ mod tests {
                 &mut alloc,
                 &ctx,
             );
-            let path = entry.font_path.expect("resolved to a file");
+            let Some(FontSource::File(path)) = entry.font_source else {
+                panic!("resolved to a file");
+            };
             path.file_name().unwrap().to_string_lossy().to_lowercase()
         };
         use FontFamily::*;

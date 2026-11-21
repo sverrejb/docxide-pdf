@@ -691,9 +691,9 @@ pub(super) fn collect_and_register_fonts(
         // metrics: they never size a line (`size_lines_by_own_runs`).
         if !chars.iter().all(|&c| crate::docx::is_east_asian_char(c))
             && let Some((asc, desc)) = entry
-                .font_path
-                .as_deref()
-                .and_then(|p| crate::fonts::hhea_box(p, entry.face_index))
+                .font_source
+                .as_ref()
+                .and_then(|s| crate::fonts::hhea_box(s, entry.face_index))
         {
             entry.set_line_box(asc, asc + desc);
         }

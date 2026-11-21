@@ -118,16 +118,15 @@ pub(super) fn load_font_data(
 ) -> Option<(Vec<u8>, u32)> {
     let entry = seen_fonts
         .get(font_key)
-        .filter(|e| e.font_path.is_some())
+        .filter(|e| e.font_source.is_some())
         .or_else(|| {
             seen_fonts
                 .iter()
-                .filter(|(k, e)| k.starts_with(font_name) && e.font_path.is_some())
+                .filter(|(k, e)| k.starts_with(font_name) && e.font_source.is_some())
                 .min_by_key(|(k, _)| k.as_str())
                 .map(|(_, e)| e)
         })?;
-    let path = entry.font_path.as_ref()?;
-    let data = crate::fonts::memory::read_font(path)?;
+    let data = entry.font_source.as_ref()?.read()?.into_owned();
     Some((data, entry.face_index))
 }
 

@@ -342,14 +342,18 @@ impl FontIndex {
     }
 }
 
-/// Parse one face of a font file (memory-mapped, so only the tables touched are read).
-pub(super) fn probe_face<T>(path: &Path, face_index: u32, f: impl FnOnce(&Face) -> T) -> Option<T> {
-    if let Some(data) = super::memory::font_bytes(path) {
-        return Face::parse(&data, face_index).ok().map(|face| f(&face));
+impl super::FontSource {
+    /// Parse one face (a file is memory-mapped, so only the tables touched are read).
+    pub(super) fn probe<T>(&self, face_index: u32, f: impl FnOnce(&Face) -> T) -> Option<T> {
+        let parse = |data: &[u8]| Face::parse(data, face_index).ok().map(|face| f(&face));
+        match self {
+            Self::Data(data) => parse(data),
+            Self::File(path) => {
+                let file = fs::File::open(path).ok()?;
+                parse(&unsafe { Mmap::map(&file) }.ok()?)
+            }
+        }
     }
-    let file = fs::File::open(path).ok()?;
-    let data = unsafe { Mmap::map(&file) }.ok()?;
-    Face::parse(&data, face_index).ok().map(|face| f(&face))
 }
 
 impl FontIndex {
@@ -361,7 +365,7 @@ impl FontIndex {
         font_name: &str,
         bold: bool,
         italic: bool,
-    ) -> Option<(PathBuf, u32, bool, bool)> {
+    ) -> Option<(super::FontSource, u32, bool, bool)> {
         let key = font_name.to_lowercase();
         let lookup = |bold, italic| self.exact_face(&(key.clone(), bold, italic));
         if let Some((path, face_index)) = lookup(bold, italic) {
@@ -388,7 +392,13 @@ impl FontIndex {
     }
 
     /// The face of exactly this family and style, supplied or installed.
-    pub(super) fn exact_face(&self, key: &(String, bool, bool)) -> Option<(PathBuf, u32)> {
-        super::memory::lookup(key).or_else(|| self.lookup.get(key).cloned())
+    pub(super) fn exact_face(
+        &self,
+        key: &(String, bool, bool),
+    ) -> Option<(super::FontSource, u32)> {
+        super::memory::lookup(key).or_else(|| {
+            let (path, face_index) = self.lookup.get(key)?;
+            Some((super::FontSource::File(path.clone()), *face_index))
+        })
     }
 }

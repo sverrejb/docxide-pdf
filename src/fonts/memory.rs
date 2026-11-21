@@ -4,7 +4,6 @@
 //! for the call.
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 type FontKey = (String, bool, bool);
@@ -13,14 +12,14 @@ type FontKey = (String, bool, bool);
 #[derive(Clone, Default)]
 pub(crate) struct MemoryFonts {
     // The rank preserves the directory scanner's regular/Mac Roman/off-weight order.
-    index: HashMap<FontKey, (PathBuf, u32, u8)>,
-    data: HashMap<PathBuf, Arc<Vec<u8>>>,
+    index: HashMap<FontKey, (Arc<Vec<u8>>, u32, u8)>,
+    files: usize,
 }
 
 impl std::fmt::Debug for MemoryFonts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MemoryFonts")
-            .field("files", &self.data.len())
+            .field("files", &self.files)
             .field("faces", &self.index.len())
             .finish()
     }
@@ -36,7 +35,6 @@ impl MemoryFonts {
     /// the number of valid faces with usable names.
     pub(crate) fn add(&mut self, data: Vec<u8>) -> usize {
         let data = Arc::new(data);
-        let path = PathBuf::from(format!("memory:{}", self.data.len()));
         let mut count = 0;
         for face_index in 0..ttf_parser::fonts_in_collection(&data).unwrap_or(1) {
             let faces = super::discovery::read_faces(&data, face_index);
@@ -49,13 +47,11 @@ impl MemoryFonts {
                     u8::from(face.mac_roman_only)
                 };
                 if self.index.get(&key).is_none_or(|entry| rank < entry.2) {
-                    self.index.insert(key, (path.clone(), face_index, rank));
+                    self.index.insert(key, (data.clone(), face_index, rank));
                 }
             }
         }
-        if count > 0 {
-            self.data.insert(path, data);
-        }
+        self.files += usize::from(count > 0);
         count
     }
 }
@@ -74,21 +70,9 @@ impl Drop for Installed {
     }
 }
 
-pub(super) fn lookup(key: &FontKey) -> Option<(PathBuf, u32)> {
+pub(super) fn lookup(key: &FontKey) -> Option<(super::FontSource, u32)> {
     FONTS.with_borrow(|fonts| {
-        fonts
-            .index
-            .get(key)
-            .map(|(path, face, _)| (path.clone(), *face))
+        let (data, face_index, _) = fonts.index.get(key)?;
+        Some((super::FontSource::Data(data.clone()), *face_index))
     })
-}
-
-pub(crate) fn font_bytes(path: &Path) -> Option<Arc<Vec<u8>>> {
-    FONTS.with_borrow(|fonts| fonts.data.get(path).cloned())
-}
-
-pub(crate) fn read_font(path: &Path) -> Option<Vec<u8>> {
-    font_bytes(path)
-        .map(|data| data.to_vec())
-        .or_else(|| std::fs::read(path).ok())
 }
