@@ -8,7 +8,6 @@ mod model;
 mod pdf;
 
 pub use error::Error;
-pub use fonts::memory::{clear_fonts, register_font, use_system_fonts};
 pub use fonts::requests::MissingFont;
 pub use pdf::bookmarks::BookmarkPosition;
 
@@ -42,6 +41,8 @@ pub struct ConvertOptions {
     font_cache: bool,
     debug_wrap: bool,
     display_list: bool,
+    fonts: std::sync::Arc<fonts::memory::MemoryFonts>,
+    system_fonts: bool,
 }
 
 impl Default for ConvertOptions {
@@ -53,6 +54,9 @@ impl Default for ConvertOptions {
             font_cache: true,
             debug_wrap: false,
             display_list: false,
+            fonts: Default::default(),
+            // A bare wasm instance has no font directories to scan.
+            system_fonts: !cfg!(all(target_arch = "wasm32", target_os = "unknown")),
         }
     }
 }
@@ -84,6 +88,25 @@ impl ConvertOptions {
         self
     }
 
+    /// A TrueType/OpenType font (all faces of a collection) to use before
+    /// installed faces of the same family and style. Parsed here, once:
+    /// reusing the options re-parses nothing. Data without a usable face is
+    /// skipped with a warning in the log.
+    pub fn font(mut self, data: Vec<u8>) -> Self {
+        if std::sync::Arc::make_mut(&mut self.fonts).add(data) == 0 {
+            log::warn!("ConvertOptions::font: no usable font face in the data");
+        }
+        self
+    }
+
+    /// Search the system font directories (the default, except on bare
+    /// wasm). `false` keeps the `font_dirs`, the `font`s and the fonts the
+    /// document embeds.
+    pub fn system_fonts(mut self, on: bool) -> Self {
+        self.system_fonts = on;
+        self
+    }
+
     /// Read and write the font index disk cache (on by default).
     pub fn font_cache(mut self, on: bool) -> Self {
         self.font_cache = on;
@@ -109,6 +132,7 @@ impl ConvertOptions {
         fonts::FontSetup {
             dirs: self.font_dirs.clone(),
             cache: self.font_cache,
+            system: self.system_fonts,
         }
     }
 }
@@ -135,6 +159,7 @@ pub fn convert(docx: &[u8], options: &ConvertOptions) -> Result<Conversion, Erro
     // conversion nested inside another on one thread would mix them; nothing nests.
     take_bookmark_positions();
     take_font_requests();
+    let _fonts = fonts::memory::install(&options.fonts);
     let recording = options.display_list.then(pdf::canvas::Recording::start);
     let pdf = docx::parse_bytes(docx, options.revisions).and_then(|doc| pdf::render(&doc, options));
     let bookmarks = take_bookmark_positions();

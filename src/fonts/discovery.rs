@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::Mutex;
 use std::time::Instant;
 
 use memmap2::Mmap;
@@ -18,6 +18,8 @@ type FontLookup = HashMap<(String, bool, bool), (PathBuf, u32)>;
 pub(crate) struct FontSetup {
     pub(crate) dirs: Vec<PathBuf>,
     pub(crate) cache: bool,
+    /// Whether the system font directories are scanned too.
+    pub(crate) system: bool,
 }
 
 #[derive(Default)]
@@ -30,11 +32,6 @@ pub(crate) struct FontIndex {
 impl FontIndex {
     /// One scan per distinct setup for the life of the process.
     pub(crate) fn for_setup(setup: &FontSetup) -> &'static FontIndex {
-        // Off by default on bare wasm, which has no font directories to scan.
-        if !super::memory::system_fonts_enabled() {
-            static EMPTY: LazyLock<FontIndex> = LazyLock::new(FontIndex::default);
-            return &EMPTY;
-        }
         // ponytail: leaked once per distinct setup; a server cycling through
         // many font-directory sets would keep an index per set.
         static INDEXES: Mutex<Vec<(FontSetup, &'static FontIndex)>> = Mutex::new(Vec::new());
@@ -109,8 +106,11 @@ pub(super) fn read_faces(data: &[u8], face_index: u32) -> Vec<CachedFace> {
         .collect()
 }
 
-fn font_directories(extra: &[PathBuf]) -> Vec<PathBuf> {
+fn font_directories(extra: &[PathBuf], system: bool) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
+    if !system {
+        return extra.iter().rev().cloned().collect();
+    }
 
     // The scan is a LIFO stack and the first-scanned face wins, so later entries
     // here outrank earlier ones. Platform-specific system font directories first.
@@ -160,11 +160,13 @@ mod tests {
 
     #[test]
     fn first_listed_custom_dir_is_popped_first() {
-        let dirs = font_directories(&["a".into(), "b".into(), "c".into()]);
+        let dirs = font_directories(&["a".into(), "b".into(), "c".into()], true);
         assert_eq!(
             dirs[dirs.len() - 3..],
             [PathBuf::from("c"), "b".into(), "a".into()]
         );
+        let own = font_directories(&["a".into(), "b".into()], false);
+        assert_eq!(own, [PathBuf::from("b"), "a".into()]);
     }
 }
 
@@ -175,6 +177,7 @@ pub(crate) fn test_index() -> &'static FontIndex {
     FontIndex::for_setup(&FontSetup {
         dirs: std::env::split_paths(&dirs).collect(),
         cache: std::env::var_os("DOCXIDE_NO_FONT_CACHE").is_none(),
+        system: true,
     })
 }
 
@@ -200,7 +203,7 @@ fn scan_font_dirs(setup: &FontSetup) -> FontIndex {
     let mut mac_roman_index = FontLookup::new();
     // Off-weight faces fill in only the styles no regular-weight face provides.
     let mut off_weight_index = FontLookup::new();
-    let dirs = font_directories(&setup.dirs);
+    let dirs = font_directories(&setup.dirs, setup.system);
 
     let no_cache = !setup.cache;
 

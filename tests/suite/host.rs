@@ -3,32 +3,21 @@ use std::io::{Cursor, Write};
 use std::sync::{Arc, Barrier};
 
 use docxide_pdf::display::FontSource;
-use docxide_pdf::{
-    Conversion, ConvertOptions, clear_fonts, convert, register_font, use_system_fonts,
-};
+use docxide_pdf::{Conversion, ConvertOptions, convert};
 
-use crate::common::{convert_bytes, pdf_contains};
+use crate::common::pdf_contains;
 
 /// Its family name is "NB Hyphen Fixture native".
 const FONT: &[u8] = include_bytes!("../../src/fonts/testdata/nb-hyphen-native.ttf");
 const FONT_NAME: &str = "NB Hyphen Fixture native";
 
-/// Only registered fonts on this thread, from a clean registry.
-struct Host;
-
-impl Host {
-    fn new() -> Self {
-        clear_fonts();
-        use_system_fonts(false);
-        Self
-    }
+/// No system fonts: only what the options supply.
+fn host() -> ConvertOptions {
+    ConvertOptions::new().font_cache(false).system_fonts(false)
 }
 
-impl Drop for Host {
-    fn drop(&mut self) {
-        clear_fonts();
-        use_system_fonts(true);
-    }
+fn with_font() -> ConvertOptions {
+    host().font(FONT.to_vec())
 }
 
 /// One paragraph in `font`, with `rpr` added to its run properties.
@@ -43,12 +32,14 @@ fn document(font: &str, rpr: &str) -> Vec<u8> {
     zip.finish().unwrap().into_inner()
 }
 
-fn requested(out: &Conversion, name: &str) -> bool {
-    out.missing_fonts.iter().any(|m| m.name == name)
+fn run(docx: &[u8], options: &ConvertOptions) -> Conversion {
+    let out = convert(docx, options).unwrap();
+    assert!(out.pdf.starts_with(b"%PDF-"));
+    out
 }
 
-fn pdf(docx: &[u8]) -> Vec<u8> {
-    convert_bytes(docx).pdf
+fn requested(out: &Conversion, name: &str) -> bool {
+    out.missing_fonts.iter().any(|m| m.name == name)
 }
 
 /// A real font subset, not only the standard-14 fallback, reached the PDF.
@@ -57,37 +48,34 @@ fn embeds_font(pdf: &[u8]) -> bool {
 }
 
 #[test]
-fn host_fonts_can_be_registered_and_cleared() {
-    let _host = Host::new();
+fn host_fonts_can_be_supplied_and_left_out() {
     let doc = document(FONT_NAME, "");
-    assert!(!embeds_font(&pdf(&doc)));
-    assert_eq!(register_font(vec![0, 1, 2]), 0);
-    assert_eq!(register_font(FONT.to_vec()), 1);
-    assert!(embeds_font(&pdf(&doc)));
-    clear_fonts();
-    assert!(!embeds_font(&pdf(&doc)));
+    assert!(!embeds_font(&run(&doc, &host()).pdf));
+    assert!(!embeds_font(&run(&doc, &host().font(vec![0, 1, 2])).pdf));
+    assert!(embeds_font(&run(&doc, &with_font()).pdf));
+    assert!(!embeds_font(&run(&doc, &host()).pdf));
 }
 
 #[test]
-fn host_fonts_cover_a_missing_style_with_the_registered_face() {
-    let _host = Host::new();
-    register_font(FONT.to_vec());
-    assert!(embeds_font(&pdf(&document(FONT_NAME, "<w:b/>"))));
+fn host_fonts_cover_a_missing_style_with_the_supplied_face() {
+    assert!(embeds_font(
+        &run(&document(FONT_NAME, "<w:b/>"), &with_font()).pdf
+    ));
 }
 
 #[test]
-fn host_fonts_belong_to_the_registering_thread() {
+fn host_fonts_reach_other_threads_with_the_options() {
+    // Built on this thread, converted on others: the fonts travel with the options.
+    let options = [with_font(), host()];
     let barrier = Arc::new(Barrier::new(2));
-    let threads: Vec<_> = (0..2)
-        .map(|i| {
+    let threads: Vec<_> = options
+        .into_iter()
+        .enumerate()
+        .map(|(i, options)| {
             let barrier = barrier.clone();
             std::thread::spawn(move || {
-                let _host = Host::new();
-                if i == 0 {
-                    register_font(FONT.to_vec());
-                }
                 barrier.wait();
-                let pdf = pdf(&document(FONT_NAME, ""));
+                let pdf = run(&document(FONT_NAME, ""), &options).pdf;
                 assert_eq!(embeds_font(&pdf), i == 0);
             })
         })
@@ -98,10 +86,33 @@ fn host_fonts_belong_to_the_registering_thread() {
 }
 
 #[test]
+fn host_fonts_leave_the_thread_after_the_conversion() {
+    let doc = document(FONT_NAME, "");
+    assert!(embeds_font(&run(&doc, &with_font()).pdf));
+    assert!(!embeds_font(&run(&doc, &host()).pdf));
+}
+
+#[test]
+fn host_fonts_match_the_same_font_in_a_directory() {
+    let dir = std::env::temp_dir().join(format!("docxide-host-font-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("nb-hyphen-native.ttf"), FONT).unwrap();
+    for rpr in ["", "<w:b/>"] {
+        let doc = document(FONT_NAME, rpr);
+        let supplied = run(&doc, &with_font()).pdf;
+        let installed = run(&doc, &host().font_dirs([&dir])).pdf;
+        assert!(embeds_font(&supplied));
+        assert!(
+            supplied == installed,
+            "{rpr:?}: supplied and installed differ"
+        );
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn host_fonts_reach_the_display_list_as_bytes() {
-    let _host = Host::new();
-    register_font(FONT.to_vec());
-    let options = ConvertOptions::new().font_cache(false).display_list(true);
+    let options = with_font().display_list(true);
     let out = convert(&document(FONT_NAME, ""), &options).unwrap();
     let layout = out.display.unwrap();
     assert!(
@@ -120,20 +131,16 @@ fn host_fonts_reach_the_display_list_as_bytes() {
 
 #[test]
 fn host_requests_name_missing_fonts_until_registered() {
-    let _host = Host::new();
     let name = FONT_NAME.to_string();
     let doc = document(&name, "");
-    assert!(requested(&convert_bytes(&doc), &name));
-    register_font(FONT.to_vec());
-    assert!(!requested(&convert_bytes(&doc), &name));
-    clear_fonts();
-    assert!(requested(&convert_bytes(&doc), &name));
+    assert!(requested(&run(&doc, &host()), &name));
+    assert!(!requested(&run(&doc, &with_font()), &name));
+    assert!(requested(&run(&doc, &host()), &name));
 }
 
 #[test]
 fn host_requests_leave_out_the_fallbacks_tried_instead() {
-    let _host = Host::new();
-    let out = convert_bytes(&document(FONT_NAME, "<w:i/>"));
+    let out = run(&document(FONT_NAME, "<w:i/>"), &host());
     let missing: Vec<_> = out
         .missing_fonts
         .iter()
@@ -144,21 +151,17 @@ fn host_requests_leave_out_the_fallbacks_tried_instead() {
 
 #[test]
 fn host_requests_exact_style_even_when_regular_is_registered() {
-    let _host = Host::new();
     let name = FONT_NAME.to_string();
-    register_font(FONT.to_vec());
-    let out = convert_bytes(&document(&name, "<w:b/>"));
+    let out = run(&document(&name, "<w:b/>"), &with_font());
     assert!(out.missing_fonts.iter().any(|m| m.bold && m.name == name));
 }
 
 #[test]
 fn host_requests_cleared_by_failed_conversion() {
-    let _host = Host::new();
-    convert_bytes(&document(FONT_NAME, ""));
+    run(&document(FONT_NAME, ""), &host());
     assert!(convert(b"not a zip", &ConvertOptions::new()).is_err());
-    register_font(FONT.to_vec());
     assert!(
-        convert_bytes(&document(FONT_NAME, ""))
+        run(&document(FONT_NAME, ""), &with_font())
             .missing_fonts
             .is_empty()
     );
@@ -166,17 +169,16 @@ fn host_requests_cleared_by_failed_conversion() {
 
 #[test]
 fn host_requests_belong_to_the_converting_thread() {
+    let options = [with_font(), host()];
     let barrier = Arc::new(Barrier::new(2));
-    let threads: Vec<_> = (0..2)
-        .map(|i| {
+    let threads: Vec<_> = options
+        .into_iter()
+        .enumerate()
+        .map(|(i, options)| {
             let barrier = barrier.clone();
             std::thread::spawn(move || {
-                let _host = Host::new();
-                if i == 0 {
-                    register_font(FONT.to_vec());
-                }
                 barrier.wait();
-                let out = convert_bytes(&document(FONT_NAME, ""));
+                let out = run(&document(FONT_NAME, ""), &options);
                 barrier.wait();
                 assert_eq!(requested(&out, FONT_NAME), i == 1);
             })
