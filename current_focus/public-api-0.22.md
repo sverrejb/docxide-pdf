@@ -519,6 +519,7 @@ Open after step 5:
 | second simplify pass: no scan without dirs, test setup via options | `0ff9cf4e6` |
 | missing-font recording moved into `register_font` | `d8a36d9a1` |
 | `MissingFont::replaces` (user-approved addition to the target block) | `26a6a6655` |
+| third simplify pass (no changes); whole public API documented, `#![warn(missing_docs)]` | `d730a41a3` |
 | push `api-0.22` to main | waiting for the user |
 | 5.9 whole-repo `cargo fmt` | not started |
 | Release 0.22.0 | not started |
