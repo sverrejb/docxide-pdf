@@ -67,7 +67,7 @@ pub enum Error { InvalidDocx(String) }          // Zip, Xml, Pdf, Io, RenamedEnv
 pub struct BookmarkPosition { .. }
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MissingFont { pub name: String, pub bold: bool, pub italic: bool }
+pub struct MissingFont { pub name: String, pub bold: bool, pub italic: bool, pub replaces: Option<String> }
 pub mod display;                                // + #175's structure/outline types
 ```
 
@@ -514,10 +514,11 @@ Open after step 5:
 | 5.7 README, CLAUDE.md (other repos not touched) | `99448c852` |
 | 5.8 version 0.22.0, release notes in the commit message | `4fb6d14c8` |
 | simplify pass | `9ae109c39` |
-| `missing_fonts` names the substitute (Arial for Helvetica) | `868a7c3bc`, **user to keep or drop** (decision 13 said the document's name) |
+| `missing_fonts` names the substitute (Arial for Helvetica) | `868a7c3bc`, kept by the user 2026-11-21 after a Word online probe (an embedded Helvetica also draws as Arial) |
 | `display.rs` doc links | `d7d5c0eeb` |
 | second simplify pass: no scan without dirs, test setup via options | `0ff9cf4e6` |
 | missing-font recording moved into `register_font` | `d8a36d9a1` |
+| `MissingFont::replaces` (user-approved addition to the target block) | `26a6a6655` |
 | push `api-0.22` to main | waiting for the user |
 | 5.9 whole-repo `cargo fmt` | not started |
 | Release 0.22.0 | not started |
