@@ -3,7 +3,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use pdf_writer::{Pdf, Ref};
 
 use crate::ConvertOptions;
-use crate::fonts::{FontContext, FontEntry, FontFiles, FontIndex, font_key_buf, register_font};
+use crate::fonts::{
+    FontContext, FontEntry, FontFiles, FontIndex, font_key_buf, note_if_missing, register_font,
+};
 use crate::model::{Block, Document, FieldCode, IfPart, ImageFormat, Paragraph, Run};
 
 use super::collect_paras;
@@ -600,6 +602,7 @@ pub(super) fn collect_and_register_fonts(
                 word_text: true,
                 ..base_ctx
             };
+            note_if_missing(&run.font_name, run.bold, run.italic, &ctx);
             let entry = register_font(
                 pdf,
                 &run.font_name,
@@ -634,6 +637,7 @@ pub(super) fn collect_and_register_fonts(
             used_chars: used,
             ..base_ctx
         };
+        note_if_missing(base, bold, italic, &ctx);
         let entry = register_font(pdf, base, bold, italic, pdf_name, alloc, &ctx);
         seen_fonts.insert(key.clone(), entry);
         font_order.push(key.clone());

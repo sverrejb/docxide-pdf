@@ -9,7 +9,7 @@ mod pdf;
 
 pub use error::Error;
 pub use fonts::memory::{clear_fonts, register_font, use_system_fonts};
-pub use fonts::requests::{FontRequest, take_font_requests};
+pub use fonts::requests::{MissingFont, take_font_requests};
 pub use pdf::bookmarks::{BookmarkPosition, take_bookmark_positions};
 
 use std::path::{Path, PathBuf};
@@ -51,6 +51,7 @@ pub struct ConvertOptions {
     /// Draw the float wrap zones on the page. Environment:
     /// `DOCXIDE_DEBUG_WRAP=1`.
     pub debug_wrap: bool,
+    display_list: bool,
 }
 
 impl Default for ConvertOptions {
@@ -61,6 +62,7 @@ impl Default for ConvertOptions {
             font_dirs: Vec::new(),
             font_cache: true,
             debug_wrap: false,
+            display_list: false,
         }
     }
 }
@@ -133,6 +135,13 @@ impl ConvertOptions {
         self
     }
 
+    /// Also return the pages as display items ([`Conversion::display`]),
+    /// recorded from the same render as the PDF.
+    pub fn display_list(mut self, on: bool) -> Self {
+        self.display_list = on;
+        self
+    }
+
     pub(crate) fn font_setup(&self) -> fonts::FontSetup {
         fonts::FontSetup {
             dirs: self.font_dirs.clone(),
@@ -140,6 +149,47 @@ impl ConvertOptions {
         }
     }
 }
+
+/// Everything one conversion produces.
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct Conversion {
+    pub pdf: Vec<u8>,
+    /// Where each bookmarked body or table-cell paragraph was laid out.
+    pub bookmarks: Vec<BookmarkPosition>,
+    /// The fonts the document asks for that no face provides.
+    pub missing_fonts: Vec<MissingFont>,
+    /// What each page draws, with the fonts and pictures it draws them with,
+    /// for a caller that writes PDF (or renders pages) itself. `Some` only
+    /// with [`ConvertOptions::display_list`].
+    pub display: Option<display::Document>,
+}
+
+/// Converts DOCX bytes. File I/O is the caller's:
+/// `std::fs::write("out.pdf", &convert(&std::fs::read("in.docx")?, &options)?.pdf)`.
+pub fn convert(docx: &[u8], options: &ConvertOptions) -> Result<Conversion, Error> {
+    // ponytail: bookmarks and missing fonts are thread-locals drained here, so a
+    // conversion nested inside another on one thread would mix them; nothing nests.
+    take_bookmark_positions();
+    take_font_requests();
+    let recording = options.display_list.then(pdf::canvas::Recording::start);
+    let pdf = docx::parse_bytes(docx, options.revisions).and_then(|doc| pdf::render(&doc, options));
+    let bookmarks = take_bookmark_positions();
+    let missing_fonts = take_font_requests();
+    Ok(Conversion {
+        pdf: pdf?,
+        bookmarks,
+        missing_fonts,
+        display: recording.map(|r| r.finish().unwrap_or_default()),
+    })
+}
+
+// A server converts on worker threads; an `Rc` in either type must not slip in.
+const _: fn() = || {
+    fn send_sync<T: Send + Sync>() {}
+    send_sync::<ConvertOptions>();
+    send_sync::<Conversion>();
+};
 
 /// Converts with [`ConvertOptions::from_env`].
 pub fn convert_docx_to_pdf(input: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<(), Error> {

@@ -567,6 +567,20 @@ fn cjk_rescue_font(missing: &HashSet<char>, font_index: &FontIndex) -> String {
         .join(";")
 }
 
+/// Lists the document's own font when neither an embedded nor an installed or
+/// supplied face has its exact style. Only the name the document asks for:
+/// the fallbacks `register_font` goes on to try are ours, not the document's.
+pub(crate) fn note_if_missing(font_name: &str, bold: bool, italic: bool, ctx: &FontContext) {
+    let name = primary_font_name(font_name);
+    let key = (name.to_lowercase(), bold, italic);
+    if !name.is_empty()
+        && !ctx.embedded_fonts.contains_key(&key)
+        && ctx.font_index.exact_face(&key).is_none()
+    {
+        requests::record(name, bold, italic);
+    }
+}
+
 pub(crate) fn register_font(
     pdf: &mut Pdf,
     font_name: &str,
@@ -579,7 +593,6 @@ pub(crate) fn register_font(
     // Bare wasm has no clock: no timings there.
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     let t0 = std::time::Instant::now();
-    let _request = requests::begin(bold, italic);
     let refs = FontRefs {
         font: alloc(),
         descriptor: alloc(),
@@ -885,6 +898,30 @@ mod tests {
         assert!(pdf.contains(&stream), "{stream} is written");
         assert_eq!(pdf.matches("/Length1").count(), 1);
         assert!(!pdf.contains(" 00000 f"), "no object number is left unused");
+    }
+
+    #[test]
+    fn an_embedded_font_is_not_missing() {
+        let face = std::sync::Arc::new(include_bytes!("testdata/nb-hyphen-native.ttf").to_vec());
+        let embedded: EmbeddedFonts =
+            [(("synthetic hyphen".to_string(), false, false), face)].into();
+        let ctx = FontContext {
+            embedded_fonts: &embedded,
+            font_table: &FontTable::new(),
+            used_chars: &HashSet::new(),
+            word_text: true,
+            extra_glyphs: None,
+            font_index: discovery::test_index(),
+            font_files: &FontFiles::default(),
+        };
+        requests::take_font_requests();
+        note_if_missing("Synthetic Hyphen", false, false, &ctx);
+        assert!(requests::take_font_requests().is_empty());
+        note_if_missing("Synthetic Hyphen", true, false, &ctx);
+        note_if_missing("Synthetic Hyphen", true, false, &ctx);
+        let missing = requests::take_font_requests();
+        assert_eq!(missing.len(), 1);
+        assert!(missing[0].bold && missing[0].name == "Synthetic Hyphen");
     }
 
     #[test]

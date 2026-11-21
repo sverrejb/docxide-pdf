@@ -1,83 +1,40 @@
-//! The font lookups of a conversion that found nothing, for hosts that supply
-//! fonts on demand: convert, read the requests, register a face for a name the
-//! host has (`register_font`) and convert again. The log belongs to the
-//! converting thread; a conversion starts it anew.
+//! The fonts a document asks for that no face provides, for hosts that tell
+//! the end user which font to supply (`Conversion::missing_fonts`). The list
+//! belongs to the converting thread; `convert` drains it.
 use std::cell::RefCell;
 
-/// Family names absent from the host/system index during one resolution, in
-/// lookup order, and the requested style. Includes missing exact styles even
-/// when a regular face can be used with synthetic bold or italic.
+/// A family and style the document asks for that no embedded, supplied or
+/// system face provides. A missing bold or italic is listed even when the
+/// regular face stands in with synthetic bold or italic: the real face would
+/// change the output.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FontRequest {
-    pub names: Vec<String>,
+pub struct MissingFont {
+    pub name: String,
     pub bold: bool,
     pub italic: bool,
 }
 
-#[derive(Default)]
-struct Requests {
-    // register_font never nests, so one resolution is open at a time.
-    current: Option<FontRequest>,
-    completed: Vec<FontRequest>,
-}
-
 thread_local! {
-    static REQUESTS: RefCell<Requests> = RefCell::new(Requests::default());
+    static MISSING: RefCell<Vec<MissingFont>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Drain this thread's missing-font requests from its latest conversion. A new
-/// conversion clears old requests, including when parsing fails. Requests are
-/// deduplicated across render passes. Register a requested face and retry to
-/// replace a fallback; the list describes the index, not embedded DOCX fonts.
-pub fn take_font_requests() -> Vec<FontRequest> {
-    REQUESTS.with_borrow_mut(|requests| std::mem::take(&mut requests.completed))
+/// Drain this thread's missing fonts.
+pub fn take_font_requests() -> Vec<MissingFont> {
+    MISSING.with_borrow_mut(std::mem::take)
 }
 
-/// One font resolution: the misses noted while it lives form one request.
-pub(super) struct RequestScope;
-
-pub(super) fn begin(bold: bool, italic: bool) -> RequestScope {
-    REQUESTS.with_borrow_mut(|requests| {
-        requests.current = Some(FontRequest {
-            names: Vec::new(),
-            bold,
-            italic,
-        })
-    });
-    RequestScope
-}
-
-fn record(requests: &mut Requests, request: FontRequest) {
-    if !request.names.is_empty() && !requests.completed.contains(&request) {
-        requests.completed.push(request);
-    }
-}
-
-impl Drop for RequestScope {
-    fn drop(&mut self) {
-        REQUESTS.with_borrow_mut(|requests| {
-            if let Some(request) = requests.current.take() {
-                record(requests, request);
-            }
-        });
-    }
-}
-
-pub(super) fn note_miss(name: &str, bold: bool, italic: bool) {
-    REQUESTS.with_borrow_mut(|requests| {
-        if let Some(current) = requests.current.as_mut() {
-            if !current.names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
-                current.names.push(name.to_owned());
-            }
-        } else {
-            record(
-                requests,
-                FontRequest {
-                    names: vec![name.to_owned()],
-                    bold,
-                    italic,
-                },
-            );
+/// Every render pass resolves the fonts again, so each font is kept once.
+pub(super) fn record(name: &str, bold: bool, italic: bool) {
+    MISSING.with_borrow_mut(|missing| {
+        if !missing
+            .iter()
+            .any(|m| m.bold == bold && m.italic == italic && m.name.eq_ignore_ascii_case(name))
+        {
+            missing.push(MissingFont {
+                name: name.to_owned(),
+                bold,
+                italic,
+            });
         }
     });
 }

@@ -272,10 +272,12 @@ pub fn convert_with(input: &Path, output: &Path, markup: bool) -> Result<(), Str
         RevisionView::Final
     };
     let options = ConvertOptions::from_env().revisions(view);
-    match std::panic::catch_unwind(|| {
-        docxide_pdf::convert_docx_to_pdf_with(input, output, &options)
-    }) {
-        Ok(r) => r.map_err(|e| e.to_string()),
+    let docx = fs::read(input).map_err(|e| format!("{e}: {}", input.display()))?;
+    match std::panic::catch_unwind(|| docxide_pdf::convert(&docx, &options)) {
+        Ok(r) => {
+            let pdf = r.map_err(|e| e.to_string())?.pdf;
+            fs::write(output, pdf).map_err(|e| format!("{e}: {}", output.display()))
+        }
         Err(payload) => {
             let msg = payload
                 .downcast_ref::<&str>()
@@ -548,14 +550,11 @@ pub fn ensure_libreoffice_pdf(fixture_dir: &Path, soffice: &Path) -> Result<Path
 }
 
 /// Converts in-memory DOCX bytes without the font cache; the result must be a PDF.
-pub fn convert_bytes(input: &[u8]) -> Vec<u8> {
-    let pdf = docxide_pdf::convert_docx_bytes_to_pdf_bytes_with(
-        input,
-        &docxide_pdf::ConvertOptions::new().font_cache(false),
-    )
-    .unwrap();
-    assert!(pdf.starts_with(b"%PDF-"));
-    pdf
+pub fn convert_bytes(input: &[u8]) -> docxide_pdf::Conversion {
+    let out =
+        docxide_pdf::convert(input, &docxide_pdf::ConvertOptions::new().font_cache(false)).unwrap();
+    assert!(out.pdf.starts_with(b"%PDF-"));
+    out
 }
 
 /// Whether `needle` occurs in the PDF, also inside its Flate-compressed streams.

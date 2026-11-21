@@ -71,7 +71,8 @@ fn main() {
     let output = available_path(
         args.output
             .unwrap_or_else(|| args.input.with_extension("pdf")),
-    );
+    )
+    .with_extension("pdf");
 
     let t0 = std::time::Instant::now();
     let mut options = docxide_pdf::ConvertOptions::from_env();
@@ -90,9 +91,24 @@ fn main() {
     if args.debug_wrap {
         options = options.debug_wrap(true);
     }
-    if let Err(e) = docxide_pdf::convert_docx_to_pdf_with(&args.input, &output, &options) {
+    let fail = |e: &dyn std::fmt::Display| -> ! {
         eprintln!("Error: {e}");
         std::process::exit(1);
-    }
+    };
+    let docx = std::fs::read(&args.input)
+        .unwrap_or_else(|e| fail(&format_args!("{e}: {}", args.input.display())));
+    let pdf = docxide_pdf::convert(&docx, &options)
+        .unwrap_or_else(|e| fail(&e))
+        .pdf;
+    let t_render = t0.elapsed();
+    std::fs::write(&output, &pdf)
+        .unwrap_or_else(|e| fail(&format_args!("{e}: {}", output.display())));
+    log::info!(
+        "Timing: render={:.1}ms, write={:.1}ms, total={:.1}ms (output {} bytes)",
+        t_render.as_secs_f64() * 1000.0,
+        (t0.elapsed() - t_render).as_secs_f64() * 1000.0,
+        t0.elapsed().as_secs_f64() * 1000.0,
+        pdf.len(),
+    );
     println!("Converted to {} in {:.0?}", output.display(), t0.elapsed());
 }

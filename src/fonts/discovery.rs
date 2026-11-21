@@ -354,16 +354,11 @@ impl FontIndex {
         bold: bool,
         italic: bool,
     ) -> Option<(PathBuf, u32, bool, bool)> {
-        let index = &self.lookup;
         let key = font_name.to_lowercase();
-        let lookup = |bold, italic| {
-            let key = (key.clone(), bold, italic);
-            super::memory::lookup(&key).or_else(|| index.get(&key).cloned())
-        };
+        let lookup = |bold, italic| self.exact_face(&(key.clone(), bold, italic));
         if let Some((path, face_index)) = lookup(bold, italic) {
             return Some((path, face_index, bold, italic));
         }
-        super::requests::note_miss(font_name, bold, italic);
         // A plain regular request that misses falls through to a generic family
         // fallback rather than borrowing this family's bold/italic face, which would
         // render unexpectedly heavy/slanted.
@@ -382,5 +377,10 @@ impl FontIndex {
             }
         }
         None
+    }
+
+    /// The face of exactly this family and style, supplied or installed.
+    pub(super) fn exact_face(&self, key: &(String, bool, bool)) -> Option<(PathBuf, u32)> {
+        super::memory::lookup(key).or_else(|| self.lookup.get(key).cloned())
     }
 }
