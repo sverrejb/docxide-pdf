@@ -520,7 +520,11 @@ fn cell_min_content_width(
                             && prev_char
                                 .zip(word.chars().next())
                                 .is_some_and(|(a, b)| !super::layout::breaks_between(a, b)));
-                joined_width = if continues { joined_width + gap + ww } else { ww };
+                joined_width = if continues {
+                    joined_width + gap + ww
+                } else {
+                    ww
+                };
                 gap_w = 0.0;
                 prev_char = word.chars().last();
                 let required = (joined_width + inset).max(h_pad);
@@ -1186,7 +1190,11 @@ mod tests {
             // Spaces beside a no-break space hold the words together, within
             // a run and across runs.
             let split = measure(&["abc def"], indent);
-            for glued in [&["abc\u{a0} def"][..], &["abc \u{a0}def"], &["abc\u{a0}\u{a0}\u{a0} ", "def"]] {
+            for glued in [
+                &["abc\u{a0} def"][..],
+                &["abc \u{a0}def"],
+                &["abc\u{a0}\u{a0}\u{a0} ", "def"],
+            ] {
                 assert!(measure(glued, indent) > whole, "{glued:?}");
             }
             assert!(split < whole);

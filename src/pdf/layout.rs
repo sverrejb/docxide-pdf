@@ -1869,7 +1869,11 @@ pub(super) const PUNCT_PULL_FREE: f32 = 0.012;
 /// mark joins in (the 2010 layout: chinese_costume_design_course's "…使用。"
 /// gives 0.5 em on its comma and on that final mark). Returns that word's cut
 /// (0 without one), or None, touching nothing, when the marks cannot give enough.
-fn compress_punctuation(chunks: &mut [WordChunk], needed: f32, incoming: Option<f32>) -> Option<f32> {
+fn compress_punctuation(
+    chunks: &mut [WordChunk],
+    needed: f32,
+    incoming: Option<f32>,
+) -> Option<f32> {
     // (chunk, squeezes at its end, squeezes at its start)
     let marks: Vec<(usize, f32, bool)> = chunks
         .iter()
@@ -1897,7 +1901,8 @@ fn compress_punctuation(chunks: &mut [WordChunk], needed: f32, incoming: Option<
         .sum();
     let level = (taken + needed) / sides_total;
     let over_cap = |fs: f32| level > fs * PUNCT_SQUEEZE + 0.01;
-    if marks.iter().any(|&(i, _, _)| over_cap(chunks[i].font_size)) || incoming.is_some_and(over_cap)
+    if marks.iter().any(|&(i, _, _)| over_cap(chunks[i].font_size))
+        || incoming.is_some_and(over_cap)
     {
         return None;
     }
@@ -2715,8 +2720,7 @@ pub(super) fn build_paragraph_lines(
                     proposed_x + ww - cur_max,
                     (cjk.punct_cut_last && word.ends_with(is_compressible_punct))
                         .then_some(eff_fs),
-                )
-            {
+                ) {
                 current_x = current_chunks.last().map_or(0.0, |c| c.x_offset + c.width);
                 (
                     if need_space {
@@ -4095,7 +4099,7 @@ mod tests {
                     compress_punct: false,
                     punct_pull: false,
                     punct_cut_last: false,
-            balance_sbdb: false,
+                    balance_sbdb: false,
                     punct_pull_free_ratio: 0.0,
                     punct_pull_free_em: 0.0,
                     squeeze_spaces: true,
@@ -4210,7 +4214,10 @@ mod tests {
             ideograph_breaks: false,
             ..plain_layout(false)
         };
-        assert_eq!(line_words("2. 研究人员", &legacy), [(0, "2."), (1, "研究人员")]);
+        assert_eq!(
+            line_words("2. 研究人员", &legacy),
+            [(0, "2."), (1, "研究人员")]
+        );
         assert_eq!(line_words("2.研究", &legacy), [(0, "2.研究")]);
         assert!(line_words("2. 研究人员", &plain_layout(false)).len() > 2);
     }

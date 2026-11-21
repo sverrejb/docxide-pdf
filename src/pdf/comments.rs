@@ -176,7 +176,14 @@ pub(super) fn render_comment_pane(
         content.save_state();
         // A revision's balloon is white, a comment's tinted (probe: "Deleted Cells").
         let revision = comments.get(cid).is_some_and(|c| c.label.is_some());
-        fill_rgb(content, if revision { [255, 255, 255] } else { CALLOUT_FILL });
+        fill_rgb(
+            content,
+            if revision {
+                [255, 255, 255]
+            } else {
+                CALLOUT_FILL
+            },
+        );
         stroke_rgb(content, CALLOUT_STROKE);
         content.set_line_width(BALLOON_BORDER * zoom);
         content.fill_even_odd_and_stroke();

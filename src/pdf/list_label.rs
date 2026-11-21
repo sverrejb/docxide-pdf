@@ -76,8 +76,7 @@ pub(super) fn show_label_pieces<S: AsRef<str>>(
     size: f32,
 ) {
     for (i, (key, text)) in pieces.iter().enumerate() {
-        let Some((entry, text)) = label_face(text.as_ref(), key.as_deref(), body_key, fonts)
-        else {
+        let Some((entry, text)) = label_face(text.as_ref(), key.as_deref(), body_key, fonts) else {
             continue;
         };
         let mut bytes = entry.encode(&text);

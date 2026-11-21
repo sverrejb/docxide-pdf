@@ -1871,7 +1871,9 @@ pub(super) fn parse_runs<R: Read + Seek>(
             .filter_map(|r| {
                 let text: String = r
                     .children()
-                    .filter(|c| c.has_tag_name((WML_NS, "delText")) || c.has_tag_name((WML_NS, "t")))
+                    .filter(|c| {
+                        c.has_tag_name((WML_NS, "delText")) || c.has_tag_name((WML_NS, "t"))
+                    })
                     .filter_map(|c| c.text())
                     .collect();
                 if text.is_empty() {

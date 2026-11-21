@@ -1823,8 +1823,9 @@ pub(super) fn render_paragraph_block(
                 + next_first_line_h
                 + needed.saturating_sub(1) as f32 * next_line_h;
             first_link.get_or_insert(extra);
-            hang = line_h_with_picture(picture_h, &next.runs, next, ctx.fonts, next_ls, next_line_h)
-                - next_first_line_h;
+            hang =
+                line_h_with_picture(picture_h, &next.runs, next, ctx.fonts, next_ls, next_line_h)
+                    - next_first_line_h;
             if !next.keep_next || needed < count() {
                 if needed == count() {
                     chain_end_after = next.space_after;
@@ -1938,8 +1939,8 @@ pub(super) fn render_paragraph_block(
     };
     let body_splits = || {
         let room = state.pb.slot_top - inter_gap - text_drop - state.effective_margin_bottom;
-        let mut fit = fit_in(&lines, &line_fn_extra, room, state.pb.col_fn_reserved > 0.0)
-            .min(lines.len());
+        let mut fit =
+            fit_in(&lines, &line_fn_extra, room, state.pb.col_fn_reserved > 0.0).min(lines.len());
         if para.widow_control && lines.len() - fit < 2 {
             fit = lines.len().saturating_sub(2);
         }
@@ -2948,7 +2949,9 @@ pub(super) fn render_paragraph_block(
             let start = para.indent_left + first;
             let room = col_w - start - para.indent_right - box_w;
             let box_x = col_x + start + align_offset(para.alignment, room.max(0.0));
-            let x = box_x + (box_w - trim - img.display_width) / 2.0 + if swap_axes { 0.0 } else { img.effect_left };
+            let x = box_x
+                + (box_w - trim - img.display_width) / 2.0
+                + if swap_axes { 0.0 } else { img.effect_left };
             let y_bottom = box_bottom + (box_h - img.display_height) / 2.0;
             if turned {
                 state.pb.content.save_state();

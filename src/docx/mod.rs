@@ -1884,7 +1884,9 @@ fn cell_revision_balloons(
         };
         for cell in table.rows.iter_mut().flat_map(|r| r.cells.iter_mut()) {
             if let Some(label) = cell.revision_label {
-                let id = (0xC000_0000u32..).find(|id| !comments.contains_key(id)).unwrap();
+                let id = (0xC000_0000u32..)
+                    .find(|id| !comments.contains_key(id))
+                    .unwrap();
                 comments.insert(
                     id,
                     Comment {
