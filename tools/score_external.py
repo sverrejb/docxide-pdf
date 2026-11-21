@@ -30,7 +30,7 @@ from pathlib import Path
 
 from corpus_score import OUT, ROOT, score
 
-CORPUS = ROOT.parent / 'corpora/neurotic_docx_bench'
+CORPUS = Path.home() / 'workspace/docxside/corpora/neurotic_docx_bench'
 RESULTS = ROOT / 'tests/output/score_external.json'
 CLI = ROOT / 'target/release/docxide-pdf'
 GROUPS = {
