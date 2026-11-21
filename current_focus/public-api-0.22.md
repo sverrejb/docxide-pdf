@@ -1,8 +1,8 @@
 # Public API 0.22: one `convert()`, one `Conversion` (handover)
 
 Planned 2026-11-19 with the user; public API reviewed with the user
-2026-11-20 (decisions 6–15, none open). Status: **planning done,
-step 5 not coded.**
+2026-11-20 (decisions 6–15, none open). Status: **step 5.1–5.8 coded
+2026-11-21 on branch `api-0.22` (not pushed); 5.9 and the release open.**
 Main was at `475c1e95f` when this was written. Update the status table at the
 bottom as each step lands.
 
@@ -441,6 +441,60 @@ None. Every question from 2026-11-19 and 2026-11-20 is decided
 (decisions 6–15). Ask the user about anything new that changes the public
 surface.
 
+## Step 5 notes (2026-11-21, for the next session)
+
+Base `83d235da2`, rebased onto `4d72ce49b` (tools and docs only). Every commit: release CLI, all 1246 fixtures × 4
+variants byte-identical to the base; clippy warnings identical to the base.
+At the end: visual 1244 unchanged, accessibility 1242 unchanged, host 11,
+bookmark_positions 7, `cargo test --lib` 376 (no failures, as at base),
+wasm smoke passes.
+
+- 5.1: `note_if_missing` is called from the two document loops of
+  `collect_and_register_fonts`, not inside `register_font`, because the
+  math font, the rescue fonts and the empty-document Helvetica go through
+  `register_font` too. It checks the name `register_font` looks up
+  (`word_substitute`: Helvetica → Arial) and skips Bahnschrift
+  (`868a7c3bc`, its own commit so the user can drop it). Chart title font (`charts::TITLE_FONT`), theme minor font, line
+  number and comment-pane fonts are reported when missing: Word draws
+  them, so supplying them changes output.
+- 5.1: file I/O moved out: the CLI forces `.pdf` before picking a free
+  name (simplify pass; before, `-o out` checked `out` and wrote
+  `out.pdf`, which could overwrite). The timing log line now covers parse
+  + render (the library no longer times).
+- 5.2: `reject_old_env_vars`/`old_env_var` went here, not in 5.3: with the
+  old functions gone they were dead code.
+- 5.3: clap's `env` on set-true flags needs `FalseyValueParser` (the
+  default `BoolValueParser` rejects `1`). Off values now include `no`,
+  `off`. A flag still can't switch a variable off (set-true flags); the
+  README says so. `DOCXIDE_REVISIONS` and `DOCXIDE_FONTS` are read by hand
+  in `main.rs`. The harness and `test_index` read `DOCXIDE_FONTS` and
+  `DOCXIDE_NO_FONT_CACHE` (`""`, `0`, `false` = off).
+- 5.4a: `ConvertOptions` keeps `Arc<MemoryFonts>`; `convert()` installs it
+  as the thread's registry (`memory::install`, a drop guard).
+  `register_font(..) -> usize` counted faces; `font()` has no count (a
+  warning is logged), so the host test asserts "unusable bytes embed no
+  font" instead. `FontSetup.system` replaces the early return of an empty
+  index; a scan without system dirs does not save the disk cache (else it
+  dropped the system entries).
+- 5.4b: `FontEntry::font_path` → `font_source: Option<FontSource>`
+  (`File(PathBuf)` | `Data(Arc<Vec<u8>>)`); `is_some()` still means
+  "installed or supplied, not embedded" (hhea line box, Bahnschrift,
+  WordArt, script check). Test: supplied and the same font in a directory
+  give identical PDFs (regular and bold).
+- 5.5: one site needed a message (`roxmltree::Document::parse` of
+  `word/document.xml`).
+- 5.8: no CHANGELOG or GitHub releases exist; the release notes are the
+  body of `4fb6d14c8`.
+
+Open after step 5:
+- Other repos (need the user's OK): docxide-template README example,
+  docxide-demo `src/main.rs` (`convert_docx_bytes_to_pdf_bytes`).
+- `missing_fonts` edge: a Mac-only family with an altName is skipped by
+  `register_font` but not reported.
+- Supplied fonts still reach `FontIndex` through a thread-local; passing
+  `&options.fonts` with the index (about 6 signatures) would delete
+  `install`. `pdf::render`/`render_pass` return `Result` but never fail.
+
 ## Status
 
 | Step | State |
@@ -450,6 +504,18 @@ surface.
 | 2. #171 memory fonts | merged 2026-11-20 |
 | 3. #172 font requests | merged 2026-11-20 |
 | 4. #175 display tags | merged `c336d95f2` (2026-11-20) |
-| 5. 0.22 refactor | not started |
+| 5.1 `convert()` + `Conversion` | `d2fa9a9d8` on `api-0.22` (2026-11-21) |
+| 5.2 old functions removed | `f4aefc62a` |
+| 5.3 private options, no environment | `87bd7a4a7` |
+| 5.4a `font()`, `system_fonts()` | `618d24c98` |
+| 5.4b bytes, no `memory:N` paths | `46f753360` |
+| 5.5 `Error` | `2c069140c` |
+| 5.6 `#[non_exhaustive]` | `89d6a2a99` |
+| 5.7 README, CLAUDE.md (other repos not touched) | `99448c852` |
+| 5.8 version 0.22.0, release notes in the commit message | `4fb6d14c8` |
+| simplify pass | `9ae109c39` |
+| `missing_fonts` names the substitute (Arial for Helvetica) | `868a7c3bc`, **user to keep or drop** (decision 13 said the document's name) |
+| `display.rs` doc links | `d7d5c0eeb` |
+| push `api-0.22` to main | waiting for the user |
 | 5.9 whole-repo `cargo fmt` | not started |
 | Release 0.22.0 | not started |
