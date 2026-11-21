@@ -88,7 +88,8 @@ impl<'a> MathFont<'a> {
     }
 
     /// The strikethrough's bottom above the baseline and its thickness at
-    /// `size`: the OS/2 strikeout, like a text run's (`line_render::strike_line`).
+    /// `size`: the OS/2 strikeout (not snapped to the quarter-point grid as a
+    /// text run's is in `line_render::os2_strike`).
     pub(super) fn strikeout(&self, size: f32) -> (f32, f32) {
         // ponytail: a face without an OS/2 strikeout gets 0.3em / 0.05em.
         let (top, th) = self

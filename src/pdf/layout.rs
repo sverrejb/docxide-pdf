@@ -1709,7 +1709,6 @@ fn line_words<'a>(text: &'a str, cjk: &CjkLayout) -> Vec<(usize, &'a str)> {
     for (spaces, w) in words {
         if spaces == 0
             && let Some((_, last)) = out.last_mut()
-            && offset(last) + last.len() == offset(w)
             && (ea(last.chars().next_back()) || ea(w.chars().next()))
         {
             *last = &text[offset(last)..offset(w) + w.len()];

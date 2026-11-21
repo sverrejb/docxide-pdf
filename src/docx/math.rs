@@ -193,11 +193,10 @@ impl MathParser<'_> {
         // Markup view: revised math takes the author's colour, deleted math
         // is struck through and inserted math is not underlined (Word for
         // Mac, corpus redlines 970e9bbbcc and d0281643d2).
-        let revision = r
-            .descendants()
-            .find(|t| t.has_tag_name((MATH_NS, "t")))
-            .and_then(revision_of)
-            .filter(|_| markup);
+        let revision = markup
+            .then(|| r.descendants().find(|t| t.has_tag_name((MATH_NS, "t"))))
+            .flatten()
+            .and_then(revision_of);
         let val = |name| math_val(r, "rPr", name);
         Some(MathNode::Run(MathRun {
             text,
