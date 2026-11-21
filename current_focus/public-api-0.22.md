@@ -449,12 +449,14 @@ At the end: visual 1244 unchanged, accessibility 1242 unchanged, host 11,
 bookmark_positions 7, `cargo test --lib` 376 (no failures, as at base),
 wasm smoke passes.
 
-- 5.1: `note_if_missing` is called from the two document loops of
-  `collect_and_register_fonts`, not inside `register_font`, because the
-  math font, the rescue fonts and the empty-document Helvetica go through
-  `register_font` too. It checks the name `register_font` looks up
-  (`word_substitute`: Helvetica → Arial) and skips Bahnschrift
-  (`868a7c3bc`, its own commit so the user can drop it). Chart title font (`charts::TITLE_FONT`), theme minor font, line
+- 5.1: `register_font` sets `FontEntry::missing` (the first name it looks
+  up, with a Mac-only family it skipped for an altName counted as missing);
+  `collect_and_register_fonts` records the entries in `font_order` before
+  the glyph fallbacks and the empty-document Helvetica, so the document's
+  math font is reported and those two are not. The name is the one
+  `register_font` looks up (`word_substitute`: Helvetica → Arial) and
+  Bahnschrift is skipped (`868a7c3bc`, its own commit so the user can drop
+  it). Chart title font (`charts::TITLE_FONT`), theme minor font, line
   number and comment-pane fonts are reported when missing: Word draws
   them, so supplying them changes output.
 - 5.1: file I/O moved out: the CLI forces `.pdf` before picking a free
@@ -489,8 +491,6 @@ wasm smoke passes.
 Open after step 5:
 - Other repos (need the user's OK): docxide-template README example,
   docxide-demo `src/main.rs` (`convert_docx_bytes_to_pdf_bytes`).
-- `missing_fonts` edge: a Mac-only family with an altName is skipped by
-  `register_font` but not reported.
 - Supplied fonts still reach `FontIndex` through a thread-local; passing
   `&options.fonts` with the index (about 6 signatures) would delete
   `install`. `pdf::render`/`render_pass` return `Result` but never fail.
@@ -517,6 +517,7 @@ Open after step 5:
 | `missing_fonts` names the substitute (Arial for Helvetica) | `868a7c3bc`, **user to keep or drop** (decision 13 said the document's name) |
 | `display.rs` doc links | `d7d5c0eeb` |
 | second simplify pass: no scan without dirs, test setup via options | `0ff9cf4e6` |
+| missing-font recording moved into `register_font` | `d8a36d9a1` |
 | push `api-0.22` to main | waiting for the user |
 | 5.9 whole-repo `cargo fmt` | not started |
 | Release 0.22.0 | not started |
