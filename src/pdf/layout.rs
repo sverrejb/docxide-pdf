@@ -3491,12 +3491,18 @@ pub(super) fn build_tabbed_line(
             // Otherwise a tab wraps when it lands past the margin or the word
             // after it doesn't fit (a default stop on the margin stays:
             // massachusetts' signature line keeps its fifth tab there).
-            // Before 2013 layout a tab past the margin right after a right,
-            // centre or decimal stop stays too, and what follows it (online
-            // probe tabwrap14: `left⇥mid⇥CCPR⇥Z` puts Z at 576pt on a 540pt
-            // margin; after a left stop it wraps).
+            // In Word 2010 layout (compat 14) a tab past the margin right after
+            // a right, centre or decimal stop whose text fills the line stays
+            // too, and what follows it (online probe tabwrap14: `left⇥mid⇥CCPR⇥Z`
+            // puts Z at 576pt on a 540pt margin). After a left stop, or a right
+            // one short of the line's end, it wraps (corpus dd9c48af48's
+            // header), and in compat 12 (2b4475cba6's).
             let stop_past = effective_tab_target > wrap_limit;
-            let after_aligned = prev_alignment.is_some_and(|a| a != TabAlignment::Left);
+            // A positional tab is no stop: back at the left it starts a line.
+            let after_aligned = compat_mode == 14
+                && ptab_align.is_none()
+                && prev_alignment.is_some_and(|a| a != TabAlignment::Left)
+                && text_end + 0.5 >= wrap_limit;
             if compat_mode < 15
                 && (line_reach == f32::INFINITY
                     || (explicit && stop_past)
