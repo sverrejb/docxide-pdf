@@ -442,8 +442,8 @@
     "a11y_text": 1.0
   },
   "cases/case103": {
-    "jaccard": 0.9573,
-    "ssim": 0.982,
+    "jaccard": 0.9682,
+    "ssim": 0.9909,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -452,8 +452,8 @@
     "a11y_text": 1.0
   },
   "cases/case104": {
-    "jaccard": 0.9513,
-    "ssim": 0.975,
+    "jaccard": 0.9622,
+    "ssim": 0.9881,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1492,8 +1492,8 @@
     "a11y_text": 1.0
   },
   "cases/case200": {
-    "jaccard": 0.9864,
-    "ssim": 0.9731,
+    "jaccard": 0.9937,
+    "ssim": 0.9922,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1502,8 +1502,8 @@
     "a11y_text": 1.0
   },
   "cases/case201": {
-    "jaccard": 0.9016,
-    "ssim": 0.9737,
+    "jaccard": 0.9079,
+    "ssim": 0.9929,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1512,8 +1512,8 @@
     "a11y_text": 1.0
   },
   "cases/case202": {
-    "jaccard": 0.8388,
-    "ssim": 0.9726,
+    "jaccard": 0.8443,
+    "ssim": 0.9923,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -9375,8 +9375,8 @@
     "a11y_text": 1.0
   },
   "cases/text-box-story-pictures": {
-    "jaccard": 0.911,
-    "ssim": 0.8844,
+    "jaccard": 0.9185,
+    "ssim": 0.8916,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -11494,8 +11494,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_land_development_sign_form": {
-    "jaccard": 0.6936,
-    "ssim": 0.8668,
+    "jaccard": 0.6964,
+    "ssim": 0.8744,
     "text_boundary": 1.0,
     "ua_fail": 4,
     "a11y_missing": 0,
@@ -11793,8 +11793,8 @@
     "a11y_text": 0.9892
   },
   "scraped/polish_municipal_letter": {
-    "jaccard": 0.7619,
-    "ssim": 0.8918,
+    "jaccard": 0.8192,
+    "ssim": 0.9279,
     "text_boundary": 1.0,
     "convert_ms": 11.8,
     "ua_fail": 3,
@@ -12163,8 +12163,8 @@
     "a11y_text": 1.0
   },
   "scraped/strategi_pengembangan_information_center_resort": {
-    "jaccard": 0.8462,
-    "ssim": 0.9367,
+    "jaccard": 0.8474,
+    "ssim": 0.9374,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
