@@ -828,6 +828,7 @@ pub(super) fn compute_row_layouts(
                                 } + label_extra;
                                 let space_before = space_before.max(nested_float_clearance);
                                 total_h += space_before;
+                                let para_top = total_h;
 
                                 // The first baseline sits this far (per em) below the
                                 // cell top: the ascent, line gap included, as in body
@@ -1133,6 +1134,17 @@ pub(super) fn compute_row_layouts(
                                         })
                                     })
                                     .collect();
+                                // A picture the text wraps beside grows the row to
+                                // its bottom; one without wrapping does not (online
+                                // probe cellrow, compat 14 and 15).
+                                // ponytail: top-and-bottom wrapping also moves the
+                                // anchor line below the picture; not modelled.
+                                for fi in para.floating_images.iter().filter(|fi| fi.wrap_type.wraps_beside()) {
+                                    if let VerticalPosition::Offset(o) = fi.v_position {
+                                        floating_extent = floating_extent
+                                            .max(para_top + o + fi.image.display_height);
+                                    }
+                                }
 
                                 let next = super::block_para(&cell.content, block_idx + 1)
                                     .filter(|n| super::helpers::joins_border_group(para, n));
