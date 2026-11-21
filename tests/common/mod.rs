@@ -273,7 +273,7 @@ pub fn convert_with(input: &Path, output: &Path, markup: bool) -> Result<(), Str
     };
     // .cargo/config.toml points DOCXIDE_FONTS at the fonts/ mirror, and a
     // worktree suite turns off the shared font-index cache with
-    // DOCXIDE_NO_FONT_CACHE=1, so the harness reads both as the CLI does.
+    // DOCXIDE_NO_FONT_CACHE=1; the unit tests' `test_index` reads both alike.
     let fonts = std::env::var_os("DOCXIDE_FONTS").unwrap_or_default();
     let cache = std::env::var("DOCXIDE_NO_FONT_CACHE").map_or(true, |v| {
         matches!(v.trim().to_ascii_lowercase().as_str(), "" | "0" | "false")
@@ -561,8 +561,15 @@ pub fn ensure_libreoffice_pdf(fixture_dir: &Path, soffice: &Path) -> Result<Path
 
 /// Converts in-memory DOCX bytes without the font cache; the result must be a PDF.
 pub fn convert_bytes(input: &[u8]) -> docxide_pdf::Conversion {
-    let out =
-        docxide_pdf::convert(input, &docxide_pdf::ConvertOptions::new().font_cache(false)).unwrap();
+    convert_bytes_with(input, &docxide_pdf::ConvertOptions::new().font_cache(false))
+}
+
+/// `convert_bytes` with the caller's options.
+pub fn convert_bytes_with(
+    input: &[u8],
+    options: &docxide_pdf::ConvertOptions,
+) -> docxide_pdf::Conversion {
+    let out = docxide_pdf::convert(input, options).unwrap();
     assert!(out.pdf.starts_with(b"%PDF-"));
     out
 }

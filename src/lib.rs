@@ -8,10 +8,10 @@ mod model;
 mod pdf;
 
 pub use error::Error;
-pub use fonts::requests::MissingFont;
+pub use fonts::missing::MissingFont;
 pub use pdf::bookmarks::BookmarkPosition;
 
-use fonts::requests::take_font_requests;
+use fonts::missing::take_missing_fonts;
 use pdf::bookmarks::take_bookmark_positions;
 use std::path::PathBuf;
 
@@ -159,12 +159,12 @@ pub fn convert(docx: &[u8], options: &ConvertOptions) -> Result<Conversion, Erro
     // ponytail: bookmarks and missing fonts are thread-locals drained here, so a
     // conversion nested inside another on one thread would mix them; nothing nests.
     take_bookmark_positions();
-    take_font_requests();
+    take_missing_fonts();
     let _fonts = fonts::memory::install(&options.fonts);
     let recording = options.display_list.then(pdf::canvas::Recording::start);
     let pdf = docx::parse_bytes(docx, options.revisions).and_then(|doc| pdf::render(&doc, options));
     let bookmarks = take_bookmark_positions();
-    let missing_fonts = take_font_requests();
+    let missing_fonts = take_missing_fonts();
     Ok(Conversion {
         pdf: pdf?,
         bookmarks,

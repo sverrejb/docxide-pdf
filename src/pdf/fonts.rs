@@ -3,9 +3,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use pdf_writer::{Pdf, Ref};
 
 use crate::ConvertOptions;
-use crate::fonts::{
-    FontContext, FontEntry, FontFiles, FontIndex, font_key_buf, note_if_missing, register_font,
-};
+use crate::fonts::missing::note_if_missing;
+use crate::fonts::{FontContext, FontEntry, FontFiles, FontIndex, font_key_buf, register_font};
 use crate::model::{Block, Document, FieldCode, IfPart, ImageFormat, Paragraph, Run};
 
 use super::collect_paras;

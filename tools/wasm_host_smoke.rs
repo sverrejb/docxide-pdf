@@ -18,7 +18,7 @@ pub extern "C" fn smoke_test() -> usize {
         options.font(include_bytes!("../src/fonts/testdata/nb-hyphen-native.ttf").to_vec());
     let out = convert(INPUT, &options).unwrap();
     assert!(out.pdf.starts_with(b"%PDF-"));
-    // The registered face is embedded; the standard-14 fallback is not.
+    // The supplied face is embedded; the standard-14 fallback is not.
     assert!(out.pdf.len() > fallback.pdf.len());
     assert!(!requested(&out));
     assert!(convert(b"invalid", &options).is_err());

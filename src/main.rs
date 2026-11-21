@@ -70,9 +70,9 @@ fn main() {
 
     let output = available_path(
         args.output
-            .unwrap_or_else(|| args.input.with_extension("pdf")),
-    )
-    .with_extension("pdf");
+            .unwrap_or_else(|| args.input.clone())
+            .with_extension("pdf"),
+    );
 
     let t0 = std::time::Instant::now();
     // Not a flag's on/off value, and a path list clap can't split with

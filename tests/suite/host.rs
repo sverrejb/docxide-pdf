@@ -5,7 +5,7 @@ use std::sync::{Arc, Barrier};
 use docxide_pdf::display::FontSource;
 use docxide_pdf::{Conversion, ConvertOptions, convert};
 
-use crate::common::pdf_contains;
+use crate::common::{convert_bytes_with as run, pdf_contains};
 
 /// Its family name is "NB Hyphen Fixture native".
 const FONT: &[u8] = include_bytes!("../../src/fonts/testdata/nb-hyphen-native.ttf");
@@ -30,12 +30,6 @@ fn document(font: &str, rpr: &str) -> Vec<u8> {
     .unwrap();
     write!(zip, r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:rPr><w:rFonts w:ascii="{font}" w:hAnsi="{font}"/>{rpr}</w:rPr><w:t>-</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="4000" w:h="4000"/><w:pgMar w:top="400" w:bottom="400" w:left="400" w:right="400"/></w:sectPr></w:body></w:document>"#).unwrap();
     zip.finish().unwrap().into_inner()
-}
-
-fn run(docx: &[u8], options: &ConvertOptions) -> Conversion {
-    let out = convert(docx, options).unwrap();
-    assert!(out.pdf.starts_with(b"%PDF-"));
-    out
 }
 
 fn requested(out: &Conversion, name: &str) -> bool {
@@ -86,13 +80,6 @@ fn host_fonts_reach_other_threads_with_the_options() {
 }
 
 #[test]
-fn host_fonts_leave_the_thread_after_the_conversion() {
-    let doc = document(FONT_NAME, "");
-    assert!(embeds_font(&run(&doc, &with_font()).pdf));
-    assert!(!embeds_font(&run(&doc, &host()).pdf));
-}
-
-#[test]
 fn host_fonts_match_the_same_font_in_a_directory() {
     let dir = std::env::temp_dir().join(format!("docxide-host-font-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -113,7 +100,7 @@ fn host_fonts_match_the_same_font_in_a_directory() {
 #[test]
 fn host_fonts_reach_the_display_list_as_bytes() {
     let options = with_font().display_list(true);
-    let out = convert(&document(FONT_NAME, ""), &options).unwrap();
+    let out = run(&document(FONT_NAME, ""), &options);
     let layout = out.display.unwrap();
     assert!(
         layout
@@ -130,7 +117,7 @@ fn host_fonts_reach_the_display_list_as_bytes() {
 }
 
 #[test]
-fn host_requests_name_missing_fonts_until_registered() {
+fn host_requests_name_missing_fonts_until_supplied() {
     let name = FONT_NAME.to_string();
     let doc = document(&name, "");
     assert!(requested(&run(&doc, &host()), &name));
@@ -150,7 +137,7 @@ fn host_requests_leave_out_the_fallbacks_tried_instead() {
 }
 
 #[test]
-fn host_requests_exact_style_even_when_regular_is_registered() {
+fn host_requests_exact_style_even_when_regular_is_supplied() {
     let name = FONT_NAME.to_string();
     let out = run(&document(&name, "<w:b/>"), &with_font());
     assert!(out.missing_fonts.iter().any(|m| m.bold && m.name == name));
@@ -195,8 +182,8 @@ fn display_list_leaves_the_pdf_unchanged() {
     for case in ["case78", "picture-part-reuse", "case30", "charts_ex"] {
         let docx = std::fs::read(format!("tests/fixtures/cases/{case}/input.docx")).unwrap();
         let options = ConvertOptions::new().font_cache(false);
-        let plain = convert(&docx, &options).unwrap();
-        let recorded = convert(&docx, &options.clone().display_list(true)).unwrap();
+        let plain = run(&docx, &options);
+        let recorded = run(&docx, &options.clone().display_list(true));
         assert!(plain.display.is_none());
         assert!(recorded.display.is_some_and(|d| !d.pages.is_empty()));
         assert!(

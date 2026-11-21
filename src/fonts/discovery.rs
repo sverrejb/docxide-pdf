@@ -107,10 +107,10 @@ pub(super) fn read_faces(data: &[u8], face_index: u32) -> Vec<CachedFace> {
 }
 
 fn font_directories(extra: &[PathBuf], system: bool) -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
     if !system {
         return extra.iter().rev().cloned().collect();
     }
+    let mut dirs = Vec::new();
 
     // The scan is a LIFO stack and the first-scanned face wins, so later entries
     // here outrank earlier ones. Platform-specific system font directories first.
@@ -175,8 +175,12 @@ pub(crate) fn test_index() -> &'static FontIndex {
     // The fonts/ mirror that .cargo/config.toml names, as the harness reads it.
     let dirs = std::env::var_os("DOCXIDE_FONTS").unwrap_or_default();
     FontIndex::for_setup(&FontSetup {
-        dirs: std::env::split_paths(&dirs).collect(),
-        cache: std::env::var_os("DOCXIDE_NO_FONT_CACHE").is_none(),
+        dirs: std::env::split_paths(&dirs)
+            .filter(|d| !d.as_os_str().is_empty())
+            .collect(),
+        cache: std::env::var("DOCXIDE_NO_FONT_CACHE").map_or(true, |v| {
+            matches!(v.trim().to_ascii_lowercase().as_str(), "" | "0" | "false")
+        }),
         system: true,
     })
 }
@@ -313,7 +317,9 @@ fn scan_font_dirs(setup: &FontSetup) -> FontIndex {
         index.entry(key).or_insert(value);
     }
 
-    if !no_cache {
+    // The cache holds what one scan visited: a scan without the system
+    // directories would drop them, and the next full scan would re-parse them.
+    if !no_cache && setup.system {
         save_cache(&new_cache);
     }
 
@@ -359,7 +365,7 @@ impl super::FontSource {
 impl FontIndex {
     /// Look up a font file by family name and style using the OS/2 table metadata index.
     /// Falls back to the regular variant if the requested bold/italic is not available.
-    /// Returns `(path, face_index, face_bold, face_italic)`.
+    /// Returns `(source, face_index, face_bold, face_italic)`.
     pub(super) fn find_font_file(
         &self,
         font_name: &str,
@@ -368,8 +374,8 @@ impl FontIndex {
     ) -> Option<(super::FontSource, u32, bool, bool)> {
         let key = font_name.to_lowercase();
         let lookup = |bold, italic| self.exact_face(&(key.clone(), bold, italic));
-        if let Some((path, face_index)) = lookup(bold, italic) {
-            return Some((path, face_index, bold, italic));
+        if let Some((source, face_index)) = lookup(bold, italic) {
+            return Some((source, face_index, bold, italic));
         }
         // A plain regular request that misses falls through to a generic family
         // fallback rather than borrowing this family's bold/italic face, which would
@@ -384,8 +390,8 @@ impl FontIndex {
         // single styled face — e.g. Vivaldi is an italic-flagged script with no upright
         // or bold variant, so "Vivaldi bold" only resolves once we try (regular,italic).
         for (b, i) in [(bold, !italic), (!bold, italic), (!bold, !italic)] {
-            if let Some((path, face_index)) = lookup(b, i) {
-                return Some((path, face_index, b, i));
+            if let Some((source, face_index)) = lookup(b, i) {
+                return Some((source, face_index, b, i));
             }
         }
         None

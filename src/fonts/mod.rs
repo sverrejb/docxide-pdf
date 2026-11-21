@@ -3,7 +3,7 @@ mod discovery;
 mod embed;
 mod encoding;
 pub(crate) mod memory;
-pub(crate) mod requests;
+pub(crate) mod missing;
 mod resolve;
 
 use std::cell::RefCell;
@@ -17,7 +17,7 @@ use crate::model::{FontFamily, FontTable, Run};
 pub(crate) use discovery::{FontIndex, FontSetup};
 pub(crate) use encoding::{encode_as_gids, to_winansi_bytes, winansi_to_char};
 pub(crate) use resolve::{
-    FontContext, FontRefs, hhea_box, is_cjk_family, note_if_missing, register_font, rescue_fonts,
+    FontContext, FontRefs, hhea_box, is_cjk_family, register_font, rescue_fonts,
 };
 
 /// Metrics extracted from a font file during embedding. Does not include font resolution

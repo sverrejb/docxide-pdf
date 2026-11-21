@@ -13,13 +13,11 @@ type FontKey = (String, bool, bool);
 pub(crate) struct MemoryFonts {
     // The rank preserves the directory scanner's regular/Mac Roman/off-weight order.
     index: HashMap<FontKey, (Arc<Vec<u8>>, u32, u8)>,
-    files: usize,
 }
 
 impl std::fmt::Debug for MemoryFonts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MemoryFonts")
-            .field("files", &self.files)
             .field("faces", &self.index.len())
             .finish()
     }
@@ -51,7 +49,6 @@ impl MemoryFonts {
                 }
             }
         }
-        self.files += usize::from(count > 0);
         count
     }
 }

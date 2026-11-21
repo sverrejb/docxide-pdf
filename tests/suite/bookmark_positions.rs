@@ -5,7 +5,7 @@ use std::sync::{Arc, Barrier};
 
 use docxide_pdf::{BookmarkPosition, Conversion, ConvertOptions, convert};
 
-use crate::common::{convert_bytes, pdf_contains};
+use crate::common::{convert_bytes, convert_bytes_with, pdf_contains};
 
 fn document(body: &str, section: &str) -> Vec<u8> {
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
@@ -31,6 +31,9 @@ fn lines(count: usize) -> String {
 fn position(out: Conversion, name: &str) -> BookmarkPosition {
     out.bookmarks.into_iter().find(|p| p.name == name).unwrap()
 }
+
+/// A paragraph without a bookmark.
+const UNMARKED: &str = "<w:p><w:r><w:t>-</w:t></w:r></w:p>";
 
 fn names(out: &Conversion) -> Vec<&str> {
     out.bookmarks.iter().map(|p| p.name.as_str()).collect()
@@ -59,8 +62,7 @@ fn bookmark_positions_cover_body_cells_nested_tables_and_page_splits() {
             assert!(p.top > p.bottom);
         }
     }
-    let unmarked = "<w:p><w:r><w:t>-</w:t></w:r></w:p>";
-    assert!(convert_bytes(&document(unmarked, "")).bookmarks.is_empty());
+    assert!(convert_bytes(&document(UNMARKED, "")).bookmarks.is_empty());
 }
 
 #[test]
@@ -130,14 +132,13 @@ fn bookmark_positions_from_layout_leave_no_links_and_clear_on_failure() {
         paragraph("body", "<w:t>Body</w:t>")
     );
     let options = ConvertOptions::new().font_cache(false).display_list(true);
-    let out = convert(&document(&body, ""), &options).unwrap();
+    let out = convert_bytes_with(&document(&body, ""), &options);
     let layout = out.display.unwrap();
     assert!(layout.pages.iter().all(|page| page.links.is_empty()));
     assert_eq!(out.bookmarks.len(), 2);
 
     convert_bytes(&document(&body, ""));
     assert!(convert(b"not a zip", &options).is_err());
-    let unmarked = "<w:p><w:r><w:t>-</w:t></w:r></w:p>";
-    let out = convert(&document(unmarked, ""), &options).unwrap();
+    let out = convert_bytes_with(&document(UNMARKED, ""), &options);
     assert!(out.bookmarks.is_empty() && out.display.is_some());
 }

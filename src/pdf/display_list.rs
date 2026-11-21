@@ -318,27 +318,26 @@ impl<'a> Builder<'a> {
         if let Some(&index) = self.font_index.get(&entry.pdf_name) {
             return Some(index);
         }
-        let source = if let Some(name) = entry.standard_font {
-            FontSource::Standard(name)
-        } else if let Some(data) = &entry.embedded_data {
-            FontSource::Data {
+        use crate::fonts::FontSource as Program;
+        let face = entry.face_index;
+        let source = match (
+            entry.standard_font,
+            &entry.embedded_data,
+            &entry.font_source,
+        ) {
+            (Some(name), ..) => FontSource::Standard(name),
+            (None, Some(data), _) | (None, None, Some(Program::Data(data))) => FontSource::Data {
                 data: data.clone(),
-                index: entry.face_index,
+                index: face,
+            },
+            (None, None, Some(Program::File(path))) => FontSource::File {
+                path: path.clone(),
+                index: face,
+            },
+            (None, None, None) => {
+                self.unsupported(Unsupported::FontWithoutSource);
+                return None;
             }
-        } else if let Some(source) = &entry.font_source {
-            match source {
-                crate::fonts::FontSource::Data(data) => FontSource::Data {
-                    data: data.clone(),
-                    index: entry.face_index,
-                },
-                crate::fonts::FontSource::File(path) => FontSource::File {
-                    path: path.clone(),
-                    index: entry.face_index,
-                },
-            }
-        } else {
-            self.unsupported(Unsupported::FontWithoutSource);
-            return None;
         };
         let name = entry
             .ps_name
