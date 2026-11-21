@@ -99,7 +99,7 @@ Re-exported online (probes in `tests/output/probes/hdrB/`, gitignored):
 |---|---|---|---|---|
 | Kant `b50d7a1bf1` | 88.1 | 102.8 | 88.1 | Mac-only (a second empty header line); not code, moved to H |
 | CCPR `b1eac08c1e` | 156.5 | 156.5 | 133.0 | real: header tab wrap, below |
-| `c1a1763682` | 122.3 | 122.5 | 115.8 | real, not looked at yet: header table with logos (re-measure on the online PDF) |
+| `c1a1763682` | 122.3 | 122.5 | 115.8 → 122.3 | DONE: cell float offset from the text area; wrapping cell floats grow the row |
 
 **CCPR: a tab that overflows right after a right stop on the margin.** Header
 paragraphs `logo⇥(V1, 25 May 2019)⇥CCPR 19/03⇥⇥` and `⇥⇥⇥⇥` (Kopfzeile:
@@ -121,11 +121,14 @@ phase. Next step: derive that comparison (glyph_grid's rounding?) before
 coding the carry rule: break before the last word of the aligned segment, or
 before the aligned tab itself when the segment is empty.
 
-**Side finding, compat 14 (probe `tabs3/tabwrap14`):** Word keeps a tab that
-overflows after a right or centre segment on the margin *on the line*, past
-the margin (4 tabs = 1 line; `⇥Z` lands at 576, off the text area); we wrap.
-After left/default stops it wraps as we do. Our compat < 15 branch only covers
-explicit stops past the margin.
+**Compat 14 (probe `tabs3/tabwrap14`), DONE:** a tab that overflows right
+after a right/centre/decimal stop stays on the line past the margin. Still
+open there: case H, a centred segment on the margin runs past it in compat 14
+(`left⇥CC 19⇥Z` on one line in Word; we wrap "19").
+
+**Cell floats, open:** a top-and-bottom wrapped picture in a cell also moves
+its anchor line below it (probe `cellrow/m1*_tb`: Word's body 13pt lower
+than ours).
 
 ### C. Vertical text not supported (1 row)
 
