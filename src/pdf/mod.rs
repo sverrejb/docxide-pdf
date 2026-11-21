@@ -189,6 +189,8 @@ pub(super) struct RenderContext<'a> {
     pub(super) page_labels: Vec<String>,
     /// Word's `compatibilityMode` (see `docx::settings`).
     pub(super) compat_mode: u32,
+    /// `Document::cjk_space_breaks`.
+    pub(super) cjk_space_breaks: bool,
     /// Word's `enableOpenTypeFeatures` (see `docx::settings`).
     pub(super) open_type_features: bool,
     /// `Document::east_asian_lang`.
@@ -281,6 +283,7 @@ impl RenderContext<'_> {
             bidi: para.bidi,
             shaped_kerning: self.open_type_features,
             break_words: para.break_words,
+            ideograph_breaks: !self.cjk_space_breaks,
         }
     }
 }
@@ -842,6 +845,7 @@ fn render_pass(
         valign_offsets,
         page_labels: Vec::new(),
         compat_mode: doc.compat_mode,
+        cjk_space_breaks: doc.cjk_space_breaks,
         open_type_features: doc.open_type_features,
         east_asian_lang: doc.east_asian_lang,
         do_not_expand_shift_return: doc.do_not_expand_shift_return,

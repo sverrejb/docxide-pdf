@@ -1427,6 +1427,7 @@ fn parse_zip<R: Read + std::io::Seek>(
         default_lang: styles.defaults.lang.clone().or(settings.default_lang),
         compress_punctuation: settings.compress_punctuation,
         compat_mode: settings.compat_mode,
+        cjk_space_breaks: settings.cjk_space_breaks,
         open_type_features: settings.open_type_features,
         east_asian_lang: styles
             .defaults

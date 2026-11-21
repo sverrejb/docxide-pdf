@@ -793,6 +793,10 @@ pub(super) struct RightRegion {
 #[derive(Default)]
 pub(super) struct TextLine {
     pub(super) chunks: Vec<WordChunk>,
+    /// Justified at its spaces only, East Asian text too: before Word 2010
+    /// layout (`CjkLayout::ideograph_breaks`; probe: "Results 研究" spreads
+    /// at the space alone).
+    pub(super) space_justify: bool,
     pub(super) total_width: f32,
     pub(super) ends_with_break: bool,
     pub(super) right_region: Option<RightRegion>,
@@ -1685,6 +1689,35 @@ pub(super) struct CjkLayout {
     pub(super) shaped_kerning: bool,
     /// `Paragraph::break_words`.
     pub(super) break_words: bool,
+    /// East Asian characters are break opportunities: from Word 2010 layout
+    /// (compatibilityMode 14) on. Before it only spaces split words, and a
+    /// word wider than the line is cut at the margin (online probes: "2. 研究…"
+    /// puts "2." alone on its line in modes 11, 12 and none, not in 14 or 15
+    /// or without a settings part; font and language make no difference).
+    pub(super) ideograph_breaks: bool,
+}
+
+/// A run's words for the line breaker, see `CjkLayout::ideograph_breaks`.
+fn line_words<'a>(text: &'a str, cjk: &CjkLayout) -> Vec<(usize, &'a str)> {
+    let words = split_preserving_spaces(text);
+    if cjk.ideograph_breaks {
+        return words;
+    }
+    let ea = |c: Option<char>| c.is_some_and(crate::docx::is_east_asian_char);
+    let offset = |w: &str| w.as_ptr() as usize - text.as_ptr() as usize;
+    let mut out: Vec<(usize, &'a str)> = Vec::with_capacity(words.len());
+    for (spaces, w) in words {
+        if spaces == 0
+            && let Some((_, last)) = out.last_mut()
+            && offset(last) + last.len() == offset(w)
+            && (ea(last.chars().next_back()) || ea(w.chars().next()))
+        {
+            *last = &text[offset(last)..offset(w) + w.len()];
+            continue;
+        }
+        out.push((spaces, w));
+    }
+    out
 }
 
 /// How far Word 2013+ narrows the spaces of a justified line to keep its
@@ -2404,7 +2437,7 @@ pub(super) fn build_paragraph_lines(
 
         let mut is_first_word_in_run = true;
         let mut prev_char = None;
-        let mut words: std::collections::VecDeque<_> = split_preserving_spaces(text).into();
+        let mut words: std::collections::VecDeque<_> = line_words(text, &cjk).into();
         while let Some((space_count, mut source)) = words.pop_front() {
             pending_space_count += space_count;
             let literal_spaces = pending_space_count;
@@ -3125,6 +3158,7 @@ fn finish_lines(lines: &mut [TextLine], cjk: &CjkLayout) {
     for line in lines.iter_mut() {
         line.rtl_paragraph = cjk.bidi;
         line.shaped_kerning = cjk.shaped_kerning;
+        line.space_justify = !cjk.ideograph_breaks;
         if !cjk.expand_shift_return && line.ends_with_break {
             line.natural_width = true;
         }
@@ -3752,7 +3786,7 @@ pub(super) fn build_tabbed_line(
                 y_off: vert_y_offset(run),
             };
             let width = run_width(run, seen_fonts, &mut key_buf);
-            let mut words: std::collections::VecDeque<_> = split_preserving_spaces(text).into();
+            let mut words: std::collections::VecDeque<_> = line_words(text, &cjk).into();
             let mut prev_char = None;
             let mut first_in_run = true;
             while let Some((space_count, mut source)) = words.pop_front() {
@@ -4024,6 +4058,7 @@ mod tests {
             bidi: false,
             shaped_kerning: false,
             break_words: false,
+            ideograph_breaks: true,
         }
     }
     use crate::model::{LineSpacing, VertAlign};
@@ -4073,6 +4108,7 @@ mod tests {
                     bidi: false,
                     shaped_kerning: false,
                     break_words: false,
+                    ideograph_breaks: true,
                 },
             )
             .len()
@@ -4167,6 +4203,17 @@ mod tests {
         assert!((fresh[2].x_offset - 60.0).abs() < 1e-4);
         let mut plain = vec![chunk("任負", 0.0)];
         assert_eq!(compress_punctuation(&mut plain, 1.0, None), None);
+    }
+
+    #[test]
+    fn ideographs_break_words_only_from_compat_14() {
+        let legacy = CjkLayout {
+            ideograph_breaks: false,
+            ..plain_layout(false)
+        };
+        assert_eq!(line_words("2. 研究人员", &legacy), [(0, "2."), (1, "研究人员")]);
+        assert_eq!(line_words("2.研究", &legacy), [(0, "2.研究")]);
+        assert!(line_words("2. 研究人员", &plain_layout(false)).len() > 2);
     }
 
     #[test]

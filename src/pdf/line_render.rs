@@ -1074,9 +1074,10 @@ pub(super) fn render_paragraph_lines(
                 .sum()
         };
         let left_char_count = spread_chars(&line.chunks[jf..left_chunk_count]);
-        let has_cjk_content = line.chunks[..left_chunk_count]
-            .iter()
-            .any(|c| c.text.chars().any(crate::docx::is_east_asian_char));
+        let has_cjk_content = !line.space_justify
+            && line.chunks[..left_chunk_count]
+                .iter()
+                .any(|c| c.text.chars().any(crate::docx::is_east_asian_char));
 
         // Soft line breaks (w:br) should still be justified — only the
         // paragraph's true last line suppresses justification. `distribute`
