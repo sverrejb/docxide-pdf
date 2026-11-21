@@ -271,7 +271,17 @@ pub fn convert_with(input: &Path, output: &Path, markup: bool) -> Result<(), Str
     } else {
         RevisionView::Final
     };
-    let options = ConvertOptions::from_env().revisions(view);
+    // .cargo/config.toml points DOCXIDE_FONTS at the fonts/ mirror, and a
+    // worktree suite turns off the shared font-index cache with
+    // DOCXIDE_NO_FONT_CACHE=1, so the harness reads both as the CLI does.
+    let fonts = std::env::var_os("DOCXIDE_FONTS").unwrap_or_default();
+    let cache = std::env::var("DOCXIDE_NO_FONT_CACHE").map_or(true, |v| {
+        matches!(v.trim().to_ascii_lowercase().as_str(), "" | "0" | "false")
+    });
+    let options = ConvertOptions::new()
+        .revisions(view)
+        .font_dirs(std::env::split_paths(&fonts).filter(|d| !d.as_os_str().is_empty()))
+        .font_cache(cache);
     let docx = fs::read(input).map_err(|e| format!("{e}: {}", input.display()))?;
     match std::panic::catch_unwind(|| docxide_pdf::convert(&docx, &options)) {
         Ok(r) => {

@@ -35,7 +35,7 @@ roxmltree = "0.21"
 pdf-writer = "0.14"
 ttf-parser = "0.25"
 log = "0.4"
-clap = { version = "4", features = ["derive"], optional = true }
+clap = { version = "4", features = ["derive", "env"], optional = true }
 env_logger = { version = "0.11", optional = true }
 memmap2 = "0.9.10"
 subsetter = "0.2"

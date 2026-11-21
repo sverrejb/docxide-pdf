@@ -29,30 +29,18 @@ pub enum RevisionView {
     Markup,
 }
 
-/// Per-conversion settings. The defaults reproduce Word's online export; each
-/// option moves one behaviour towards desktop Word or adapts the conversion to
-/// its host. Explicit options never read the environment;
-/// [`ConvertOptions::from_env`] reads the same settings from `DOCXIDE_*`
-/// variables and is what the functions without an options argument use.
+/// Per-conversion settings, set with the builder methods. The defaults
+/// reproduce Word's online export; each option moves one behaviour towards
+/// desktop Word or adapts the conversion to its host. The library reads no
+/// environment variables (the CLI maps `DOCXIDE_*` onto these options).
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ConvertOptions {
-    /// Which view of the tracked changes to print. Environment:
-    /// `DOCXIDE_REVISIONS=markup`.
-    pub revisions: RevisionView,
-    /// Resample pictures shown above 192 ppi down to 192 ppi, as Word's online
-    /// export does. `false` keeps the source pixels, like a desktop export
-    /// with picture compression off. Environment: `DOCXIDE_NO_RESAMPLE=1`.
-    pub resample_pictures: bool,
-    /// Font directories searched before the system ones; the first listed
-    /// wins. Environment: `DOCXIDE_FONTS`, colon-separated (`;` on Windows).
-    pub font_dirs: Vec<PathBuf>,
-    /// Read and write the font index disk cache. Environment:
-    /// `DOCXIDE_NO_FONT_CACHE=1` switches it off.
-    pub font_cache: bool,
-    /// Draw the float wrap zones on the page. Environment:
-    /// `DOCXIDE_DEBUG_WRAP=1`.
-    pub debug_wrap: bool,
+    revisions: RevisionView,
+    resample_pictures: bool,
+    font_dirs: Vec<PathBuf>,
+    font_cache: bool,
+    debug_wrap: bool,
     display_list: bool,
 }
 
@@ -75,63 +63,36 @@ impl ConvertOptions {
         Self::default()
     }
 
-    /// The defaults overridden by whichever `DOCXIDE_*` variables are set. A
-    /// boolean variable is on unless its value is empty, `0` or `false`.
-    pub fn from_env() -> Self {
-        Self::from_vars(|name| std::env::var(name).ok())
-    }
-
-    fn from_vars(var: impl Fn(&str) -> Option<String>) -> Self {
-        let flag = |name: &str| {
-            var(name).is_some_and(|v| {
-                !matches!(v.trim().to_ascii_lowercase().as_str(), "" | "0" | "false")
-            })
-        };
-        let mut options = Self::new();
-        if var("DOCXIDE_REVISIONS").is_some_and(|v| v.trim().eq_ignore_ascii_case("markup")) {
-            options.revisions = RevisionView::Markup;
-        }
-        if flag("DOCXIDE_NO_RESAMPLE") {
-            options.resample_pictures = false;
-        }
-        if let Some(dirs) = var("DOCXIDE_FONTS") {
-            let sep = if cfg!(windows) { ';' } else { ':' };
-            options.font_dirs = dirs
-                .split(sep)
-                .map(str::trim)
-                .filter(|dir| !dir.is_empty())
-                .map(PathBuf::from)
-                .collect();
-        }
-        if flag("DOCXIDE_NO_FONT_CACHE") {
-            options.font_cache = false;
-        }
-        if flag("DOCXIDE_DEBUG_WRAP") {
-            options.debug_wrap = true;
-        }
-        options
-    }
-
+    /// Which view of the tracked changes to print.
     pub fn revisions(mut self, view: RevisionView) -> Self {
         self.revisions = view;
         self
     }
 
+    /// Resample pictures shown above 192 ppi down to 192 ppi, as Word's online
+    /// export does (the default). `false` keeps the source pixels, like a
+    /// desktop export with picture compression off.
     pub fn resample_pictures(mut self, on: bool) -> Self {
         self.resample_pictures = on;
         self
     }
 
+    /// Font directories searched before the system ones; the first listed
+    /// wins.
     pub fn font_dirs(mut self, dirs: impl IntoIterator<Item = impl Into<PathBuf>>) -> Self {
         self.font_dirs = dirs.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Read and write the font index disk cache (on by default).
     pub fn font_cache(mut self, on: bool) -> Self {
         self.font_cache = on;
         self
     }
 
+    /// Draw the float wrap zones on the page: a layout debugging aid for the
+    /// CLI, not part of the stable API.
+    #[doc(hidden)]
     pub fn debug_wrap(mut self, on: bool) -> Self {
         self.debug_wrap = on;
         self
@@ -198,50 +159,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn env_vars_override_the_online_defaults() {
-        let with = |vars: &[(&str, &str)]| {
-            ConvertOptions::from_vars(|name| {
-                vars.iter()
-                    .find(|(n, _)| *n == name)
-                    .map(|(_, v)| v.to_string())
-            })
-        };
-        let plain = with(&[]);
+    fn builders_override_the_online_defaults() {
+        let plain = ConvertOptions::new();
         assert_eq!(plain.revisions, RevisionView::Final);
         assert!(plain.resample_pictures && plain.font_cache && !plain.debug_wrap);
-        assert!(plain.font_dirs.is_empty());
-        for off in ["0", "false", "", " False "] {
-            assert!(with(&[("DOCXIDE_NO_RESAMPLE", off)]).resample_pictures);
-        }
-        for not_markup in ["", "final", "1"] {
-            assert_eq!(
-                with(&[("DOCXIDE_REVISIONS", not_markup)]).revisions,
-                RevisionView::Final
-            );
-        }
-        let fonts = if cfg!(windows) {
-            " a ; ;b;c "
-        } else {
-            " a : :b:c "
-        };
-        let set = with(&[
-            ("DOCXIDE_REVISIONS", " Markup "),
-            ("DOCXIDE_NO_RESAMPLE", "1"),
-            ("DOCXIDE_NO_FONT_CACHE", "yes"),
-            ("DOCXIDE_DEBUG_WRAP", "true"),
-            ("DOCXIDE_FONTS", fonts),
-        ]);
-        assert_eq!(set.revisions, RevisionView::Markup);
-        assert!(!set.resample_pictures && !set.font_cache && set.debug_wrap);
-        assert_eq!(set.font_dirs, [PathBuf::from("a"), "b".into(), "c".into()]);
+        assert!(plain.font_dirs.is_empty() && !plain.display_list);
         let built = ConvertOptions::new()
             .revisions(RevisionView::Markup)
             .resample_pictures(false)
             .font_dirs(["x"])
             .font_cache(false)
-            .debug_wrap(true);
+            .debug_wrap(true)
+            .display_list(true);
         assert_eq!(built.revisions, RevisionView::Markup);
         assert!(!built.resample_pictures && !built.font_cache && built.debug_wrap);
+        assert!(built.display_list);
         assert_eq!(built.font_setup().dirs, [PathBuf::from("x")]);
     }
 }

@@ -1,4 +1,5 @@
 use clap::Parser;
+use clap::builder::FalseyValueParser;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -10,24 +11,23 @@ struct Args {
     output: Option<PathBuf>,
     /// Print tracked changes as Word's All Markup view (insertions
     /// underlined, deletions struck through, change bars in the margin)
-    /// instead of the final text (same as DOCXIDE_REVISIONS=markup)
+    /// instead of the final text (or DOCXIDE_REVISIONS=markup)
     #[arg(long)]
     markup: bool,
     /// Keep every picture's source pixels instead of resampling pictures
-    /// above 192 ppi down to 192 ppi like Word's online export (same as
-    /// DOCXIDE_NO_RESAMPLE=1)
-    #[arg(long)]
+    /// above 192 ppi down to 192 ppi like Word's online export
+    #[arg(long, env = "DOCXIDE_NO_RESAMPLE", value_parser = FalseyValueParser::new())]
     no_resample: bool,
     /// Font directory searched before the system ones; repeatable, the first
-    /// wins (replaces DOCXIDE_FONTS)
+    /// wins (replaces DOCXIDE_FONTS, a path list like PATH)
     #[arg(long, value_name = "DIR")]
     fonts: Vec<PathBuf>,
     /// Scan the font directories afresh instead of reading the font index
-    /// disk cache (same as DOCXIDE_NO_FONT_CACHE=1)
-    #[arg(long)]
+    /// disk cache
+    #[arg(long, env = "DOCXIDE_NO_FONT_CACHE", value_parser = FalseyValueParser::new())]
     no_font_cache: bool,
-    /// Draw the float wrap zones on the page (same as DOCXIDE_DEBUG_WRAP=1)
-    #[arg(long)]
+    /// Draw the float wrap zones on the page
+    #[arg(long, env = "DOCXIDE_DEBUG_WRAP", value_parser = FalseyValueParser::new())]
     debug_wrap: bool,
 }
 
@@ -75,22 +75,30 @@ fn main() {
     .with_extension("pdf");
 
     let t0 = std::time::Instant::now();
-    let mut options = docxide_pdf::ConvertOptions::from_env();
-    if args.markup {
-        options = options.revisions(docxide_pdf::RevisionView::Markup);
+    // Not a flag's on/off value, and a path list clap can't split with
+    // std::env::split_paths, so these two variables are read here.
+    let markup = args.markup
+        || std::env::var("DOCXIDE_REVISIONS")
+            .is_ok_and(|v| v.trim().eq_ignore_ascii_case("markup"));
+    let mut fonts = args.fonts;
+    if fonts.is_empty()
+        && let Some(dirs) = std::env::var_os("DOCXIDE_FONTS")
+    {
+        fonts = std::env::split_paths(&dirs)
+            .filter(|dir| !dir.as_os_str().is_empty())
+            .collect();
     }
-    if args.no_resample {
-        options = options.resample_pictures(false);
-    }
-    if !args.fonts.is_empty() {
-        options = options.font_dirs(args.fonts);
-    }
-    if args.no_font_cache {
-        options = options.font_cache(false);
-    }
-    if args.debug_wrap {
-        options = options.debug_wrap(true);
-    }
+    let view = if markup {
+        docxide_pdf::RevisionView::Markup
+    } else {
+        docxide_pdf::RevisionView::Final
+    };
+    let options = docxide_pdf::ConvertOptions::new()
+        .revisions(view)
+        .resample_pictures(!args.no_resample)
+        .font_dirs(fonts)
+        .font_cache(!args.no_font_cache)
+        .debug_wrap(args.debug_wrap);
     let fail = |e: &dyn std::fmt::Display| -> ! {
         eprintln!("Error: {e}");
         std::process::exit(1);

@@ -170,7 +170,12 @@ mod tests {
 
 #[cfg(test)]
 pub(crate) fn test_index() -> &'static FontIndex {
-    FontIndex::for_setup(&crate::ConvertOptions::from_env().font_setup())
+    // The fonts/ mirror that .cargo/config.toml names, as the harness reads it.
+    let dirs = std::env::var_os("DOCXIDE_FONTS").unwrap_or_default();
+    FontIndex::for_setup(&FontSetup {
+        dirs: std::env::split_paths(&dirs).collect(),
+        cache: std::env::var_os("DOCXIDE_NO_FONT_CACHE").is_none(),
+    })
 }
 
 fn is_font_file(path: &Path) -> bool {
