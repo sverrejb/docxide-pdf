@@ -18,6 +18,10 @@ pub(super) struct DocumentSettings {
     /// `w:compat/w:compatSetting[@w:name="compatibilityMode"]`: 15 = Word 2013+
     /// layout, 14 = Word 2010, lower or 0 (absent) = older.
     pub compat_mode: u32,
+    /// East Asian text breaks only at spaces: a settings part with a mode
+    /// below 14 or none (online probes: modes 11, 12 and absent; a document
+    /// without settings breaks between ideographs, cjk_run_boundary_breaks).
+    pub cjk_space_breaks: bool,
     /// `w:compat/w:compatSetting[@w:name="enableOpenTypeFeatures"]`: kerned
     /// text goes through Word's OpenType shaping (fundamentals probe 4).
     pub open_type_features: bool,
@@ -117,6 +121,10 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
         compat_mode: compat_setting("compatibilityMode")
             .and_then(|v| v.parse().ok())
             .unwrap_or(0),
+        cjk_space_breaks: doc.is_some()
+            && compat_setting("compatibilityMode")
+                .and_then(|v| v.parse::<u32>().ok())
+                .is_none_or(|m| m < 14),
         open_type_features: compat_setting("enableOpenTypeFeatures")
             .is_some_and(super::parse_on_off),
         styles_from_normal_template: wml_bool(root, "linkStyles").unwrap_or(false)

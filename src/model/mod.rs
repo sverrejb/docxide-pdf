@@ -341,6 +341,8 @@ pub struct Document {
     pub compress_punctuation: bool,
     /// Word's `compatibilityMode` (see `docx::settings`).
     pub compat_mode: u32,
+    /// See `docx::settings::DocumentSettings::cjk_space_breaks`.
+    pub cjk_space_breaks: bool,
     /// Word's `enableOpenTypeFeatures` (see `docx::settings`).
     pub open_type_features: bool,
     /// The document's East Asian language is Chinese, Japanese or Korean and
