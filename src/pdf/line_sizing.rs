@@ -420,13 +420,20 @@ fn with_fallback_faces(
     }
     let (asc, desc) = text
         .chars()
-        .filter(|c| entry.missing_chars.contains(c) && !crate::docx::is_east_asian_char(*c))
+        .filter(|c| entry.missing_chars.contains(c))
         .filter_map(|c| {
-            fallbacks
+            let f = fallbacks
                 .iter()
-                .find(|f| f.char_to_gid.as_ref().is_some_and(|m| m.contains_key(&c)))
+                .find(|f| f.char_to_gid.as_ref().is_some_and(|m| m.contains_key(&c)))?;
+            // A rescued East Asian character brings its face's East Asian box
+            // (corpus 150b0fad13: Chinese under Calibri steps by Microsoft
+            // JhengHei's 1.3 × hhea line, online and Mac alike).
+            if crate::docx::is_east_asian_char(c) {
+                Some((f.ascender_ratio?, f.line_h_ratio?))
+            } else {
+                Some((f.plain_ascender_ratio?, f.plain_line_h_ratio?))
+            }
         })
-        .filter_map(|f| Some((f.plain_ascender_ratio?, f.plain_line_h_ratio?)))
         .fold((ar, lhr - ar), |(a, d), (fa, fl)| {
             (a.max(fa), d.max(fl - fa))
         });
@@ -1109,9 +1116,17 @@ mod tests {
         let own = (1.15, 0.938);
         let (lhr, ar) = with_fallback_faces(own, &arial, "A☑B", &[&segoe]);
         assert!((ar - 1.079).abs() < 1e-4 && (lhr - 1.33).abs() < 1e-4);
-        // East Asian rescues and characters the font has leave the line alone.
-        assert_eq!(with_fallback_faces(own, &arial, "A中B", &[&segoe]), own);
+        // Characters the font has leave the line alone.
         assert_eq!(with_fallback_faces(own, &arial, "AB", &[&segoe]), own);
+        // A rescued East Asian character brings the face's East Asian box.
+        let jhenghei = FontEntry {
+            ascender_ratio: Some(1.3),
+            line_h_ratio: Some(1.73),
+            char_to_gid: Some([('中', 2)].into_iter().collect()),
+            ..FontEntry::stub()
+        };
+        let (lhr, ar) = with_fallback_faces(own, &arial, "A中B", &[&jhenghei]);
+        assert!((ar - 1.3).abs() < 1e-4 && (lhr - 1.73).abs() < 1e-4);
     }
 
     #[test]
