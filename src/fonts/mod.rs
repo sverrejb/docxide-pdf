@@ -47,6 +47,8 @@ pub(crate) struct FontMetrics {
     /// OS/2 yStrikeoutPosition (above the baseline) and yStrikeoutSize, per em.
     pub(crate) strikeout: Option<(f32, f32)>,
     pub(crate) east_asian: bool,
+    /// See `FontEntry::glyph_box`.
+    pub(crate) glyph_box: (f32, f32),
     /// See `FontEntry::avg_char_width`.
     pub(crate) avg_char_width: Option<(u16, u16)>,
     pub(crate) char_to_gid: FastMap<char, u16>,
@@ -120,6 +122,10 @@ pub(crate) struct FontEntry {
     pub(crate) strikeout: Option<(f32, f32)>,
     /// See `embed::LineMetrics::east_asian`.
     pub(crate) east_asian: bool,
+    /// Ascender and descender per em (the descender negative) as text
+    /// extraction reads them (FreeType: `hhea`, else OS/2 typographic, else
+    /// OS/2 Windows): the box of a glyph, which a range link covers.
+    pub(crate) glyph_box: Option<(f32, f32)>,
     /// Units per em and OS/2 xAvgCharWidth, what Word scales a `w:w` run's
     /// advances by (`FontEntry::scaled_word_width`).
     pub(crate) avg_char_width: Option<(u16, u16)>,
@@ -193,6 +199,7 @@ impl FontEntry {
             underline: None,
             strikeout: None,
             east_asian: false,
+            glyph_box: None,
             avg_char_width: None,
             fallback_avg_char_width: Default::default(),
             plain_ascender_ratio: None,

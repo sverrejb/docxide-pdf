@@ -324,6 +324,7 @@ pub(super) fn embed_truetype(
             .map(|m| (m.position as f32 / units, m.thickness as f32 / units))
             .filter(|&(_, t)| t > 0.0),
         east_asian: lm.east_asian,
+        glyph_box: glyph_box(&face, units),
         avg_char_width: face
             .raw_face()
             .table(ttf_parser::Tag::from_bytes(b"OS/2"))
@@ -753,6 +754,24 @@ fn external_leading(face: &Face, os2: ttf_parser::os2::Table) -> i16 {
     // ttf-parser hands back usWinDescent negated, like hhea's descender.
     let win_box = os2.windows_ascender() as i32 - os2.windows_descender() as i32;
     (hhea_box - win_box).max(0) as i16
+}
+
+/// Ascender and descender per em as FreeType reads them: `hhea`, or the
+/// OS/2 typographic values when both are 0, or the Windows ones when those
+/// are too.
+fn glyph_box(face: &Face, units: f32) -> (f32, f32) {
+    let hhea = face.tables().hhea;
+    let (mut ascender, mut descender) = (hhea.ascender, hhea.descender);
+    if ascender == 0
+        && descender == 0
+        && let Some(os2) = face.tables().os2
+    {
+        (ascender, descender) = (os2.typographic_ascender(), os2.typographic_descender());
+        if ascender == 0 && descender == 0 {
+            (ascender, descender) = (os2.windows_ascender(), os2.windows_descender());
+        }
+    }
+    (f32::from(ascender) / units, f32::from(descender) / units)
 }
 
 /// Returns (line_h_ratio, ascender_ratio) by the Latin rules.

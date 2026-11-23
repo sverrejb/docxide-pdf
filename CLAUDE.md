@@ -95,7 +95,8 @@ src/
                  wordart.rs, bidi.rs, comments.rs (comment pane), fonts.rs (per-document font set),
                  tagging.rs (PDF/UA structure tree), assembly.rs (pages, borders, document objects),
                  objstm.rs (object streams), color.rs, helpers.rs (border geometry), bookmarks.rs
-                 (where bookmarked paragraphs were laid out, for `Conversion::bookmarks`)
+                 (where bookmarked paragraphs were laid out, for `Conversion::bookmarks`),
+                 range_links.rs (annotations over bookmarked body ranges)
   fonts/       — mod.rs (FontEntry, metrics, font keys), resolve.rs (resolution, substitution, fallback,
                  registration), discovery.rs (cross-platform search), cache.rs (TSV index cache), embed.rs
                  (subsetting, kern/GPOS, line metrics), encoding.rs (WinAnsi), memory.rs (fonts supplied with
@@ -105,7 +106,7 @@ src/
 tests/
   suite/main.rs       — the one integration-test binary; modules visual_comparison, accessibility,
                         text_boundary, font_validation, image_count, page_geometry, file_size,
-                        bookmark_positions,
+                        bookmark_positions, range_links, host,
                         libreoffice_comparison (DOCXIDE_LO_COMPARE=1), speed (#[ignore])
   common/             — shared harness: fixtures, conversion, baselines, per-case score caches,
                         metrics.rs (rasterization, Jaccard/SSIM), a11y.rs, text_boundary.rs
@@ -150,9 +151,10 @@ but a bare binary needs `DOCXIDE_FONTS=$PWD/fonts`), `DOCXIDE_NO_FONT_CACHE`,
 `DOCXIDE_DEBUG_WRAP` (draw wrap zones), `DOCXIDE_REVISIONS=markup` (All
 Markup view; default is the final text), `DOCXIDE_NO_RESAMPLE` (keep picture
 pixels instead of the export's 192 ppi), `DOCXIDE_FAST_COMPRESSION`
-(faster conversion, larger PDF). CLI flags: `--fonts`,
-`--no-font-cache`, `--debug-wrap`, `--markup`, `--no-resample`,
-`--fast-compression`. The test
+(faster conversion, larger PDF), `DOCXIDE_RANGE_LINKS` (one `START END URI
+[HEADING_URI]` per line). CLI flags: `--fonts`, `--no-font-cache`,
+`--debug-wrap`, `--markup`, `--no-resample`, `--fast-compression`,
+`--range-link`. The test
 harness reads `DOCXIDE_FONTS` and `DOCXIDE_NO_FONT_CACHE` only.
 
 ## Working alongside other sessions

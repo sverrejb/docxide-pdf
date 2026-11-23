@@ -780,6 +780,7 @@ pub(crate) fn register_font(
             underline: r.metrics.underline,
             strikeout: r.metrics.strikeout,
             east_asian: r.metrics.east_asian,
+            glyph_box: Some(r.metrics.glyph_box),
             avg_char_width: r.metrics.avg_char_width,
             plain_ascender_ratio: Some(r.metrics.plain_ascender_ratio),
             leading_ratio: Some(r.metrics.leading_ratio),

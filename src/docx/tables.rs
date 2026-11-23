@@ -706,6 +706,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     }
                     // Underlined pictures stay picture runs and hidden ones
                     // are not shown, as in a body paragraph.
+                    let image_ranges = crate::model::shown_image_ranges(&runs);
                     let (para_image, content_height) = if !has_text
                         && runs.iter().any(|r| r.shown_image().is_some())
                         && !runs.iter().any(Run::underlined_picture)
@@ -715,6 +716,11 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         (None, super::images::inline_drawing_height(p))
                     } else {
                         (None, 0.0)
+                    };
+                    let image_ranges = if para_image.is_some() {
+                        image_ranges
+                    } else {
+                        Vec::new()
                     };
                     let ppr = wml(p, "pPr");
                     let (para_style_id, para_style) = ctx.styles.paragraph_style_of(ppr);
@@ -819,6 +825,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         line_spacing,
                         space_before,
                         space_after,
+                        image_ranges,
                         image: para_image,
                         content_height,
                         snap_to_grid: super::paragraph::snap_to_grid(ppr, para_style),
