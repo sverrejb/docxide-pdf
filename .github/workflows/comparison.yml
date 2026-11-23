@@ -83,7 +83,7 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends webp libreoffice-writer \
-            poppler-utils default-jre-headless
+            poppler-utils default-jre-headless openjdk-25-jre-headless   # 25: Stirling Office Convert's minimum
       - uses: actions/cache@v6
         id: mupdf
         with:
@@ -118,6 +118,29 @@ jobs:
           gh release download -R storytold/wordcraft -p 'wordcraft-*-linux-x86_64.tar.gz' -D "$RUNNER_TEMP/wordcraft"
           tar xzf "$RUNNER_TEMP"/wordcraft/*.tar.gz -C "$RUNNER_TEMP/wordcraft" --strip-components=2 --wildcards '*/bin/wordcraft-cli'
           echo "$RUNNER_TEMP/wordcraft" >> "$GITHUB_PATH"
+      - name: Install Stirling Office Convert   # its release CLI jar, latest. Fonts come from engine_compare.py (--fonts)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: Stirling-Tools/Stirling-Office-Convert
+        run: |
+          d="$RUNNER_TEMP/stirling"
+          tag=$(gh release view -R "$REPO" --json tagName -q .tagName)
+          published=$(gh release view "$tag" -R "$REPO" --json publishedAt -q .publishedAt)
+          gh release download "$tag" -R "$REPO" -p stirling-office-convert-cli.jar -D "$d"
+          jvm="$(ls -d /usr/lib/jvm/java-25-openjdk-*/bin/java) -XX:+IgnoreUnrecognizedVMOptions -Djava.awt.headless=true"
+          # Stirling-PDF runs it in a warm JVM; a fresh JVM per document would put startup into its timings. A JDK 25
+          # AOT cache trained on one fixture loads and links its classes ahead of time. Optional: skipped if training fails.
+          $jvm -XX:AOTCacheOutput="$d/aot" -jar "$d/stirling-office-convert-cli.jar" -q --overwrite \
+            "$(ls -S tests/fixtures/cases/*/input.docx | head -1)" -o "$RUNNER_TEMP/aot-training.pdf" || true
+          [ ! -f "$d/aot" ] || jvm="$jvm -XX:AOTCache=$d/aot"
+          # The jar has no --version; engine_compare.py stamps each PDF with the banner and reconverts on a change.
+          printf '#!/bin/sh\n[ "$1" = --version ] && exec echo "stirling-office-convert %s"\nexec %s -jar %s "$@"\n' \
+            "$tag" "$jvm" "$d/stirling-office-convert-cli.jar" > "$d/stirling-office-convert"
+          chmod +x "$d/stirling-office-convert"
+          # Dated by the release, not the download: engine_compare.py reconverts every PDF older than its engine.
+          touch -d "$published" "$d"/*
+          echo "$d" >> "$GITHUB_PATH"
+          "$d/stirling-office-convert" --version
       - name: Link private assets
         run: |
           ln -s "$PWD/assets/fonts" fonts
