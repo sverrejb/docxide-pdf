@@ -165,7 +165,7 @@ jobs:
           tool: office2pdf-cli   # installs `office2pdf`
       - uses: taiki-e/cache-cargo-install-action@v3
         with:
-          tool: jubarte-redlines   # installs `jubarte`; engine_compare.py hands it the fonts via JUBARTE_FONT_DIR
+          tool: jubarte   # since 0.19 the `jubarte` binary lives here, not in jubarte-redlines; engine_compare.py hands it the fonts via JUBARTE_FONT_DIR
       - uses: actions/cache/restore@v6
         id: restore
         with:

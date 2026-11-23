@@ -27,7 +27,7 @@ rdocx: `rdocx` on PATH (cargo install rdocx) or RDOCX_BIN.
 MiniPdf: the Rust crate's CLI, `minipdf` on PATH (cargo install minipdf-cli) or MINIPDF_BIN.
 The .NET engine is a different implementation and is deliberately not what we compare against.
 office2pdf: `office2pdf` on PATH (cargo install office2pdf-cli) or OFFICE2PDF_BIN.
-jubarte-redlines: `jubarte` on PATH (cargo install jubarte-redlines) or JUBARTE_BIN.
+jubarte-redlines: `jubarte` on PATH (cargo install jubarte) or JUBARTE_BIN.
 dxpdf: `dxpdf` on PATH (cargo install dxpdf, or the .deb from its GitHub releases) or DXPDF_BIN.
 WordCraft: `wordcraft-cli` on PATH (from its GitHub release archives; not on crates.io) or WORDCRAFT_BIN.
 Accessibility scores need verapdf and pdfinfo on PATH (brew install verapdf poppler); without them the column is empty.
@@ -925,7 +925,7 @@ def main() -> None:
     if not opts.skip_jubarte:
         tools["jubarte"] = find_jubarte()
         if not tools["jubarte"]:
-            print("jubarte not found; skipping (cargo install jubarte-redlines, or JUBARTE_BIN)")
+            print("jubarte not found; skipping (cargo install jubarte, or JUBARTE_BIN)")
     if not opts.skip_dxpdf:
         tools["dxpdf"] = find_dxpdf()
         if not tools["dxpdf"]:
