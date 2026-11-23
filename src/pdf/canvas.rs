@@ -547,8 +547,17 @@ impl Content {
 
     /// `TJ`, written compactly (`TjArray`).
     pub(crate) fn show_array(&mut self, items: &[TjItem]) -> &mut Self {
-        self.inner.op("TJ").operand(TjArray(items));
-        self.record(|r| r.show(items.to_vec()));
+        self.show_array_with(TjArray(items), || items.to_vec())
+    }
+
+    /// Write a compact `TJ` without allocating its text items unless recording.
+    pub(crate) fn show_array_with(
+        &mut self,
+        array: impl Primitive,
+        items: impl FnOnce() -> Vec<TjItem>,
+    ) -> &mut Self {
+        self.inner.op("TJ").operand(array);
+        self.record(|r| r.show(items()));
         self
     }
 

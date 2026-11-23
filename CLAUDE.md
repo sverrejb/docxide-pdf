@@ -64,6 +64,7 @@ src/
                  is a private field + builder method, plus a CLI flag in main.rs with `env = "DOCXIDE_…"`;
                  defaults = Word's online export. The library never reads the environment.
   main.rs      — CLI (feature `cli`); error.rs — Error enum
+  fast_hash.rs — deterministic maps for hot character/glyph lookups
   model/       — IR: mod.rs (Document, Section, Paragraph, Run, fonts, settings), table.rs, drawing.rs
                  (shape geometry, fills, textboxes), chart.rs, math.rs
   docx/        — parsing: mod.rs (relationships, orchestrator), xml.rs (namespaces, element finders, unit

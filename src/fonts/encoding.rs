@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use crate::fast_hash::FastMap;
 
 /// The Unicode code points of WinAnsi (Windows-1252) bytes 0x80..=0x9F, the
 /// only bytes that differ from Latin-1; 0 for the five undefined bytes.
@@ -35,27 +35,43 @@ pub(super) fn char_to_winansi(c: char) -> u8 {
 /// Convert a UTF-8 string to WinAnsi (Windows-1252) bytes for PDF Str encoding.
 pub(crate) fn to_winansi_bytes(s: &str) -> Vec<u8> {
     let mut out = Vec::with_capacity(s.len());
+    push_winansi_bytes(s, &mut out);
+    out
+}
+
+/// `to_winansi_bytes`, appending to `out`.
+pub(super) fn push_winansi_bytes(s: &str, out: &mut Vec<u8>) {
     for ch in s.chars() {
         let b = char_to_winansi(ch);
         if b != 0 {
             out.push(b);
         }
     }
-    out
 }
 
 /// Encode UTF-8 text as big-endian 2-byte glyph IDs for CIDFont content streams.
-pub(crate) fn encode_as_gids(text: &str, char_to_gid: &HashMap<char, u16>) -> Vec<u8> {
+pub(crate) fn encode_as_gids(text: &str, char_to_gid: &FastMap<char, u16>) -> Vec<u8> {
     encode_as_gids_noting(text, char_to_gid, &std::cell::Cell::new(false))
 }
 
 /// `encode_as_gids`, setting `drew_notdef` when a char has no glyph.
 pub(super) fn encode_as_gids_noting(
     text: &str,
-    char_to_gid: &HashMap<char, u16>,
+    char_to_gid: &FastMap<char, u16>,
     drew_notdef: &std::cell::Cell<bool>,
 ) -> Vec<u8> {
     let mut out = Vec::with_capacity(text.len() * 2);
+    push_gids_noting(text, char_to_gid, drew_notdef, &mut out);
+    out
+}
+
+/// `encode_as_gids_noting`, appending to `out`.
+pub(super) fn push_gids_noting(
+    text: &str,
+    char_to_gid: &FastMap<char, u16>,
+    drew_notdef: &std::cell::Cell<bool>,
+    out: &mut Vec<u8>,
+) {
     for ch in text.chars() {
         let gid = char_to_gid.get(&ch).copied().unwrap_or_else(|| {
             drew_notdef.set(true);
@@ -63,7 +79,6 @@ pub(super) fn encode_as_gids_noting(
         });
         out.extend_from_slice(&gid.to_be_bytes());
     }
-    out
 }
 
 /// Approximate Helvetica widths at 1000 units/em for WinAnsi chars 32..=255.

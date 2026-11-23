@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
+use crate::fast_hash::FastMap;
 use crate::fonts::{FontEntry, font_key_buf};
 use crate::model::{
     Alignment, FormCheckbox, ParagraphBorder, Run, TabAlignment, TabStop, TextFill, TextOutline,
@@ -314,16 +315,80 @@ pub(super) fn breaks_between(a: char, b: char) -> bool {
     unicode_linebreak::linebreaks(pair).any(|(pos, _)| pos == la)
 }
 
+/// (preceding spaces, word start, word end) of each word of a text, as
+/// `split_words` finds them; `u32` keeps a long document's cache small.
+type WordSpans = Box<[(u32, u32, u32)]>;
+
+thread_local! {
+    /// `split_words` by text while a document renders (`SplitCache`): a
+    /// paragraph's runs are split for the page prescan, the first-word fit
+    /// and every layout of its lines, and UAX #14 dominated those.
+    static SPLITS: std::cell::RefCell<Option<FastMap<Box<str>, WordSpans>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Keeps `split_preserving_spaces` results while alive (one document's
+/// render); dropping it frees them.
+pub(super) struct SplitCache(());
+
+impl SplitCache {
+    pub(super) fn begin() -> Self {
+        SPLITS.with(|c| *c.borrow_mut() = Some(Default::default()));
+        SplitCache(())
+    }
+}
+
+impl Drop for SplitCache {
+    fn drop(&mut self) {
+        SPLITS.with(|c| *c.borrow_mut() = None);
+    }
+}
+
 /// Split text into (preceding_space_count, word) segments using UAX #14 line break rules.
 /// Handles CJK character boundaries, hyphens, and punctuation break opportunities
 /// in addition to whitespace. Non-breaking spaces (U+00A0) and ideographic spaces
 /// (U+3000) are kept within words. Trailing spaces after the last word are handled
-/// separately by the caller.
+/// separately by the caller. Remembered per text while a `SplitCache` lives.
 pub(super) fn split_preserving_spaces(text: &str) -> Vec<(usize, &str)> {
     if text.is_empty() {
         return Vec::new();
     }
+    let from_spans = |spans: &[(u32, u32, u32)]| -> Vec<(usize, &str)> {
+        spans
+            .iter()
+            .map(|&(n, s, e)| (n as usize, &text[s as usize..e as usize]))
+            .collect()
+    };
+    let cached = SPLITS.with(|c| {
+        c.borrow()
+            .as_ref()
+            .map(|cache| cache.get(text).map(|spans| from_spans(spans)))
+    });
+    match cached {
+        Some(Some(words)) => words,
+        Some(None) if u32::try_from(text.len()).is_ok() => {
+            let words = split_words(text);
+            let base = text.as_ptr() as usize;
+            let spans: WordSpans = words
+                .iter()
+                .map(|&(n, w)| {
+                    let s = w.as_ptr() as usize - base;
+                    (n as u32, s as u32, (s + w.len()) as u32)
+                })
+                .collect();
+            SPLITS.with(|c| {
+                if let Some(cache) = c.borrow_mut().as_mut() {
+                    cache.insert(text.into(), spans);
+                }
+            });
+            words
+        }
+        _ => split_words(text),
+    }
+}
 
+/// `split_preserving_spaces` without the cache.
+fn split_words(text: &str) -> Vec<(usize, &str)> {
     let mut result = Vec::new();
     let mut pending_spaces: usize = 0;
 
@@ -1512,8 +1577,11 @@ fn is_cjk_punctuation(ch: char) -> bool {
 
 fn finish_line(chunks: &mut Vec<WordChunk>) -> TextLine {
     let total_width = chunks.last().map(|c| c.x_offset + c.width).unwrap_or(0.0);
+    // The next line likely holds as many chunks: a chunk is large, and
+    // growing the vector from empty line after line moved them repeatedly.
+    let room = chunks.len();
     TextLine {
-        chunks: std::mem::take(chunks),
+        chunks: std::mem::replace(chunks, Vec::with_capacity(room)),
         total_width,
         ..TextLine::default()
     }

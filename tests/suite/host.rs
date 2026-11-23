@@ -192,3 +192,48 @@ fn display_list_leaves_the_pdf_unchanged() {
         );
     }
 }
+
+#[test]
+fn display_list_keeps_text_after_reusing_line_buffers() {
+    use docxide_pdf::display::Item;
+
+    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    zip.start_file(
+        "word/document.xml",
+        zip::write::SimpleFileOptions::default(),
+    )
+    .unwrap();
+    write!(zip, r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>"#).unwrap();
+    for text in ["- --", "--- -- -"] {
+        write!(zip, r#"<w:p><w:r><w:rPr><w:rFonts w:ascii="{FONT_NAME}" w:hAnsi="{FONT_NAME}"/></w:rPr><w:t>{text}</w:t></w:r></w:p>"#).unwrap();
+    }
+    write!(zip, "</w:body></w:document>").unwrap();
+    let input = zip.finish().unwrap().into_inner();
+    let plain = run(&input, &with_font());
+    let recorded = run(&input, &with_font().display_list(true));
+    assert_eq!(plain.pdf, recorded.pdf);
+    fn glyphs(items: &[Item]) -> usize {
+        items
+            .iter()
+            .map(|item| match item {
+                Item::Text(run) => run
+                    .glyphs
+                    .iter()
+                    .flat_map(|glyph| glyph.text.chars())
+                    .filter(|ch| !ch.is_whitespace())
+                    .count(),
+                Item::Group(items) => glyphs(items),
+                _ => 0,
+            })
+            .sum()
+    }
+    let display = recorded.display.unwrap();
+    assert_eq!(
+        display
+            .pages
+            .iter()
+            .map(|page| glyphs(&page.items))
+            .sum::<usize>(),
+        9
+    );
+}

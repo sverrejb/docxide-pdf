@@ -710,6 +710,7 @@ fn bookmark_page_label(pages: &BookmarkPages, bookmark: &str) -> Option<String> 
 }
 
 pub fn render(doc: &Document, options: &ConvertOptions) -> Result<Vec<u8>, Error> {
+    let _splits = layout::SplitCache::begin();
     let (pdf, page_fields, valign_offsets, moved_refs) =
         render_pass(doc, None, &[], None, options)?;
     // Word shows body PAGE, NUMPAGES and SECTIONPAGES fields live, not their cached result,
