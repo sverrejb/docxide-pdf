@@ -14,6 +14,7 @@ use super::layout::WordChunk;
 use crate::RangeLink;
 use crate::fonts::FontEntry;
 use std::collections::HashMap;
+use std::hash::BuildHasher;
 
 const MARKER: &str = "\0docxide-range:";
 /// Per range and page: the first line, the lines in between, the last line.
@@ -62,7 +63,7 @@ fn chunk_box(
     x: f32,
     baseline: f32,
     picture_baseline: f32,
-    fonts: &HashMap<&str, &FontEntry>,
+    fonts: &HashMap<&str, &FontEntry, impl BuildHasher>,
 ) -> Rect {
     if chunk.inline_image_name.is_some() {
         let box_bottom = picture_baseline + chunk.y_offset;
@@ -103,7 +104,7 @@ pub(super) fn mark_line(
     x_of: impl Fn(usize, &WordChunk) -> f32,
     baseline: f32,
     picture_baseline: f32,
-    fonts: &HashMap<&str, &FontEntry>,
+    fonts: &HashMap<&str, &FontEntry, impl BuildHasher>,
 ) {
     let mut boxes: Vec<(u32, Rect)> = Vec::new();
     for (index, chunk) in chunks.iter().enumerate() {
