@@ -311,3 +311,10 @@ Pull requests are welcome!
 ## License
 
 Apache-2.0
+
+## Compression for local previews
+
+The default compression is unchanged. For a PDF consumed locally,
+`ConvertOptions::new().compression(docxide_pdf::Compression::Fast)` trades
+a larger file for less compression work. The CLI accepts `--fast-compression`
+or `DOCXIDE_COMPRESSION=fast`; the library never reads the environment.

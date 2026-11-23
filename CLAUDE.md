@@ -64,6 +64,7 @@ src/
                  is a private field + builder method, plus a CLI flag in main.rs with `env = "DOCXIDE_…"`;
                  defaults = Word's online export. The library never reads the environment.
   main.rs      — CLI (feature `cli`); error.rs — Error enum
+  compression.rs — stream compression policy (`ConvertOptions::compression`)
   model/       — IR: mod.rs (Document, Section, Paragraph, Run, fonts, settings), table.rs, drawing.rs
                  (shape geometry, fills, textboxes), chart.rs, math.rs
   docx/        — parsing: mod.rs (relationships, orchestrator), xml.rs (namespaces, element finders, unit
@@ -146,8 +147,10 @@ private sverrejb/docxide-pdf-assets repo, so `cargo run`/`cargo test` see it
 but a bare binary needs `DOCXIDE_FONTS=$PWD/fonts`), `DOCXIDE_NO_FONT_CACHE`,
 `DOCXIDE_DEBUG_WRAP` (draw wrap zones), `DOCXIDE_REVISIONS=markup` (All
 Markup view; default is the final text), `DOCXIDE_NO_RESAMPLE` (keep picture
-pixels instead of the export's 192 ppi). CLI flags: `--fonts`,
-`--no-font-cache`, `--debug-wrap`, `--markup`, `--no-resample`. The test
+pixels instead of the export's 192 ppi), `DOCXIDE_COMPRESSION=fast`
+(larger streams with less compression work). CLI flags: `--fonts`,
+`--no-font-cache`, `--debug-wrap`, `--markup`, `--no-resample`,
+`--fast-compression`. The test
 harness reads `DOCXIDE_FONTS` and `DOCXIDE_NO_FONT_CACHE` only.
 
 ## Working alongside other sessions

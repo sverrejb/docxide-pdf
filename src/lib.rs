@@ -15,6 +15,7 @@
 //! ```
 #![warn(missing_docs)]
 
+mod compression;
 pub mod display;
 mod docx;
 mod error;
@@ -24,6 +25,7 @@ mod math;
 mod model;
 mod pdf;
 
+pub use compression::Compression;
 pub use error::Error;
 pub use fonts::missing::MissingFont;
 pub use pdf::bookmarks::BookmarkPosition;
@@ -59,6 +61,7 @@ pub struct ConvertOptions {
     font_cache: bool,
     debug_wrap: bool,
     display_list: bool,
+    compression: Compression,
     fonts: std::sync::Arc<fonts::memory::MemoryFonts>,
     system_fonts: bool,
 }
@@ -72,6 +75,7 @@ impl Default for ConvertOptions {
             font_cache: true,
             debug_wrap: false,
             display_list: false,
+            compression: Compression::Smallest,
             fonts: Default::default(),
             // A bare wasm instance has no font directories to scan.
             system_fonts: !cfg!(all(target_arch = "wasm32", target_os = "unknown")),
@@ -146,6 +150,13 @@ impl ConvertOptions {
         self
     }
 
+    /// How hard to compress PDF streams. The default keeps the smallest file;
+    /// [`Compression::Fast`] trades size for conversion time.
+    pub fn compression(mut self, compression: Compression) -> Self {
+        self.compression = compression;
+        self
+    }
+
     pub(crate) fn font_setup(&self) -> fonts::FontSetup {
         fonts::FontSetup {
             dirs: self.font_dirs.clone(),
@@ -208,14 +219,17 @@ mod tests {
         assert_eq!(plain.revisions, RevisionView::Final);
         assert!(plain.resample_pictures && plain.font_cache && !plain.debug_wrap);
         assert!(plain.font_dirs.is_empty() && !plain.display_list);
+        assert_eq!(plain.compression, Compression::Smallest);
         let built = ConvertOptions::new()
             .revisions(RevisionView::Markup)
             .resample_pictures(false)
             .font_dirs(["x"])
             .font_cache(false)
             .debug_wrap(true)
-            .display_list(true);
+            .display_list(true)
+            .compression(Compression::Fast);
         assert_eq!(built.revisions, RevisionView::Markup);
+        assert_eq!(built.compression, Compression::Fast);
         assert!(!built.resample_pictures && !built.font_cache && built.debug_wrap);
         assert!(built.display_list);
         assert_eq!(built.font_setup().dirs, [PathBuf::from("x")]);
