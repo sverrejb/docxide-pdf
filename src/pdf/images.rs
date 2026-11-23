@@ -528,7 +528,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 let se = img.soft_edge.as_ref()?;
                 let radius_px = se.radius * w as f32 / display_width;
                 let mask_data = super::color::generate_soft_edge_mask(w, h, radius_px);
-                let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&mask_data, 6);
+                let compressed = crate::compression::zlib(&mask_data, 6);
                 let mask_ref = alloc();
                 write_gray_mask_xobject(pdf, mask_ref, &compressed, w, h, true);
                 Some(mask_ref)
@@ -605,11 +605,11 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                     // The palette goes in its own Flate stream, as in Word's
                     // files: inline it costs more than a small image saves.
                     let lookup_ref = self.next_ref();
-                    let lookup = miniz_oxide::deflate::compress_to_vec_zlib(&p.palette, 6);
+                    let lookup = crate::compression::zlib(&p.palette, 6);
                     self.pdf
                         .stream(lookup_ref, &lookup)
                         .filter(Filter::FlateDecode);
-                    let data = miniz_oxide::deflate::compress_to_vec_zlib(&p.rows, 6);
+                    let data = crate::compression::zlib(&p.rows, 6);
                     canvas::capture_image(
                         xobj_ref,
                         || Image {
@@ -739,7 +739,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 // is 589 bytes in its export and was 3.7 KB here as an RGB JPEG.
                 if bilevel && !has_alpha && !img.recolored() {
                     let packed = pack_bilevel(&rgb_data, w, h);
-                    let data = miniz_oxide::deflate::compress_to_vec_zlib(&packed, 6);
+                    let data = crate::compression::zlib(&packed, 6);
                     canvas::capture_image(
                         xobj_ref,
                         || Image {
@@ -764,8 +764,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 }
 
                 let smask_ref = if has_alpha {
-                    let compressed_alpha =
-                        miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
+                    let compressed_alpha = crate::compression::zlib(&alpha_data, 6);
                     let mask_ref = self.next_ref();
                     // Alpha mask: no interpolate (matches Word's output on case12).
                     write_gray_mask_xobject(self.pdf, mask_ref, &compressed_alpha, w, h, false);
@@ -776,7 +775,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
 
                 // Try both JPEG and Flate, pick whichever is smaller.
                 // JPEG wins for photographic content; Flate wins for synthetic/chart images.
-                let compressed_rgb = miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
+                let compressed_rgb = crate::compression::zlib(&rgb_data, 6);
                 let rgb = image::RgbImage::from_raw(w, h, rgb_data)
                     .expect("RGB data size matches dimensions");
                 let jpeg_buf = encode_jpeg(&rgb);
@@ -835,7 +834,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
         );
 
         // Compress the grayscale mask
-        let compressed_mask = miniz_oxide::deflate::compress_to_vec_zlib(&mask_pixels, 6);
+        let compressed_mask = crate::compression::zlib(&mask_pixels, 6);
 
         // Grayscale mask + 1x1 solid color = the shadow image.
         let mask_ref = self.next_ref();
@@ -882,7 +881,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 grad_data.push((a * 255.0).round().min(255.0) as u8);
             }
         }
-        let compressed_grad = miniz_oxide::deflate::compress_to_vec_zlib(&grad_data, 6);
+        let compressed_grad = crate::compression::zlib(&grad_data, 6);
         let grad_ref = self.next_ref();
         write_gray_mask_xobject(self.pdf, grad_ref, &compressed_grad, 1, grad_h, true);
 
@@ -932,7 +931,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                         Some(grad_ref),
                     );
                 } else {
-                    let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
+                    let compressed = crate::compression::zlib(&rgb_data, 6);
                     write_image_xobject(
                         self.pdf,
                         refl_ref,
@@ -975,7 +974,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 inner.blur_radius,
                 inner.alpha,
             );
-            let compressed_mask = miniz_oxide::deflate::compress_to_vec_zlib(&mask_pixels, 6);
+            let compressed_mask = crate::compression::zlib(&mask_pixels, 6);
             let mask_ref = self.next_ref();
             let color_ref = self.next_ref();
             write_solid_color_with_gray_mask(

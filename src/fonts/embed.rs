@@ -148,7 +148,7 @@ pub(super) fn embed_truetype(
     });
 
     let data_len = i32::try_from(subset_data.len()).ok()?;
-    let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&subset_data, 6);
+    let compressed = crate::compression::zlib(&subset_data, 6);
     let font_file = *ctx
         .font_files
         .borrow_mut()
@@ -190,11 +190,8 @@ pub(super) fn embed_truetype(
         }
         let bytes: Vec<u8> = mapping.into_iter().flat_map(u16::to_be_bytes).collect();
         let reference = alloc();
-        pdf.stream(
-            reference,
-            &miniz_oxide::deflate::compress_to_vec_zlib(&bytes, 9),
-        )
-        .filter(Filter::FlateDecode);
+        pdf.stream(reference, &crate::compression::zlib(&bytes, 9))
+            .filter(Filter::FlateDecode);
         reference
     });
     let cid_font_ref = alloc();

@@ -29,6 +29,9 @@ struct Args {
     /// Draw the float wrap zones on the page
     #[arg(long, env = "DOCXIDE_DEBUG_WRAP", value_parser = FalseyValueParser::new())]
     debug_wrap: bool,
+    /// Write larger PDF streams faster, for a local preview
+    #[arg(long)]
+    fast_compression: bool,
 }
 
 fn available_path(path: PathBuf) -> PathBuf {
@@ -93,12 +96,20 @@ fn main() {
     } else {
         docxide_pdf::RevisionView::Final
     };
+    let compression = if args.fast_compression
+        || std::env::var("DOCXIDE_COMPRESSION").is_ok_and(|v| v.trim().eq_ignore_ascii_case("fast"))
+    {
+        docxide_pdf::Compression::Fast
+    } else {
+        docxide_pdf::Compression::Smallest
+    };
     let options = docxide_pdf::ConvertOptions::new()
         .revisions(view)
         .resample_pictures(!args.no_resample)
         .font_dirs(fonts)
         .font_cache(!args.no_font_cache)
-        .debug_wrap(args.debug_wrap);
+        .debug_wrap(args.debug_wrap)
+        .compression(compression);
     let fail = |e: &dyn std::fmt::Display| -> ! {
         eprintln!("Error: {e}");
         std::process::exit(1);
