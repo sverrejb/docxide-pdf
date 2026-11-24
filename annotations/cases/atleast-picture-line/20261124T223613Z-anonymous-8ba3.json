@@ -1,0 +1,12 @@
+{
+  "case": "cases/atleast-picture-line",
+  "page": 1,
+  "source": "Generated",
+  "x_pt": 345.5,
+  "y_pt": 643.2,
+  "note": "We mess up the Next Box placement here.",
+  "author": "anonymous",
+  "created": "2026-11-24T22:36:13Z",
+  "generated": "0.22.0 @f5ac684aa",
+  "fixed": false
+}
