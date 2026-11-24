@@ -863,6 +863,10 @@ def mtime(path: Path) -> float | None:
 
 
 def write_html(results: list[dict], versions: dict, out: Path) -> None:
+    # data.json is what the docxide site's comparison page (docxide-demo) reads; index.html is the old
+    # standalone page, kept until the site has switched to data.json.
+    data = {"engines": ENGINES, "metrics": METRICS, "versions": versions, "cases": results}
+    out.with_name("data.json").write_text(json.dumps(data, separators=(",", ":")))
     page = (PAGE_TEMPLATE.read_text()
             .replace("__ENGINES__", json.dumps(ENGINES))
             .replace("__NENGINES__", str(len(ENGINES)))

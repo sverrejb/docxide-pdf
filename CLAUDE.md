@@ -29,11 +29,12 @@ Python helpers in `tools/` (each has a docstring):
   — Word | ours | LibreOffice | MiniPdf | rdocx | office2pdf | jubarte | dxpdf |
   WordCraft | Stirling Office Convert side by side → `comparison/index.html`; `deploy_comparison.sh`
   publishes it; CI does both on pushes to main that touch src, fixtures or the site generator
-  (`.github/workflows/comparison.yml`). The docxide site (docxide-demo repo, fly)
-  serves that page with a navbar and click-to-annotate on docxide-pdf pages; each
-  note becomes a PR adding `annotations/<group>/<case>/*.json` (see its README).
-  Its hooks in the template (SITE_IMG_BASE, data-case/eng/p, `compare:render`, the
-  `top` grid row, `light-dark()` colour tokens) are listed in docxide-demo's CLAUDE.md.
+  (`.github/workflows/comparison.yml`). It also writes `comparison/data.json` (engines, metrics,
+  versions, cases with image paths): the docxide site (docxide-demo repo, fly) owns the comparison
+  page and reads that file and the images from Pages, so changing its shape means changing the site
+  too. The site adds click-to-annotate on docxide-pdf pages; each note becomes a PR adding
+  `annotations/<group>/<case>/*.json` (see its README). index.html is the old standalone page,
+  kept until the site reads data.json.
 - `word_export.py <docx|dir>... [--preset online|print]` — unattended Word for
   Mac export (default online = tagged, Windows metrics); `--check` preflight;
   needs the sandbox off.
