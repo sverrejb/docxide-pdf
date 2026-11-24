@@ -22,11 +22,11 @@ This crate **might** work for your production case, do give it a try! The API, o
 
 ## Comparison with other converters
 
-[![Mean Jaccard and SSIM per engine](https://sverrejb.github.io/docxide-pdf/scores.svg)](https://sverrejb.github.io/docxide-pdf/#scores)
+[![Mean Jaccard and SSIM per engine](https://sverrejb.github.io/docxide-pdf/scores.svg)](https://docxide.fly.dev/#scores)
 
-[Side-by-side comparison](https://sverrejb.github.io/docxide-pdf/)
+[Side-by-side comparison](https://docxide.fly.dev/)
 
-[Score table](https://sverrejb.github.io/docxide-pdf/#scores)
+[Score table](https://docxide.fly.dev/#scores)
 
 Every fixture in the test corpus rendered side by side by Word (the reference) and 
 
