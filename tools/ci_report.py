@@ -135,9 +135,11 @@ def scores_svg(cur: dict) -> str:
                    f'<text x="{x(t)}" y="{h - 8}" text-anchor="middle" class="m" font-size="11">{t}</text>')
     for i, (name, j, s, conv) in enumerate(rows):
         y = top + i * row_h
-        out.append(f'<text x="{label_w - 12}" y="{y + 15}" text-anchor="end">{name}</text>'
-                   f'<text x="{label_w - 12}" y="{y + 30}" text-anchor="end" class="m" font-size="11">'
-                   f'{conv}/{len(cases)} converted</text>')
+        failed = len(cases) - conv
+        out.append(f'<text x="{label_w - 12}" y="{y + 15 if failed else y + 22}" text-anchor="end">{name}</text>')
+        if failed:
+            out.append(f'<text x="{label_w - 12}" y="{y + 30}" text-anchor="end" class="m" font-size="11">'
+                       f'{failed} failed conversion{"s" if failed > 1 else ""}</text>')
         for k, (v, color, metric) in enumerate(((j, "j", "Jaccard"), (s, "s", "SSIM"))):
             by = y + 4 + k * (bar_h + 2)
             out.append(f'<rect x="{label_w}" y="{by}" width="{max(x(v) - label_w, 1):.1f}" height="{bar_h}" rx="3" '
