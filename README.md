@@ -1,4 +1,4 @@
-[![AI:W WRITE](https://img.shields.io/badge/AI-WRITE-grey?style=flat&logoSize=auto&labelColor=13171f)](https://0rwx.com)
+I[![AI:W WRITE](https://img.shields.io/badge/AI-WRITE-grey?style=flat&logoSize=auto&labelColor=13171f)](https://0rwx.com)
 
 # docxide-pdf
 
@@ -75,10 +75,6 @@ While the idea, architecture, testing strategy and validation of output are all 
 - **SmartArt**: no layout engine for documents missing the `dsp:drawing` fallback (not planned)
 - **Features**: regeneration of a TOC Word has already filled in (its cached entries are drawn, with re-measured page numbers; only a one-paragraph placeholder is generated), embedded OLE object data (only the preview picture is drawn), lists inside `altChunk` HTML (dropped)
 - **Fonts**: no bundled fallback fonts. Without the document's fonts (installed, embedded in the DOCX, or passed with `.font()` or `.font_dirs()`), Arial, Liberation Sans, Arimo, Helvetica or DejaVu Sans stand in, then the standard-14 Helvetica
-
-## Examples
-
-Every test case rendered as a Word reference and with docxide-pdf on the [comparison page](https://sverrejb.github.io/docxide-pdf/).
 
 ## Installation
 
