@@ -210,8 +210,7 @@ fn long_document(font: &str, paragraphs: usize) -> Vec<u8> {
 }
 
 /// Every stream of `pdf` inflated (or as stored when it is not zlib), except
-/// the cross-reference stream, whose byte offsets follow the file's size, and
-/// object streams, which a fast conversion does not write.
+/// the cross-reference stream, whose byte offsets follow the file's size.
 fn inflated_streams(pdf: &[u8]) -> Vec<Vec<u8>> {
     let mut streams: Vec<Vec<u8>> = pdf
         .windows(7)
@@ -220,9 +219,7 @@ fn inflated_streams(pdf: &[u8]) -> Vec<Vec<u8>> {
         .filter(|&(start, w)| w == b"stream\n" && !pdf[..start].ends_with(b"end"))
         .filter(|&(start, _)| {
             let dictionary = &pdf[start.saturating_sub(300)..start];
-            !dictionary
-                .windows(5)
-                .any(|w| w == b"/XRef" || w == b"/ObjS")
+            !dictionary.windows(5).any(|w| w == b"/XRef")
         })
         .filter_map(|(start, _)| {
             let data = &pdf[start + 7..];

@@ -18,8 +18,8 @@ pub enum Compression {
     Smallest,
     /// As little work as possible, for a larger file: every stream at zlib
     /// level 1, JPEGs embedded as stored, no picture resampling, no JPEG
-    /// trial encode for other pictures and no object streams. Pictures keep
-    /// their source pixels, so they can differ from Word's export.
+    /// trial encode for other pictures. Pictures keep their source pixels,
+    /// so they can differ from Word's export.
     Fast,
 }
 
