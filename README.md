@@ -213,6 +213,7 @@ Each setting is a `ConvertOptions` builder method in the library, and a CLI flag
 |---|---|---|---|---|
 | Print tracked changes as Word's All Markup view: insertions underlined, deletions struck through in the author's colour, change bars in the margin | Final text, no markup | `.revisions(RevisionView::Markup)` | `--markup` | `DOCXIDE_REVISIONS=markup` |
 | Keep every picture's source pixels instead of resampling pictures above 192 ppi down to 192 ppi | Resample, like Word's online export | `.resample_pictures(false)` | `--no-resample` | `DOCXIDE_NO_RESAMPLE=1` |
+| Convert faster into a larger PDF, for a local preview: light stream compression, JPEGs embedded as stored, no picture resampling | Word-sized output | `.compression(Compression::Fast)` | `--fast-compression` | `DOCXIDE_FAST_COMPRESSION=1` |
 | Extra font directories, searched before the system fonts. The first one listed wins, and system fonts fill in what they lack (see [Fonts](#fonts)) | None | `.font_dirs(["DIR", ...])` | `--fonts DIR` (repeat for more) | `DOCXIDE_FONTS=DIR1:DIR2` (`;` on Windows) |
 | A font file's bytes, used before installed faces of the same family and style; repeat for more | None | `.font(bytes)` | | |
 | Search the system font directories | On (off on bare wasm) | `.system_fonts(false)` | | |
@@ -310,10 +311,3 @@ Pull requests are welcome!
 ## License
 
 Apache-2.0
-
-## Compression for local previews
-
-The default compression is unchanged. For a PDF consumed locally,
-`ConvertOptions::new().compression(docxide_pdf::Compression::Fast)` trades
-a larger file for less compression work. The CLI accepts `--fast-compression`
-or `DOCXIDE_COMPRESSION=fast`; the library never reads the environment.

@@ -540,8 +540,13 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 // re-encodes at the picture's own pixel size (a 1706×1279 photo
                 // shrinks 1371 KB → 374 KB with no pixel loss), so take this path
                 // even when no resize is needed; `target` only decides the size.
-                // A decode failure falls through to embedding the original bytes.
-                {
+                // A decode failure falls through to embedding the original bytes,
+                // and so does fast compression when nothing changes the pixels.
+                // CMYK still decodes: the stored-bytes path writes no Decode
+                // array for Adobe's inverted CMYK JPEGs.
+                let keep_stored =
+                    crate::compression::fast() && !img.recolored() && img.jpeg_components != 4;
+                if !keep_stored {
                     let cursor = std::io::Cursor::new(img.data.as_slice());
                     let reader = image::ImageReader::with_format(
                         std::io::BufReader::new(cursor),
@@ -778,7 +783,10 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 let compressed_rgb = crate::compression::zlib(&rgb_data, 6);
                 let rgb = image::RgbImage::from_raw(w, h, rgb_data)
                     .expect("RGB data size matches dimensions");
-                let jpeg_buf = encode_jpeg(&rgb);
+                // Fast compression skips the trial JPEG encode and keeps Flate.
+                let jpeg_buf = (!crate::compression::fast())
+                    .then(|| encode_jpeg(&rgb))
+                    .flatten();
 
                 let use_jpeg = jpeg_buf
                     .as_ref()

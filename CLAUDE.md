@@ -148,8 +148,8 @@ private sverrejb/docxide-pdf-assets repo, so `cargo run`/`cargo test` see it
 but a bare binary needs `DOCXIDE_FONTS=$PWD/fonts`), `DOCXIDE_NO_FONT_CACHE`,
 `DOCXIDE_DEBUG_WRAP` (draw wrap zones), `DOCXIDE_REVISIONS=markup` (All
 Markup view; default is the final text), `DOCXIDE_NO_RESAMPLE` (keep picture
-pixels instead of the export's 192 ppi), `DOCXIDE_COMPRESSION=fast`
-(larger streams with less compression work). CLI flags: `--fonts`,
+pixels instead of the export's 192 ppi), `DOCXIDE_FAST_COMPRESSION`
+(faster conversion, larger PDF). CLI flags: `--fonts`,
 `--no-font-cache`, `--debug-wrap`, `--markup`, `--no-resample`,
 `--fast-compression`. The test
 harness reads `DOCXIDE_FONTS` and `DOCXIDE_NO_FONT_CACHE` only.

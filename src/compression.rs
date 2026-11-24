@@ -1,7 +1,7 @@
-//! How hard the PDF's streams are deflated: page content, object and xref
-//! streams, fonts and pictures. The default writes Word-sized files; `Fast`
-//! trades size for time, for a PDF that never leaves its host (a preview
-//! rendered and shown on the same machine).
+//! How hard the PDF is compressed: page content, object and xref streams,
+//! fonts and pictures. The default writes Word-sized files; `Fast` trades size
+//! for time, for a PDF that never leaves its host (a preview rendered and shown
+//! on the same machine).
 //!
 //! A conversion sets its compression for its own duration ([`scoped`]) and
 //! every stream asks for it ([`zlib`]), like the font registry: per thread,
@@ -16,8 +16,10 @@ pub enum Compression {
     /// object streams, 6 for fonts and pictures.
     #[default]
     Smallest,
-    /// Every stream at zlib level 1: the same content once decompressed,
-    /// with less compression work and a larger file.
+    /// As little work as possible, for a larger file: every stream at zlib
+    /// level 1, JPEGs embedded as stored, no picture resampling, no JPEG
+    /// trial encode for other pictures and no object streams. Pictures keep
+    /// their source pixels, so they can differ from Word's export.
     Fast,
 }
 
@@ -39,13 +41,15 @@ pub(crate) fn scoped(compression: Compression) -> Scope {
     Scope(CURRENT.with(|current| current.replace(compression)))
 }
 
+/// Whether this thread's conversion asked for [`Compression::Fast`].
+pub(crate) fn fast() -> bool {
+    CURRENT.with(Cell::get) == Compression::Fast
+}
+
 /// `data` zlib-compressed at `smallest_level` (the level this stream uses for
 /// the smallest file), or at level 1 under [`Compression::Fast`].
 pub(crate) fn zlib(data: &[u8], smallest_level: u8) -> Vec<u8> {
-    let level = match CURRENT.with(Cell::get) {
-        Compression::Smallest => smallest_level,
-        Compression::Fast => 1,
-    };
+    let level = if fast() { 1 } else { smallest_level };
     miniz_oxide::deflate::compress_to_vec_zlib(data, level)
 }
 

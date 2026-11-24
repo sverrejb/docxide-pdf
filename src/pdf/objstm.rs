@@ -13,6 +13,10 @@ use std::io::Write as _;
 const OBJECTS_PER_STREAM: usize = 256;
 
 pub(super) fn pack(pdf: Vec<u8>) -> Vec<u8> {
+    // Packing re-reads and rewrites the whole file; a fast conversion skips it.
+    if crate::compression::fast() {
+        return pdf;
+    }
     try_pack(&pdf).unwrap_or(pdf)
 }
 

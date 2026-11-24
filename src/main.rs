@@ -29,8 +29,9 @@ struct Args {
     /// Draw the float wrap zones on the page
     #[arg(long, env = "DOCXIDE_DEBUG_WRAP", value_parser = FalseyValueParser::new())]
     debug_wrap: bool,
-    /// Write larger PDF streams faster, for a local preview
-    #[arg(long)]
+    /// Convert faster into a larger PDF, for a local preview: light stream
+    /// compression, pictures kept as stored
+    #[arg(long, env = "DOCXIDE_FAST_COMPRESSION", value_parser = FalseyValueParser::new())]
     fast_compression: bool,
 }
 
@@ -96,9 +97,7 @@ fn main() {
     } else {
         docxide_pdf::RevisionView::Final
     };
-    let compression = if args.fast_compression
-        || std::env::var("DOCXIDE_COMPRESSION").is_ok_and(|v| v.trim().eq_ignore_ascii_case("fast"))
-    {
+    let compression = if args.fast_compression {
         docxide_pdf::Compression::Fast
     } else {
         docxide_pdf::Compression::Smallest

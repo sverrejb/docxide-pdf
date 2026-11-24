@@ -210,7 +210,8 @@ fn long_document(font: &str, paragraphs: usize) -> Vec<u8> {
 }
 
 /// Every stream of `pdf` inflated (or as stored when it is not zlib), except
-/// the cross-reference stream, whose byte offsets follow the file's size.
+/// the cross-reference stream, whose byte offsets follow the file's size, and
+/// object streams, which a fast conversion does not write.
 fn inflated_streams(pdf: &[u8]) -> Vec<Vec<u8>> {
     let mut streams: Vec<Vec<u8>> = pdf
         .windows(7)
@@ -219,7 +220,9 @@ fn inflated_streams(pdf: &[u8]) -> Vec<Vec<u8>> {
         .filter(|&(start, w)| w == b"stream\n" && !pdf[..start].ends_with(b"end"))
         .filter(|&(start, _)| {
             let dictionary = &pdf[start.saturating_sub(300)..start];
-            !dictionary.windows(5).any(|w| w == b"/XRef")
+            !dictionary
+                .windows(5)
+                .any(|w| w == b"/XRef" || w == b"/ObjS")
         })
         .filter_map(|(start, _)| {
             let data = &pdf[start + 7..];
@@ -248,4 +251,33 @@ fn fast_compression_writes_the_same_pdf_once_inflated() {
     let streams = inflated_streams(&smallest);
     assert!(streams.len() > 3);
     assert_eq!(inflated_streams(&fast), streams);
+}
+
+/// One inline picture: `jpeg` shown at one inch square.
+fn picture_document(jpeg: &[u8]) -> Vec<u8> {
+    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default();
+    zip.start_file("word/document.xml", options).unwrap();
+    write!(zip, r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body><w:p><w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="914400"/><wp:docPr id="1" name="p"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="rId1"/></pic:blipFill><pic:spPr><a:xfrm><a:ext cx="914400" cy="914400"/></a:xfrm></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p></w:body></w:document>"#).unwrap();
+    zip.start_file("word/_rels/document.xml.rels", options)
+        .unwrap();
+    write!(zip, r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/p.jpg"/></Relationships>"#).unwrap();
+    zip.start_file("word/media/p.jpg", options).unwrap();
+    zip.write_all(jpeg).unwrap();
+    zip.finish().unwrap().into_inner()
+}
+
+#[test]
+fn fast_compression_embeds_a_jpeg_as_stored() {
+    let pixels =
+        image::RgbImage::from_fn(64, 64, |x, y| image::Rgb([x as u8 * 4, y as u8 * 4, 90]));
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 95)
+        .encode_image(&pixels)
+        .unwrap();
+    let input = picture_document(&jpeg);
+    let with = |compression| run(&input, &host().compression(compression)).pdf;
+    assert!(pdf_contains(&with(Compression::Fast), &jpeg));
+    // The default re-encodes at Word's quality 75.
+    assert!(!pdf_contains(&with(Compression::Smallest), &jpeg));
 }
