@@ -22,6 +22,8 @@ This crate **might** work for your production case, do give it a try! The API, o
 
 ## Comparison with other converters
 
+[![Mean Jaccard and SSIM per engine](https://sverrejb.github.io/docxide-pdf/scores.svg)](https://sverrejb.github.io/docxide-pdf/#scores)
+
 [Side-by-side comparison](https://sverrejb.github.io/docxide-pdf/)
 
 [Score table](https://sverrejb.github.io/docxide-pdf/#scores)
