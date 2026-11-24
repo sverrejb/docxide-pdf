@@ -100,7 +100,9 @@ def report(prev: dict, cur: dict) -> str:
     return "\n".join(out)
 
 
-NAMES = {"generated": "docxide-pdf", "libreoffice": "LibreOffice", "minipdf": "MiniPdf", "wordcraft": "WordCraft"}
+from engine_compare import ENGINES
+
+NAMES = dict(ENGINES)
 
 
 def scores_svg(cur: dict) -> str:
