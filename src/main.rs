@@ -30,7 +30,7 @@ struct Args {
     #[arg(long, env = "DOCXIDE_DEBUG_WRAP", value_parser = FalseyValueParser::new())]
     debug_wrap: bool,
     /// Convert faster into a larger PDF, for a local preview: light stream
-    /// compression, pictures kept as stored
+    /// compression, pictures resampled only above 384 ppi
     #[arg(long, env = "DOCXIDE_FAST_COMPRESSION", value_parser = FalseyValueParser::new())]
     fast_compression: bool,
 }

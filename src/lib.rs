@@ -190,6 +190,7 @@ pub fn convert(docx: &[u8], options: &ConvertOptions) -> Result<Conversion, Erro
     take_bookmark_positions();
     take_missing_fonts();
     let _fonts = fonts::memory::install(&options.fonts);
+    let _compression = compression::scoped(options.compression);
     let recording = options.display_list.then(pdf::canvas::Recording::start);
     let pdf = docx::parse_bytes(docx, options.revisions).and_then(|doc| pdf::render(&doc, options));
     let bookmarks = take_bookmark_positions();

@@ -574,20 +574,23 @@ pub fn convert_bytes_with(
     out
 }
 
+/// Every stream of `pdf` with the offset of its `stream` keyword: its data
+/// inflated, or as stored when it is not zlib.
+pub fn pdf_streams(pdf: &[u8]) -> impl Iterator<Item = (usize, Vec<u8>)> + '_ {
+    pdf.windows(7)
+        .enumerate()
+        // `stream` opens a stream's data; `endstream` closes it.
+        .filter(|&(start, w)| w == b"stream\n" && !pdf[..start].ends_with(b"end"))
+        .filter_map(|(start, _)| {
+            let data = &pdf[start + 7..];
+            let raw = &data[..data.windows(10).position(|w| w == b"\nendstream")?];
+            let inflated = miniz_oxide::inflate::decompress_to_vec_zlib(raw);
+            Some((start, inflated.unwrap_or_else(|_| raw.to_vec())))
+        })
+}
+
 /// Whether `needle` occurs in the PDF, also inside its Flate-compressed streams.
 pub fn pdf_contains(pdf: &[u8], needle: &[u8]) -> bool {
     let contains = |bytes: &[u8]| bytes.windows(needle.len()).any(|w| w == needle);
-    contains(pdf)
-        || pdf
-            .windows(7)
-            .enumerate()
-            .filter(|(_, w)| *w == b"stream\n")
-            .any(|(start, _)| {
-                let data = &pdf[start + 7..];
-                let Some(end) = data.windows(10).position(|w| w == b"\nendstream") else {
-                    return false;
-                };
-                miniz_oxide::inflate::decompress_to_vec_zlib(&data[..end])
-                    .is_ok_and(|data| contains(&data))
-            })
+    contains(pdf) || pdf_streams(pdf).any(|(_, data)| contains(&data))
 }

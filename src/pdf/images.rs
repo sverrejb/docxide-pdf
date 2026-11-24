@@ -73,17 +73,19 @@ impl ImageKey {
     fn new(
         img: &EmbeddedImage,
         (display_width, display_height): (f32, f32),
-        resample: bool,
+        resample_above: Option<f32>,
     ) -> Self {
         Self {
             data: Arc::clone(&img.data),
-            target: downscale_target(
-                img.pixel_width,
-                img.pixel_height,
-                display_width,
-                display_height,
-            )
-            .filter(|_| resample),
+            target: resample_above.and_then(|threshold| {
+                downscale_target(
+                    img.pixel_width,
+                    img.pixel_height,
+                    display_width,
+                    display_height,
+                    threshold,
+                )
+            }),
             soft_edge: img
                 .soft_edge
                 .as_ref()
@@ -113,13 +115,14 @@ const FAST_DOWNSAMPLE_DPI_THRESHOLD: f32 = 2.0 * DOWNSAMPLE_DPI_TARGET;
 // unconditional.
 const JPEG_QUALITY: u8 = 75;
 
-/// If pixel dimensions far exceed what's needed at the display size, return
-/// target pixel dimensions for downscaling. Returns `None` if no downscaling needed.
+/// If the picture is shown above `threshold` ppi, its pixel size at the target
+/// ppi. Returns `None` if no downscaling needed.
 fn downscale_target(
     pixel_w: u32,
     pixel_h: u32,
     display_w: f32,
     display_h: f32,
+    threshold: f32,
 ) -> Option<(u32, u32)> {
     if display_w <= 0.0 || display_h <= 0.0 {
         return None;
@@ -128,11 +131,6 @@ fn downscale_target(
     let eff_dpi_y = pixel_h as f32 / (display_h / 72.0);
     let eff_dpi = eff_dpi_x.max(eff_dpi_y);
 
-    let threshold = if crate::compression::fast() {
-        FAST_DOWNSAMPLE_DPI_THRESHOLD
-    } else {
-        DOWNSAMPLE_DPI_THRESHOLD
-    };
     if eff_dpi <= threshold {
         return None;
     }
@@ -149,8 +147,8 @@ fn downscale_target(
 
 /// `img` at `w`×`h`: Lanczos as in Word's export, or the much cheaper
 /// thumbnail filter for a fast conversion's preview.
-fn resize(img: &image::DynamicImage, (w, h): (u32, u32)) -> image::DynamicImage {
-    if crate::compression::fast() {
+fn resize(img: &image::DynamicImage, (w, h): (u32, u32), fast: bool) -> image::DynamicImage {
+    if fast {
         img.thumbnail_exact(w, h)
     } else {
         img.resize_exact(w, h, image::imageops::FilterType::Lanczos3)
@@ -460,7 +458,8 @@ struct Embedder<'a, A: FnMut() -> Ref> {
     pdf: &'a mut Pdf,
     alloc: &'a mut A,
     fonts: &'a HashMap<String, FontEntry>,
-    resample: bool,
+    resample_above: Option<f32>,
+    fast: bool,
     xobjects: ImageXObjects,
     effect_count: usize,
 }
@@ -497,7 +496,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
             ),
             None => (img.display_width, img.display_height),
         };
-        let key = ImageKey::new(img, display, self.resample);
+        let key = ImageKey::new(img, display, self.resample_above);
         let target = key.target;
         // ponytail: the reflection re-decodes the uncropped source and the soft-edge mask
         // rings the source's edges; crop those too if a fixture ever combines them.
@@ -564,10 +563,8 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 // or the size.
                 // CMYK still decodes: the stored-bytes path writes no Decode
                 // array for Adobe's inverted CMYK JPEGs.
-                let keep_stored = crate::compression::fast()
-                    && target.is_none()
-                    && !img.recolored()
-                    && img.jpeg_components != 4;
+                let keep_stored =
+                    self.fast && target.is_none() && !img.recolored() && img.jpeg_components != 4;
                 if !keep_stored {
                     let cursor = std::io::Cursor::new(img.data.as_slice());
                     let reader = image::ImageReader::with_format(
@@ -576,7 +573,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                     );
                     if let Ok(decoded) = reader.decode() {
                         let resized = match target {
-                            Some(size) => resize(&decoded, size),
+                            Some(size) => resize(&decoded, size, self.fast),
                             None => decoded,
                         };
                         let mut rgb = resized.into_rgb8();
@@ -714,7 +711,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                         tw,
                         th
                     );
-                    resize(&decoded, (tw, th))
+                    resize(&decoded, (tw, th), self.fast)
                 } else {
                     decoded
                 };
@@ -803,10 +800,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 let compressed_rgb = crate::compression::zlib(&rgb_data, 6);
                 let rgb = image::RgbImage::from_raw(w, h, rgb_data)
                     .expect("RGB data size matches dimensions");
-                // Fast compression skips the trial JPEG encode and keeps Flate.
-                let jpeg_buf = (!crate::compression::fast())
-                    .then(|| encode_jpeg(&rgb))
-                    .flatten();
+                let jpeg_buf = if self.fast { None } else { encode_jpeg(&rgb) };
 
                 let use_jpeg = jpeg_buf
                     .as_ref()
@@ -1087,12 +1081,19 @@ pub(super) fn embed_all_images(
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
     resample: bool,
+    fast: bool,
 ) -> EmbeddedImages {
+    let threshold = if fast {
+        FAST_DOWNSAMPLE_DPI_THRESHOLD
+    } else {
+        DOWNSAMPLE_DPI_THRESHOLD
+    };
     let mut em = Embedder {
         pdf,
         alloc,
         fonts,
-        resample,
+        resample_above: resample.then_some(threshold),
+        fast,
         xobjects: ImageXObjects::default(),
         effect_count: 0,
     };
@@ -1329,6 +1330,7 @@ mod tests {
                 },
                 &std::collections::HashMap::new(),
                 true,
+                false,
             );
             assert_eq!(images.table_cell_image_names.len(), 1);
             assert_eq!(images.image_xobjects.len(), 1);
@@ -1385,6 +1387,7 @@ mod tests {
             },
             &std::collections::HashMap::new(),
             true,
+            false,
         );
         let bytes = pdf.finish();
         let image_xobjects = bytes
