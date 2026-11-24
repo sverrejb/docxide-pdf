@@ -779,9 +779,7 @@ fn render_pass(
         &mut pdf,
         &mut alloc,
         &seen_fonts,
-        // Fast compression keeps every picture's source pixels: resampling
-        // costs a decode and a Lanczos pass per picture.
-        options.resample_pictures && !crate::compression::fast(),
+        options.resample_pictures,
     );
 
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]

@@ -104,6 +104,10 @@ impl ImageKey {
 // `DOCXIDE_NO_RESAMPLE=1`) selects that desktop behaviour (issue #138).
 const DOWNSAMPLE_DPI_THRESHOLD: f32 = 192.0;
 const DOWNSAMPLE_DPI_TARGET: f32 = 192.0;
+// A fast conversion is a screen preview: a page at 200% zoom on a 2x display
+// shows ~288 ppi, so pixels kept up to twice the target are never wasted on
+// screen, and only pictures above that pay for a decode.
+const FAST_DOWNSAMPLE_DPI_THRESHOLD: f32 = 2.0 * DOWNSAMPLE_DPI_TARGET;
 // Word's online export writes every JPEG at libjpeg quality 75 (all 30 across
 // six references); at 85 our files outgrew Word's once re-encoding became
 // unconditional.
@@ -124,7 +128,12 @@ fn downscale_target(
     let eff_dpi_y = pixel_h as f32 / (display_h / 72.0);
     let eff_dpi = eff_dpi_x.max(eff_dpi_y);
 
-    if eff_dpi <= DOWNSAMPLE_DPI_THRESHOLD {
+    let threshold = if crate::compression::fast() {
+        FAST_DOWNSAMPLE_DPI_THRESHOLD
+    } else {
+        DOWNSAMPLE_DPI_THRESHOLD
+    };
+    if eff_dpi <= threshold {
         return None;
     }
 
@@ -136,6 +145,16 @@ fn downscale_target(
     }
 
     Some((target_w, target_h))
+}
+
+/// `img` at `w`×`h`: Lanczos as in Word's export, or the much cheaper
+/// thumbnail filter for a fast conversion's preview.
+fn resize(img: &image::DynamicImage, (w, h): (u32, u32)) -> image::DynamicImage {
+    if crate::compression::fast() {
+        img.thumbnail_exact(w, h)
+    } else {
+        img.resize_exact(w, h, image::imageops::FilterType::Lanczos3)
+    }
 }
 
 /// Office picture brightness/contrast (`a:lum`, fractions of ±1.0) on 8-bit
@@ -541,11 +560,14 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 // shrinks 1371 KB → 374 KB with no pixel loss), so take this path
                 // even when no resize is needed; `target` only decides the size.
                 // A decode failure falls through to embedding the original bytes,
-                // and so does fast compression when nothing changes the pixels.
+                // and so does fast compression when nothing changes the pixels
+                // or the size.
                 // CMYK still decodes: the stored-bytes path writes no Decode
                 // array for Adobe's inverted CMYK JPEGs.
-                let keep_stored =
-                    crate::compression::fast() && !img.recolored() && img.jpeg_components != 4;
+                let keep_stored = crate::compression::fast()
+                    && target.is_none()
+                    && !img.recolored()
+                    && img.jpeg_components != 4;
                 if !keep_stored {
                     let cursor = std::io::Cursor::new(img.data.as_slice());
                     let reader = image::ImageReader::with_format(
@@ -554,9 +576,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                     );
                     if let Ok(decoded) = reader.decode() {
                         let resized = match target {
-                            Some((tw, th)) => {
-                                decoded.resize_exact(tw, th, image::imageops::FilterType::Lanczos3)
-                            }
+                            Some(size) => resize(&decoded, size),
                             None => decoded,
                         };
                         let mut rgb = resized.into_rgb8();
@@ -694,7 +714,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                         tw,
                         th
                     );
-                    decoded.resize_exact(tw, th, image::imageops::FilterType::Lanczos3)
+                    resize(&decoded, (tw, th))
                 } else {
                     decoded
                 };
