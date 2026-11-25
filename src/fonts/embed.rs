@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use pdf_writer::types::{CidFontType, FontFlags, SystemInfo, UnicodeCmap};
 use pdf_writer::{Filter, Name, Pdf, Rect, Ref, Str};
@@ -7,6 +7,7 @@ use ttf_parser::gpos::{PairAdjustment, PositioningSubtable};
 
 use super::encoding::winansi_to_char;
 use super::{CodeGlyph, FontContext, FontMetrics, FontRefs};
+use crate::fast_hash::FastMap;
 
 pub(super) fn embed_truetype(
     pdf: &mut Pdf,
@@ -52,11 +53,12 @@ pub(super) fn embed_truetype(
         .collect();
 
     let mut remapper = subsetter::GlyphRemapper::new();
-    let mut char_to_gid = HashMap::with_capacity(used_chars.len());
-    let mut char_widths_1000 = HashMap::with_capacity(used_chars.len());
-    let mut char_ink_1000 = HashMap::with_capacity(used_chars.len());
+    let mut char_to_gid = FastMap::with_capacity_and_hasher(used_chars.len(), Default::default());
+    let mut char_widths_1000 =
+        FastMap::with_capacity_and_hasher(used_chars.len(), Default::default());
+    let mut char_ink_1000 = FastMap::with_capacity_and_hasher(used_chars.len(), Default::default());
     // The font file's own glyph id of each character, for `FontMetrics::code_glyphs`.
-    let mut char_glyph = HashMap::with_capacity(used_chars.len());
+    let mut char_glyph = FastMap::with_capacity_and_hasher(used_chars.len(), Default::default());
 
     // HashSet order differs per process, and the remapper numbers glyphs in visit order:
     // sorting keeps the subset, and so the PDF bytes, the same from run to run.
@@ -75,7 +77,7 @@ pub(super) fn embed_truetype(
         }
     }
 
-    let mut gid_remap = HashMap::new();
+    let mut gid_remap = FastMap::default();
     let mut extra_widths = Vec::new();
     for (&gid, &ch) in ctx.extra_glyphs.into_iter().flatten() {
         let new_gid = remapper.remap(gid);
@@ -117,7 +119,7 @@ pub(super) fn embed_truetype(
         *id = code(*id);
     }
 
-    let mut kern_pairs = HashMap::new();
+    let mut kern_pairs = FastMap::default();
     let char_gids: Vec<(ttf_parser::GlyphId, u16)> = char_to_gid
         .iter()
         .filter_map(|(&ch, &cid)| {
@@ -243,7 +245,7 @@ pub(super) fn embed_truetype(
     };
     // Several characters can share a glyph (hyphen variants, no-break space)
     // but a CID maps to one character: keep the lowest code point, the plain
-    // form, instead of whichever the HashMap happened to yield last.
+    // form, instead of whichever the FastMap happened to yield last.
     let mut cid_unicode: BTreeMap<u16, char> = BTreeMap::new();
     for (&ch, &new_gid) in &char_to_gid {
         let uni = pua_unicode(symbol_code(ch)).unwrap_or(ch);
@@ -350,14 +352,15 @@ pub(super) fn embed_truetype(
 /// What each code the content streams write stands for: the font file's
 /// glyph, the text the `ToUnicode` CMap gives it and the width `/W` gives it.
 fn code_glyphs(
-    char_to_gid: &HashMap<char, u16>,
-    char_glyph: &HashMap<char, u16>,
-    char_widths_1000: &HashMap<char, f32>,
-    gid_remap: &HashMap<u16, u16>,
+    char_to_gid: &FastMap<char, u16>,
+    char_glyph: &FastMap<char, u16>,
+    char_widths_1000: &FastMap<char, f32>,
+    gid_remap: &FastMap<u16, u16>,
     extra_widths: &[(u16, f32, char)],
     code_text: BTreeMap<u16, Vec<char>>,
-) -> HashMap<u16, CodeGlyph> {
-    let mut glyphs = HashMap::with_capacity(char_to_gid.len() + gid_remap.len());
+) -> FastMap<u16, CodeGlyph> {
+    let mut glyphs =
+        FastMap::with_capacity_and_hasher(char_to_gid.len() + gid_remap.len(), Default::default());
     for (&ch, &code) in char_to_gid {
         let (Some(&gid), Some(width)) = (char_glyph.get(&ch), char_widths_1000.get(&ch)) else {
             continue;
@@ -557,7 +560,7 @@ fn extract_kern_pairs(
     face: &Face,
     char_gids: &[(ttf_parser::GlyphId, u16)],
     to_1000: &impl Fn(f32) -> f32,
-    kern_pairs: &mut HashMap<(u16, u16), f32>,
+    kern_pairs: &mut FastMap<(u16, u16), f32>,
 ) {
     let Some(kern) = face.tables().kern else {
         return;
@@ -584,7 +587,7 @@ fn extract_gpos_pairs(
     face: &Face,
     char_gids: &[(ttf_parser::GlyphId, u16)],
     to_1000: &impl Fn(f32) -> f32,
-    kern_pairs: &mut HashMap<(u16, u16), f32>,
+    kern_pairs: &mut FastMap<(u16, u16), f32>,
 ) {
     let Some(gpos) = face.tables().gpos else {
         return;
@@ -800,8 +803,8 @@ mod tests {
             data,
             0,
             &FontContext {
-                embedded_fonts: &HashMap::new(),
-                font_table: &HashMap::new(),
+                embedded_fonts: &std::collections::HashMap::new(),
+                font_table: &std::collections::HashMap::new(),
                 used_chars: &chars.chars().collect(),
                 word_text: true,
                 extra_glyphs: None,

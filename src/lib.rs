@@ -19,6 +19,7 @@ mod compression;
 pub mod display;
 mod docx;
 mod error;
+mod fast_hash;
 mod fonts;
 mod geometry;
 mod math;

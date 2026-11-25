@@ -20,7 +20,7 @@ struct ResolvedFont {
 pub(crate) struct FontContext<'a> {
     pub(crate) embedded_fonts: &'a EmbeddedFonts,
     pub(crate) font_table: &'a FontTable,
-    pub(crate) used_chars: &'a HashSet<char>,
+    pub(crate) used_chars: &'a FastSet<char>,
     pub(crate) word_text: bool,
     /// Glyphs to embed by original id, with the character each reads as
     /// (math's script-size alternates and stretched variants have none).
@@ -221,7 +221,7 @@ fn known_font_alias(name: &str) -> Option<&'static str> {
     }
 }
 
-fn has_cjk_chars(chars: &HashSet<char>) -> bool {
+fn has_cjk_chars(chars: &FastSet<char>) -> bool {
     chars.iter().any(|&c| crate::docx::is_east_asian_char(c))
 }
 
@@ -250,7 +250,7 @@ fn script_of_chars(chars: impl Iterator<Item = char>) -> CjkScript {
 /// Whether a font family name is a Chinese, Japanese or Korean face (SimSun,
 /// ＭＳ 明朝, Batang…); Times New Roman as a document's East Asian font is not.
 pub(crate) fn is_cjk_family(name: &str) -> bool {
-    classify_cjk_script(name, None, &HashSet::new()) != CjkScript::Unknown
+    classify_cjk_script(name, None, &FastSet::default()) != CjkScript::Unknown
 }
 
 /// Script of a missing CJK font: the fontTable charset first (what Word itself
@@ -258,7 +258,7 @@ pub(crate) fn is_cjk_family(name: &str) -> bool {
 fn classify_cjk_script(
     primary: &str,
     charset: Option<u8>,
-    used_chars: &HashSet<char>,
+    used_chars: &FastSet<char>,
 ) -> CjkScript {
     match charset {
         Some(0x80) => return CjkScript::Japanese,
@@ -474,9 +474,9 @@ fn cjk_fallback_fonts(script: CjkScript, serif: bool) -> &'static [&'static str]
 const HAN_RESCUE_FONTS: [&str; 3] = ["MS Mincho", "Microsoft JhengHei", "Yu Gothic"];
 
 /// The chars the named font has glyphs for; none when it is not installed.
-fn covered_chars(name: &str, chars: &HashSet<char>, font_index: &FontIndex) -> HashSet<char> {
+fn covered_chars(name: &str, chars: &FastSet<char>, font_index: &FontIndex) -> FastSet<char> {
     let Some((source, face_index, ..)) = font_index.find_font_file(name, false, false) else {
-        return HashSet::new();
+        return FastSet::default();
     };
     source
         .probe(face_index, |face| {
@@ -496,13 +496,13 @@ fn covered_chars(name: &str, chars: &HashSet<char>, font_index: &FontIndex) -> H
 /// other East Asian gaps share the best-covering CJK face; every other
 /// character takes the first face in `symbol_candidates` that has it.
 pub(crate) fn rescue_fonts(
-    missing: &HashSet<char>,
+    missing: &FastSet<char>,
     font_index: &FontIndex,
-) -> Vec<(String, HashSet<char>)> {
-    let (mut cjk, other): (HashSet<char>, HashSet<char>) = missing
+) -> Vec<(String, FastSet<char>)> {
+    let (mut cjk, other): (FastSet<char>, FastSet<char>) = missing
         .iter()
         .partition(|&&ch| crate::docx::is_east_asian_char(ch));
-    let mut groups: BTreeMap<String, HashSet<char>> = BTreeMap::new();
+    let mut groups: BTreeMap<String, FastSet<char>> = BTreeMap::new();
     if !cjk.is_empty() && script_of_chars(cjk.iter().copied()) == CjkScript::Unknown {
         // Han alone goes per character: what MS Mincho has, then Microsoft
         // JhengHei, then Yu Gothic (corpus 150b0fad13 and c9d39a9243, Chinese
@@ -519,7 +519,7 @@ pub(crate) fn rescue_fonts(
     if !cjk.is_empty() {
         groups.insert(cjk_rescue_font(&cjk, font_index), cjk);
     }
-    let mut covered: HashMap<&str, HashSet<char>> = HashMap::new();
+    let mut covered: HashMap<&str, FastSet<char>> = HashMap::new();
     for ch in other {
         let font = symbol_candidates(ch)
             .find(|&name| {
@@ -558,7 +558,7 @@ fn symbol_candidates(ch: char) -> impl Iterator<Item = &'static str> {
 /// Font for East Asian characters the resolved fonts lack, shared by all of
 /// them. The best-covering candidate leads and the rest follow in list order,
 /// semicolon-separated so `register_font` tries each in turn.
-fn cjk_rescue_font(missing: &HashSet<char>, font_index: &FontIndex) -> String {
+fn cjk_rescue_font(missing: &FastSet<char>, font_index: &FontIndex) -> String {
     let script = script_of_chars(missing.iter().copied());
     // Hangul/kana gaps take the sans default (맑은 고딕 / MS Gothic); Han-only
     // gaps lead with MS Mincho, see `cjk_fallback_fonts`.
@@ -757,7 +757,7 @@ pub(crate) fn register_font(
     // symbol the document uses (SimSun has □ but not ☑), which used to render
     // as a blank. When no face resolved at all, only CJK is rescued: the
     // standard-14 Helvetica fallback can draw Latin but not Han.
-    let missing_chars: HashSet<char> = ctx
+    let missing_chars: crate::fast_hash::FastSet<char> = ctx
         .used_chars
         .iter()
         .copied()
@@ -879,7 +879,7 @@ mod tests {
         let embedded: EmbeddedFonts = [false, true]
             .map(|bold| (("synthetic hyphen".to_string(), bold, false), face.clone()))
             .into();
-        let chars: HashSet<char> = "-\u{2011}".chars().collect();
+        let chars: FastSet<char> = "-\u{2011}".chars().collect();
         let ctx = FontContext {
             embedded_fonts: &embedded,
             font_table: &FontTable::new(),
@@ -923,7 +923,7 @@ mod tests {
 
     #[test]
     fn cjk_script_from_charset_then_name_then_text() {
-        let none = HashSet::new();
+        let none = FastSet::default();
         assert_eq!(
             classify_cjk_script("Whatever", Some(0x80), &none),
             CjkScript::Japanese
@@ -946,12 +946,12 @@ mod tests {
             CjkScript::Korean
         );
         // Otherwise the text decides; Han alone stays Unknown.
-        let kana: HashSet<char> = "表タイトル".chars().collect();
+        let kana: FastSet<char> = "表タイトル".chars().collect();
         assert_eq!(
             classify_cjk_script("Mystery", None, &kana),
             CjkScript::Japanese
         );
-        let han: HashSet<char> = "発表".chars().collect();
+        let han: FastSet<char> = "発表".chars().collect();
         assert_eq!(
             classify_cjk_script("Mystery", None, &han),
             CjkScript::Unknown
@@ -1026,7 +1026,7 @@ mod tests {
                 next += 1;
                 Ref::new(next)
             };
-            let chars: HashSet<char> = "Ab".chars().collect();
+            let chars: FastSet<char> = "Ab".chars().collect();
             let ctx = FontContext {
                 embedded_fonts: &EmbeddedFonts::new(),
                 font_table: &table,

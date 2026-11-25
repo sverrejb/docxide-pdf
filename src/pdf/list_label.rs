@@ -509,7 +509,7 @@ mod tests {
             ..Default::default()
         };
         let label_font = FontEntry {
-            char_to_gid: Some(HashMap::new()),
+            char_to_gid: Some(crate::fast_hash::FastMap::default()),
             ..FontEntry::stub()
         };
         let rescue = FontEntry {
@@ -531,7 +531,7 @@ mod tests {
     fn symbol_bullet_the_text_font_lacks_takes_the_glyph_fallback() {
         // Symbol's check mark maps to "✓", which Arial lacks.
         let lacks = || FontEntry {
-            char_to_gid: Some(HashMap::new()),
+            char_to_gid: Some(crate::fast_hash::FastMap::default()),
             ..FontEntry::stub()
         };
         let rescue = FontEntry {

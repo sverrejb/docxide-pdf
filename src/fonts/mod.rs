@@ -7,11 +7,12 @@ pub(crate) mod missing;
 mod resolve;
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use pdf_writer::{Name, Pdf, Ref};
 
+use crate::fast_hash::{FastMap, FastSet};
 use crate::model::{FontFamily, FontTable, Run};
 
 pub(crate) use discovery::{FontIndex, FontSetup};
@@ -48,20 +49,20 @@ pub(crate) struct FontMetrics {
     pub(crate) east_asian: bool,
     /// See `FontEntry::avg_char_width`.
     pub(crate) avg_char_width: Option<(u16, u16)>,
-    pub(crate) char_to_gid: HashMap<char, u16>,
-    pub(crate) char_widths_1000: HashMap<char, f32>,
+    pub(crate) char_to_gid: FastMap<char, u16>,
+    pub(crate) char_widths_1000: FastMap<char, f32>,
     /// Each used character's ink above and below the baseline, per 1000 em.
-    pub(crate) char_ink_1000: HashMap<char, (f32, f32)>,
-    pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
+    pub(crate) char_ink_1000: FastMap<char, (f32, f32)>,
+    pub(crate) kern_pairs: FastMap<(u16, u16), f32>,
     /// See `FontEntry::code_glyphs`.
-    pub(crate) code_glyphs: HashMap<u16, CodeGlyph>,
+    pub(crate) code_glyphs: FastMap<u16, CodeGlyph>,
     /// The name the PDF gives the font (`BaseFont`).
     pub(crate) ps_name: String,
     /// Subset ids of `FontContext::extra_glyphs`, by original id.
-    pub(crate) gid_remap: HashMap<u16, u16>,
+    pub(crate) gid_remap: FastMap<u16, u16>,
     /// Characters drawn with a stand-in glyph (U+2011 as the font's hyphen):
     /// a rescue font with the real glyph draws them first, as Word does.
-    pub(crate) stand_ins: HashSet<char>,
+    pub(crate) stand_ins: FastSet<char>,
 }
 
 /// What one code of an embedded font's content-stream text stands for.
@@ -123,12 +124,12 @@ pub(crate) struct FontEntry {
     /// advances by (`FontEntry::scaled_word_width`).
     pub(crate) avg_char_width: Option<(u16, u16)>,
     /// The same for each character a fallback face draws, that face's.
-    pub(crate) fallback_avg_char_width: HashMap<char, Option<(u16, u16)>>,
-    pub(crate) char_to_gid: Option<HashMap<char, u16>>,
-    pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
+    pub(crate) fallback_avg_char_width: FastMap<char, Option<(u16, u16)>>,
+    pub(crate) char_to_gid: Option<FastMap<char, u16>>,
+    pub(crate) char_widths_1000: Option<FastMap<char, f32>>,
     /// See `FontMetrics::char_ink_1000`.
-    pub(crate) char_ink_1000: Option<HashMap<char, (f32, f32)>>,
-    pub(crate) kern_pairs: Option<HashMap<(u16, u16), f32>>,
+    pub(crate) char_ink_1000: Option<FastMap<char, (f32, f32)>>,
+    pub(crate) kern_pairs: Option<FastMap<(u16, u16), f32>>,
     pub(crate) synthetic_bold: bool,
     /// The face found has no italic: Word shears it (`pdf::layout`).
     pub(crate) synthetic_italic: bool,
@@ -136,7 +137,7 @@ pub(crate) struct FontEntry {
     /// (CJK/family/standard-14) was used — altName/alias mappings don't count.
     pub(crate) is_substituted: bool,
     /// CJK chars requested but not present in this font (need fallback rendering).
-    pub(crate) missing_chars: HashSet<char>,
+    pub(crate) missing_chars: FastSet<char>,
     /// Set when text was encoded with a character the font lacks, which draws
     /// the .notdef glyph (PDF/UA 7.21.8); the document then can't claim PDF/UA.
     pub(crate) drew_notdef: std::cell::Cell<bool>,
@@ -145,10 +146,10 @@ pub(crate) struct FontEntry {
     pub(crate) font_source: Option<FontSource>,
     pub(crate) face_index: u32,
     /// Subset ids of glyphs embedded by id (`FontContext::extra_glyphs`).
-    pub(crate) gid_remap: HashMap<u16, u16>,
+    pub(crate) gid_remap: FastMap<u16, u16>,
     /// What each code an embedded font's text is written with stands for
     /// (`embed::code_glyphs`); empty for a standard-14 font.
-    pub(crate) code_glyphs: HashMap<u16, CodeGlyph>,
+    pub(crate) code_glyphs: FastMap<u16, CodeGlyph>,
     /// The name the PDF gives an embedded font.
     pub(crate) ps_name: Option<String>,
     /// The font program when it comes from the document, not a file.
@@ -169,7 +170,7 @@ impl FontEntry {
         FontEntry {
             widths_1000: vec![500.0; 224],
             is_substituted: false,
-            ..Self::unresolved("F1".into(), Ref::new(1), HashSet::new())
+            ..Self::unresolved("F1".into(), Ref::new(1), FastSet::default())
         }
     }
 }
@@ -177,7 +178,7 @@ impl FontEntry {
 impl FontEntry {
     /// The entry for a font no file was found for: standard-14 Helvetica
     /// widths, no measured metrics and no per-character tables.
-    fn unresolved(pdf_name: String, font_ref: Ref, missing_chars: HashSet<char>) -> Self {
+    fn unresolved(pdf_name: String, font_ref: Ref, missing_chars: FastSet<char>) -> Self {
         FontEntry {
             pdf_name,
             font_ref,
@@ -208,8 +209,8 @@ impl FontEntry {
             drew_notdef: Default::default(),
             font_source: None,
             face_index: 0,
-            gid_remap: HashMap::new(),
-            code_glyphs: HashMap::new(),
+            gid_remap: FastMap::default(),
+            code_glyphs: FastMap::default(),
             ps_name: None,
             embedded_data: None,
             standard_font: None,
@@ -255,9 +256,16 @@ impl FontEntry {
     /// Encode text for a PDF show operator: glyph IDs when this font carries a
     /// char→gid map (embedded subset), else WinAnsi bytes (standard font).
     pub(crate) fn encode(&self, text: &str) -> Vec<u8> {
+        let mut out = Vec::with_capacity(text.len() * 2);
+        self.encode_into(text, &mut out);
+        out
+    }
+
+    /// `encode`, appending to `out`.
+    pub(crate) fn encode_into(&self, text: &str, out: &mut Vec<u8>) {
         match &self.char_to_gid {
-            Some(map) => encoding::encode_as_gids_noting(text, map, &self.drew_notdef),
-            None => encoding::to_winansi_bytes(text),
+            Some(map) => encoding::push_gids_noting(text, map, &self.drew_notdef, out),
+            None => encoding::push_winansi_bytes(text, out),
         }
     }
 
@@ -458,7 +466,7 @@ mod tests {
             (1251.0, 980, 95.0, 1188),
         ] {
             let entry = FontEntry {
-                char_widths_1000: Some(HashMap::from([('n', adv * 1000.0 / 2048.0)])),
+                char_widths_1000: Some(FastMap::from_iter([('n', adv * 1000.0 / 2048.0)])),
                 avg_char_width: Some((2048, avg)),
                 ..FontEntry::stub()
             };
@@ -475,12 +483,12 @@ mod tests {
         // Arial text, "⇒" from Cambria Math (1773 units, xAvgCharWidth 1260):
         // Word draws it 1507 units wide at 85%, by Arial's 904 it would be 1506.
         let entry = FontEntry {
-            char_widths_1000: Some(HashMap::from([
+            char_widths_1000: Some(FastMap::from_iter([
                 ('n', 1139.0 * 1000.0 / 2048.0),
                 ('⇒', 1773.0 * 1000.0 / 2048.0),
             ])),
             avg_char_width: Some((2048, 904)),
-            fallback_avg_char_width: HashMap::from([('⇒', Some((2048, 1260)))]),
+            fallback_avg_char_width: FastMap::from_iter([('⇒', Some((2048, 1260)))]),
             ..FontEntry::stub()
         };
         let w = entry.scaled_word_width("n⇒⇒", 11.0, false, 85.0);

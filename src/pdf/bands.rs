@@ -506,6 +506,11 @@ pub(super) fn prescan_page_bands(
     text_width: f32,
     ctx: &RenderContext,
 ) {
+    // Measuring the paragraphs (a layout of each) only decides where the scan
+    // stops; with no float ahead that could add a band, nothing changes.
+    if !may_add_bands(blocks) {
+        return;
+    }
     let bottom = sp.page_height - state.effective_margin_bottom;
     let top = sp.page_height - state.pb.slot_top;
     let mut y = top;
@@ -576,6 +581,30 @@ pub(super) fn prescan_page_bands(
         }
     }
     state.pb.frame_bands = bands;
+}
+
+/// Whether `prescan_page_bands` could meet a band before it stops whatever
+/// the paragraphs measure: a paragraph with floats (`paragraph_bands`) or a
+/// page-anchored table ahead of the first break it always stops at.
+fn may_add_bands(blocks: &[Block]) -> bool {
+    for (i, block) in blocks.iter().enumerate() {
+        match block {
+            Block::Paragraph(p) => {
+                if i > 0 && p.page_break_before {
+                    return false;
+                }
+                if !p.textboxes.is_empty() || !p.floating_images.is_empty() {
+                    return true;
+                }
+                if p.page_break_after || p.page_break_at.is_some() {
+                    return false;
+                }
+            }
+            Block::Table(t) if page_anchored(t).is_some() => return true,
+            Block::Table(_) => return false,
+        }
+    }
+    false
 }
 
 /// The width of a paragraph's first word, None for one without text.

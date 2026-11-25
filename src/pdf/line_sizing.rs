@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use crate::fast_hash::FastMap;
 use crate::fonts::{FontEntry, font_key_buf};
 use crate::model::{LineSpacing, Paragraph, Run, TextAlignment};
 
@@ -204,7 +205,7 @@ struct Placed {
 /// descent, line height, gap above the glyphs, gap below them). An East
 /// Asian face's gaps are half its 1.3× leading each; a Latin face has none
 /// below.
-fn align_metrics(c: &WordChunk, by_pdf_name: &HashMap<&str, &FontEntry>) -> Option<[f32; 5]> {
+fn align_metrics(c: &WordChunk, by_pdf_name: &FastMap<&str, &FontEntry>) -> Option<[f32; 5]> {
     if c.math.is_some() || c.inline_image_name.is_some() {
         return None;
     }
@@ -249,7 +250,7 @@ fn align_metrics(c: &WordChunk, by_pdf_name: &HashMap<&str, &FontEntry>) -> Opti
 /// their box; only the shorter runs move.
 fn align_line(
     line: &mut TextLine,
-    by_pdf_name: &HashMap<&str, &FontEntry>,
+    by_pdf_name: &FastMap<&str, &FontEntry>,
     alignment: TextAlignment,
     line_spacing: LineSpacing,
     (para_pitch, para_ascent): (f32, f32),
@@ -1184,7 +1185,7 @@ mod tests {
             leading_ratio: Some(87.0 / 2048.0),
             ..FontEntry::stub()
         };
-        let by_pdf_name: HashMap<&str, &FontEntry> = [("F1", &tnr)].into_iter().collect();
+        let by_pdf_name: FastMap<&str, &FontEntry> = [("F1", &tnr)].into_iter().collect();
         let line = || {
             let mut text = WordChunk::blank("F1".to_string(), 12.0, 0.0, 10.0);
             text.text = "p1".to_string();

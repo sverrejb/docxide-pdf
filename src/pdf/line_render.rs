@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use super::canvas::{Content, TjItem};
 use pdf_writer::types::TextRenderingMode;
-use pdf_writer::{Name, Rect, Str};
+use pdf_writer::{Buf, Name, Primitive, Rect, Str};
 
+use crate::fast_hash::FastMap;
 use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
 use crate::model::{Alignment, FormCheckbox, ParagraphBorder, TextFill, UnderlineStyle};
 
@@ -405,7 +406,10 @@ fn show_placed(
 /// it; inside it the glyphs move as they would in a TJ of their own.
 #[derive(Default)]
 struct TjRun {
-    items: Vec<TjItem>,
+    items: Vec<RunItem>,
+    /// The text of every `RunItem::Text`, one buffer a page's lines reuse:
+    /// a buffer per string was a hot allocation.
+    bytes: Vec<u8>,
     /// Where the run starts and its baseline.
     origin: (f32, f32),
     /// The pen after `items`, in thousandths of the font size from the
@@ -440,17 +444,28 @@ impl TjRun {
             return;
         }
         match self.items.last_mut() {
-            Some(TjItem::Adjust(open)) => *open += adjust,
-            _ => self.items.push(TjItem::Adjust(adjust)),
+            Some(RunItem::Adjust(open)) => *open += adjust,
+            _ => self.items.push(RunItem::Adjust(adjust)),
         }
         self.pen -= adjust;
     }
 
     /// Shows `text` where the pen is; `advance` is how far it moves the pen.
+    #[cfg(test)]
     fn show(&mut self, text: Vec<u8>, advance: f32) {
-        match self.items.last_mut() {
-            Some(TjItem::Text(open)) => open.extend(text),
-            _ => self.items.push(TjItem::Text(text)),
+        self.show_encoded(advance, |open| open.extend(text));
+    }
+
+    /// `show` with the text encoded straight onto the open string: glyphs
+    /// are shown one at a time, and a buffer for each was a hot allocation.
+    fn show_encoded(&mut self, advance: f32, encode: impl FnOnce(&mut Vec<u8>)) {
+        if !matches!(self.items.last(), Some(RunItem::Text(_))) {
+            let at = self.bytes.len();
+            self.items.push(RunItem::Text(at..at));
+        }
+        encode(&mut self.bytes);
+        if let Some(RunItem::Text(open)) = self.items.last_mut() {
+            open.end = self.bytes.len();
         }
         self.pen += advance;
     }
@@ -461,8 +476,47 @@ impl TjRun {
         if self.items.is_empty() {
             return;
         }
-        content.show_array(&self.items);
+        content.show_array_with(RunArray(self), || {
+            self.items
+                .iter()
+                .map(|item| match item {
+                    RunItem::Text(range) => TjItem::Text(self.bytes[range.clone()].to_vec()),
+                    RunItem::Adjust(adjust) => TjItem::Adjust(*adjust),
+                })
+                .collect()
+        });
         self.items.clear();
+        self.bytes.clear();
+    }
+
+    /// The state of a new run, keeping the buffers' memory.
+    fn reset(&mut self) {
+        self.items.clear();
+        self.bytes.clear();
+        self.origin = (0.0, 0.0);
+        self.pen = 0.0;
+    }
+}
+
+/// A `TjRun` item: text is a range of `TjRun::bytes`.
+enum RunItem {
+    Text(std::ops::Range<usize>),
+    Adjust(f32),
+}
+
+/// `TjArray` of a `TjRun`, written alike.
+struct RunArray<'a>(&'a TjRun);
+
+impl Primitive for RunArray<'_> {
+    fn write(self, buf: &mut Buf) {
+        buf.extend([b'[']);
+        for item in &self.0.items {
+            match item {
+                RunItem::Text(range) => Str(&self.0.bytes[range.clone()]).write(buf),
+                RunItem::Adjust(adjust) => adjust.write(buf),
+            }
+        }
+        buf.extend([b']']);
     }
 }
 
@@ -501,7 +555,7 @@ fn show_placed_faces(
 /// sequence starting there moves by the whole pixels between the two.
 fn device_grid(
     line: &TextLine,
-    entries: &HashMap<&str, &FontEntry>,
+    entries: &FastMap<&str, &FontEntry>,
     chunk_abs_x: &dyn Fn(usize, &WordChunk) -> f32,
     extra_per_gap: f32,
     line_start: (f32, f32),
@@ -527,7 +581,10 @@ fn device_grid(
         members.clear();
     };
     let mut out = vec![None; line.chunks.len()];
-    let mut seq: Vec<GridGlyph> = Vec::new();
+    let mut seq: Vec<GridGlyph> =
+        Vec::with_capacity(line.chunks.iter().map(|c| c.text.len() + 1).sum());
+    // The current chunk's glyph advances (`grid_eligible`).
+    let mut advances: Vec<(f32, f32)> = Vec::new();
     // (chunk, its first glyph in `seq`)
     let mut members: Vec<(usize, usize)> = Vec::new();
     let mut x0 = 0.0;
@@ -537,7 +594,7 @@ fn device_grid(
         let Some(entry) = entries
             .get(chunk.pdf_font.as_str())
             .copied()
-            .filter(|e| grid_eligible(chunk, e))
+            .filter(|e| grid_eligible(chunk, e, &mut advances))
         else {
             flush(line, x0, &mut seq, &mut members, &mut out);
             prev = None;
@@ -598,9 +655,10 @@ fn device_grid(
         members.push((i, seq.len()));
         let shaped = line.shaped_kerning && chunk.kern && entry.kern_pairs.is_some();
         seq.extend(
-            glyph_advances(chunk, entry)
+            advances
+                .iter()
                 .enumerate()
-                .map(|(j, (advance, kern))| GridGlyph {
+                .map(|(j, &(advance, kern))| GridGlyph {
                     advance,
                     apart: chunk.char_spacing + if shaped { 0.0 } else { kern },
                     shaped,
@@ -621,7 +679,7 @@ fn device_grid(
 /// at 308 px and holds one 22 px underscore).
 fn leader_grid(
     line: &TextLine,
-    entries: &HashMap<&str, &FontEntry>,
+    entries: &FastMap<&str, &FontEntry>,
     chunk_abs_x: &dyn Fn(usize, &WordChunk) -> f32,
     line_start: (f32, f32),
 ) -> Vec<Option<Vec<f32>>> {
@@ -646,9 +704,12 @@ fn leader_grid(
         .collect()
 }
 
-/// Plain text whose drawn width is its glyphs' exact advances.
-fn grid_eligible(chunk: &WordChunk, entry: &FontEntry) -> bool {
-    let exact: f32 = glyph_advances(chunk, entry).map(|(a, _)| a).sum();
+/// Plain text whose drawn width is its glyphs' exact advances, which it
+/// leaves in `advances` (`glyph_advances`).
+fn grid_eligible(chunk: &WordChunk, entry: &FontEntry, advances: &mut Vec<(f32, f32)>) -> bool {
+    advances.clear();
+    advances.extend(glyph_advances(chunk, entry));
+    let exact: f32 = advances.iter().map(|&(a, _)| a).sum();
     !chunk.text.is_empty()
         && chunk.leader.is_none()
         && chunk.math.is_none()
@@ -758,7 +819,7 @@ pub(super) fn show_visual(content: &mut Content, entry: &FontEntry, text: &str) 
 pub(super) fn encode_text_for_pdf(
     text: &str,
     pdf_font: &str,
-    pdf_name_to_entry: &HashMap<&str, &FontEntry>,
+    pdf_name_to_entry: &FastMap<&str, &FontEntry>,
 ) -> Vec<u8> {
     match pdf_name_to_entry.get(pdf_font) {
         Some(e) => e.encode(text),
@@ -792,7 +853,7 @@ impl LineNumberArg<'_> {
         x_shift: f32,
         y: f32,
         line_font: impl FnOnce() -> Option<(String, f32)>,
-        pdf_name_to_entry: &HashMap<&str, &FontEntry>,
+        pdf_name_to_entry: &FastMap<&str, &FontEntry>,
         link_tags: Option<&mut LinkTagger<'_>>,
     ) {
         let idx = *self.counter;
@@ -962,6 +1023,8 @@ pub(super) fn render_paragraph_lines(
     // The first-line indent goes to the first line with content, past any
     // `float_skip` lines.
     let first_content_idx = lines.iter().take_while(|l| l.float_skip).count();
+    // The TJ buffers, reused line after line.
+    let mut run_buffers = TjRun::default();
     for (line_num, line) in lines.iter().enumerate() {
         let raw_y = first_baseline_y - line_y_offsets[line_num];
         let y = line_grid.map_or(raw_y, |g| {
@@ -1389,7 +1452,8 @@ pub(super) fn render_paragraph_lines(
             let mut td_x = 0.0_f32;
             let mut td_y = 0.0_f32;
             let mut cur_shear = 0.0_f32;
-            let mut run = TjRun::default();
+            let mut run = std::mem::take(&mut run_buffers);
+            run.reset();
 
             // Logical order, so the content stream (and the tags) read the
             // text as written even where bidi stored the chunks visually.
@@ -1663,28 +1727,31 @@ pub(super) fn render_paragraph_lines(
                 let tc = effective_cs * 1000.0 / chunk.font_size;
                 let placed = grid_xs.zip(primary_entry).map(|(xs, &primary)| {
                     let entry = leader_face.unwrap_or(primary);
-                    let chars: Vec<(usize, char)> = match leader_char {
-                        Some(c) => vec![(0, c); xs.len()],
-                        None => chunk.text.char_indices().collect(),
+                    let glyph = |(i, ch): (usize, char), gx: &f32| {
+                        let x =
+                            (gx - xs[0]) * 1000.0 / chunk.font_size / (chunk.text_scale / 100.0);
+                        let face = leader_face
+                            .or_else(|| fallback_idx(ch).map(|k| fallbacks[k]))
+                            .unwrap_or(primary);
+                        (
+                            face,
+                            &chunk.text[i..i + ch.len_utf8()],
+                            x,
+                            face.char_width_1000(ch) + tc,
+                        )
                     };
-                    let glyphs: Vec<(&FontEntry, &str, f32, f32)> = chars
-                        .into_iter()
-                        .zip(xs)
-                        .map(|((i, ch), gx)| {
-                            let x = (gx - xs[0]) * 1000.0
-                                / chunk.font_size
-                                / (chunk.text_scale / 100.0);
-                            let face = leader_face
-                                .or_else(|| fallback_idx(ch).map(|k| fallbacks[k]))
-                                .unwrap_or(primary);
-                            (
-                                face,
-                                &chunk.text[i..i + ch.len_utf8()],
-                                x,
-                                face.char_width_1000(ch) + tc,
-                            )
-                        })
-                        .collect();
+                    let mut glyphs: Vec<(&FontEntry, &str, f32, f32)> =
+                        Vec::with_capacity(xs.len());
+                    match leader_char {
+                        Some(c) => glyphs.extend(xs.iter().map(|gx| glyph((0, c), gx))),
+                        None => glyphs.extend(
+                            chunk
+                                .text
+                                .char_indices()
+                                .zip(xs)
+                                .map(|(ic, gx)| glyph(ic, gx)),
+                        ),
+                    }
                     (entry, glyphs)
                 });
                 let draw = if let Some((entry, glyphs)) = placed {
@@ -1795,7 +1862,7 @@ pub(super) fn render_paragraph_lines(
                         let show = |run: &mut TjRun, adjust: f32, text: &str| {
                             let advance = text.chars().map(|c| entry.pen_width_1000(c) + tc).sum();
                             run.adjust(adjust);
-                            run.show(entry.encode(text), advance);
+                            run.show_encoded(advance, |open| entry.encode_into(text, open));
                         };
                         // Inside the chunk, the moves `show_placed` and
                         // `show_kerned` make.
@@ -2020,6 +2087,7 @@ pub(super) fn render_paragraph_lines(
                 }
             }
             run.flush(content);
+            run_buffers = run;
             if cur_synthetic_bold {
                 content.set_text_rendering_mode(TextRenderingMode::Fill);
                 cur_synthetic_bold = false;

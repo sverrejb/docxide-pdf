@@ -26,6 +26,7 @@
 
 use std::collections::HashMap;
 
+use crate::fast_hash::FastMap;
 use crate::fonts::FontEntry;
 
 use super::layout::{TextLine, WordChunk};
@@ -461,7 +462,7 @@ fn reorder_line(
     levels: &[u8],
     cluster: &[bool],
     keep_left_wrap_space: bool,
-    fonts: &HashMap<&str, &FontEntry>,
+    fonts: &FastMap<&str, &FontEntry>,
 ) {
     if levels.iter().all(|&l| l == 0) {
         return;
@@ -585,7 +586,7 @@ fn reorder_line(
 fn split_chunk(
     chunk: &WordChunk,
     range: std::ops::Range<usize>,
-    fonts: &HashMap<&str, &FontEntry>,
+    fonts: &FastMap<&str, &FontEntry>,
 ) -> WordChunk {
     let text: String = chunk
         .text

@@ -47,10 +47,10 @@ pub(crate) fn record(font: &MissingFont) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fast_hash::FastSet;
     use crate::fonts::{EmbeddedFonts, FontContext, FontFiles, FontIndex, register_font};
     use crate::model::FontTable;
     use pdf_writer::{Pdf, Ref};
-    use std::collections::HashSet;
 
     #[test]
     fn only_faces_worth_supplying_are_missing() {
@@ -60,7 +60,7 @@ mod tests {
         let ctx = FontContext {
             embedded_fonts: &embedded,
             font_table: &FontTable::new(),
-            used_chars: &HashSet::new(),
+            used_chars: &FastSet::default(),
             word_text: true,
             extra_glyphs: None,
             font_index: &FontIndex::default(),

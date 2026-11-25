@@ -22,10 +22,26 @@ pub(super) fn body_runs<'a>(doc: &'a Document) -> impl Iterator<Item = &'a Run> 
 pub(super) fn document_lang(doc: &Document) -> String {
     let mut letters: HashMap<&str, usize> = HashMap::new();
     for run in body_runs(doc) {
+        // Counted per stretch of one language, not per letter: a run's letters
+        // nearly all share one, and hashing each was a measurable share of a
+        // long document's conversion.
+        let mut stretch: Option<(&str, usize)> = None;
         for ch in run.text.chars().filter(|c| c.is_alphabetic()) {
-            if let Some(lang) = layout::run_lang(run, layout::Script::of(ch)) {
-                *letters.entry(lang).or_default() += 1;
+            let Some(lang) = layout::run_lang(run, layout::Script::of(ch)) else {
+                continue;
+            };
+            match &mut stretch {
+                Some((current, n)) if *current == &**lang => *n += 1,
+                _ => {
+                    if let Some((current, n)) = stretch {
+                        *letters.entry(current).or_default() += n;
+                    }
+                    stretch = Some((lang, 1));
+                }
             }
+        }
+        if let Some((current, n)) = stretch {
+            *letters.entry(current).or_default() += n;
         }
     }
     let primary = |lang: &str| tagging::primary_subtag(lang).to_ascii_lowercase();

@@ -1,8 +1,9 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use pdf_writer::{Pdf, Ref};
 
 use crate::ConvertOptions;
+use crate::fast_hash::{FastMap, FastSet};
 use crate::fonts::{FontContext, FontEntry, FontFiles, FontIndex, font_key_buf, register_font};
 use crate::model::{Block, Document, FieldCode, IfPart, ImageFormat, Paragraph, Run};
 
@@ -25,7 +26,7 @@ pub(super) fn comment_pane_keys(doc: &Document) -> (String, String) {
 }
 
 /// The registered fonts by their PDF resource name.
-pub(super) fn by_pdf_name(fonts: &HashMap<String, FontEntry>) -> HashMap<&str, &FontEntry> {
+pub(super) fn by_pdf_name(fonts: &HashMap<String, FontEntry>) -> FastMap<&str, &FontEntry> {
     fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect()
 }
 
@@ -80,8 +81,8 @@ fn collect_used_chars(
     all_paras: &[&Paragraph],
     hf_paras: &[&Paragraph],
     math_font: bool,
-) -> HashMap<String, HashSet<char>> {
-    let mut used: HashMap<String, HashSet<char>> = HashMap::new();
+) -> HashMap<String, FastSet<char>> {
+    let mut used: HashMap<String, FastSet<char>> = HashMap::new();
     let mut key_buf = String::new();
 
     // §17.11.18/.17 mark numbering formats — must mirror the render pre-pass
@@ -122,7 +123,13 @@ fn collect_used_chars(
     }
     for run in all_runs {
         let key = font_key_buf(run, &mut key_buf);
-        let chars = used.entry(key.to_string()).or_default();
+        // Looked up before an owned key is made: runs mostly share a few fonts.
+        if !used.contains_key(key) {
+            used.insert(key.to_string(), FastSet::default());
+        }
+        let Some(chars) = used.get_mut(key) else {
+            continue;
+        };
         // Word boundaries are drawn with the preceding word's font, which may
         // not be the font of the run that holds the space.
         chars.insert(' ');
@@ -227,7 +234,7 @@ fn collect_used_chars(
 
     // Collect characters that may appear in STYLEREF values by scanning
     // body paragraph text (paragraph styles) and run text (character styles).
-    let mut styleref_chars: HashSet<char> = HashSet::new();
+    let mut styleref_chars: FastSet<char> = FastSet::default();
     for para in all_paras {
         // `\n` values: the list number, or 0
         styleref_chars.extend(para.list_label.chars().chain(['0']));
@@ -268,7 +275,7 @@ fn collect_used_chars(
 
     // Collect characters for chart labels under the theme minor font
     {
-        let mut chart_label_chars: HashSet<char> = HashSet::new();
+        let mut chart_label_chars: FastSet<char> = FastSet::default();
         for para in all_paras {
             if let Some(ref ic) = para.inline_chart {
                 chart_label_chars.extend('0'..='9');
@@ -304,7 +311,7 @@ fn collect_used_chars(
                 .or_default()
                 .extend(chart_label_chars);
         }
-        let title_chars: HashSet<char> = all_paras
+        let title_chars: FastSet<char> = all_paras
             .iter()
             .filter_map(|p| p.inline_chart.as_ref())
             .filter(|ic| ic.chart.ex_text.is_none())
@@ -354,8 +361,8 @@ fn collect_used_chars(
 
 /// The characters a PAGE, NUMPAGES or PAGEREF result may show: digits and
 /// the letters of its own and every section's page number format.
-fn page_number_chars(fc: &FieldCode, page_num_formats: &[&str]) -> HashSet<char> {
-    let mut chars = HashSet::new();
+fn page_number_chars(fc: &FieldCode, page_num_formats: &[&str]) -> FastSet<char> {
+    let mut chars = FastSet::default();
     let own_format = match fc {
         FieldCode::Page(f) | FieldCode::NumPages(f) | FieldCode::SectionPages(f) => *f,
         FieldCode::PageRef(_) => None,
@@ -372,7 +379,7 @@ fn page_number_chars(fc: &FieldCode, page_num_formats: &[&str]) -> HashSet<char>
 }
 
 /// Caps and small caps draw every letter as a capital.
-fn extend_cased(chars: &mut HashSet<char>, run: &Run, text: impl IntoIterator<Item = char>) {
+fn extend_cased(chars: &mut FastSet<char>, run: &Run, text: impl IntoIterator<Item = char>) {
     if run.caps || run.small_caps {
         chars.extend(text.into_iter().flat_map(char::to_uppercase));
     } else {
@@ -380,7 +387,7 @@ fn extend_cased(chars: &mut HashSet<char>, run: &Run, text: impl IntoIterator<It
     }
 }
 
-fn extend_chars_for_num_format(chars: &mut HashSet<char>, fmt: &str) {
+fn extend_chars_for_num_format(chars: &mut FastSet<char>, fmt: &str) {
     match fmt {
         "lowerRoman" => chars.extend(['i', 'v', 'x', 'l', 'c', 'd', 'm']),
         "upperRoman" => chars.extend(['I', 'V', 'X', 'L', 'C', 'D', 'M']),
@@ -481,7 +488,7 @@ fn register_math_font(
     }
     let pdf_name = format!("F{}", font_order.len() + 1);
     // A space marks the word boundary after a zone (`WordChunk::space_after`).
-    let space = HashSet::from([' ']);
+    let space = FastSet::from_iter([' ']);
     let ctx = FontContext {
         used_chars: &space,
         extra_glyphs: Some(&glyphs),
@@ -510,7 +517,7 @@ pub(super) fn collect_and_register_fonts(
 ) -> (HashMap<String, FontEntry>, Vec<String>) {
     let font_index = FontIndex::for_setup(&options.font_setup());
     let font_files = &FontFiles::default();
-    let no_chars = HashSet::new();
+    let no_chars = FastSet::default();
     let base_ctx = FontContext {
         embedded_fonts: &doc.embedded_fonts,
         font_table: &doc.font_table,
@@ -662,7 +669,7 @@ pub(super) fn collect_and_register_fonts(
     // Collect all chars missing from their primary fonts and register the
     // fallback fonts that draw them, so the rendering code can substitute
     // per-character.
-    let mut all_missing: HashSet<char> = HashSet::new();
+    let mut all_missing: FastSet<char> = FastSet::default();
     for entry in seen_fonts.values() {
         all_missing.extend(&entry.missing_chars);
     }
@@ -706,7 +713,9 @@ pub(super) fn collect_and_register_fonts(
                 if primary.missing_chars.is_empty() {
                     continue;
                 }
-                let widths = primary.char_widths_1000.get_or_insert_with(HashMap::new);
+                let widths = primary
+                    .char_widths_1000
+                    .get_or_insert_with(Default::default);
                 for &ch in &primary.missing_chars {
                     if let Some(&w) = fb_widths.get(&ch) {
                         widths.insert(ch, w);
