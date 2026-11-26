@@ -51,21 +51,13 @@ pub(super) fn push_winansi_bytes(s: &str, out: &mut Vec<u8>) {
 
 /// Encode UTF-8 text as big-endian 2-byte glyph IDs for CIDFont content streams.
 pub(crate) fn encode_as_gids(text: &str, char_to_gid: &FastMap<char, u16>) -> Vec<u8> {
-    encode_as_gids_noting(text, char_to_gid, &std::cell::Cell::new(false))
-}
-
-/// `encode_as_gids`, setting `drew_notdef` when a char has no glyph.
-pub(super) fn encode_as_gids_noting(
-    text: &str,
-    char_to_gid: &FastMap<char, u16>,
-    drew_notdef: &std::cell::Cell<bool>,
-) -> Vec<u8> {
     let mut out = Vec::with_capacity(text.len() * 2);
-    push_gids_noting(text, char_to_gid, drew_notdef, &mut out);
+    push_gids_noting(text, char_to_gid, &std::cell::Cell::new(false), &mut out);
     out
 }
 
-/// `encode_as_gids_noting`, appending to `out`.
+/// `encode_as_gids`, appending to `out` and setting `drew_notdef` when a
+/// char has no glyph.
 pub(super) fn push_gids_noting(
     text: &str,
     char_to_gid: &FastMap<char, u16>,

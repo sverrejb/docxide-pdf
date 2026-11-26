@@ -333,14 +333,14 @@ pub(super) struct SplitCache(());
 
 impl SplitCache {
     pub(super) fn begin() -> Self {
-        SPLITS.with(|c| *c.borrow_mut() = Some(Default::default()));
+        SPLITS.set(Some(Default::default()));
         SplitCache(())
     }
 }
 
 impl Drop for SplitCache {
     fn drop(&mut self) {
-        SPLITS.with(|c| *c.borrow_mut() = None);
+        SPLITS.set(None);
     }
 }
 
@@ -353,38 +353,28 @@ pub(super) fn split_preserving_spaces(text: &str) -> Vec<(usize, &str)> {
     if text.is_empty() {
         return Vec::new();
     }
-    let from_spans = |spans: &[(u32, u32, u32)]| -> Vec<(usize, &str)> {
-        spans
-            .iter()
-            .map(|&(n, s, e)| (n as usize, &text[s as usize..e as usize]))
-            .collect()
-    };
-    let cached = SPLITS.with(|c| {
-        c.borrow()
-            .as_ref()
-            .map(|cache| cache.get(text).map(|spans| from_spans(spans)))
-    });
-    match cached {
-        Some(Some(words)) => words,
-        Some(None) if u32::try_from(text.len()).is_ok() => {
-            let words = split_words(text);
-            let base = text.as_ptr() as usize;
-            let spans: WordSpans = words
+    SPLITS.with_borrow_mut(|cache| {
+        let Some(cache) = cache.as_mut().filter(|_| u32::try_from(text.len()).is_ok()) else {
+            return split_words(text);
+        };
+        if let Some(spans) = cache.get(text) {
+            return spans
                 .iter()
-                .map(|&(n, w)| {
-                    let s = w.as_ptr() as usize - base;
-                    (n as u32, s as u32, (s + w.len()) as u32)
-                })
+                .map(|&(n, s, e)| (n as usize, &text[s as usize..e as usize]))
                 .collect();
-            SPLITS.with(|c| {
-                if let Some(cache) = c.borrow_mut().as_mut() {
-                    cache.insert(text.into(), spans);
-                }
-            });
-            words
         }
-        _ => split_words(text),
-    }
+        let words = split_words(text);
+        let base = text.as_ptr() as usize;
+        let spans = words
+            .iter()
+            .map(|&(n, w)| {
+                let s = w.as_ptr() as usize - base;
+                (n as u32, s as u32, (s + w.len()) as u32)
+            })
+            .collect();
+        cache.insert(text.into(), spans);
+        words
+    })
 }
 
 /// `split_preserving_spaces` without the cache.

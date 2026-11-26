@@ -407,7 +407,7 @@ fn show_placed(
 #[derive(Default)]
 struct TjRun {
     items: Vec<RunItem>,
-    /// The text of every `RunItem::Text`, one buffer a page's lines reuse:
+    /// The text of every `RunItem::Text`, one buffer a paragraph's lines reuse:
     /// a buffer per string was a hot allocation.
     bytes: Vec<u8>,
     /// Where the run starts and its baseline.
@@ -450,22 +450,16 @@ impl TjRun {
         self.pen -= adjust;
     }
 
-    /// Shows `text` where the pen is; `advance` is how far it moves the pen.
-    #[cfg(test)]
-    fn show(&mut self, text: Vec<u8>, advance: f32) {
-        self.show_encoded(advance, |open| open.extend(text));
-    }
-
-    /// `show` with the text encoded straight onto the open string: glyphs
-    /// are shown one at a time, and a buffer for each was a hot allocation.
-    fn show_encoded(&mut self, advance: f32, encode: impl FnOnce(&mut Vec<u8>)) {
-        if !matches!(self.items.last(), Some(RunItem::Text(_))) {
-            let at = self.bytes.len();
-            self.items.push(RunItem::Text(at..at));
-        }
+    /// Shows the text `encode` appends where the pen is; `advance` is how far
+    /// it moves the pen. Encoded straight onto the open string: glyphs are
+    /// shown one at a time, and a buffer for each was a hot allocation.
+    fn show(&mut self, advance: f32, encode: impl FnOnce(&mut Vec<u8>)) {
+        let start = self.bytes.len();
         encode(&mut self.bytes);
-        if let Some(RunItem::Text(open)) = self.items.last_mut() {
-            open.end = self.bytes.len();
+        let end = self.bytes.len();
+        match self.items.last_mut() {
+            Some(RunItem::Text(open)) => open.end = end,
+            _ => self.items.push(RunItem::Text(start..end)),
         }
         self.pen += advance;
     }
@@ -487,14 +481,6 @@ impl TjRun {
         });
         self.items.clear();
         self.bytes.clear();
-    }
-
-    /// The state of a new run, keeping the buffers' memory.
-    fn reset(&mut self) {
-        self.items.clear();
-        self.bytes.clear();
-        self.origin = (0.0, 0.0);
-        self.pen = 0.0;
     }
 }
 
@@ -581,8 +567,7 @@ fn device_grid(
         members.clear();
     };
     let mut out = vec![None; line.chunks.len()];
-    let mut seq: Vec<GridGlyph> =
-        Vec::with_capacity(line.chunks.iter().map(|c| c.text.len() + 1).sum());
+    let mut seq: Vec<GridGlyph> = Vec::new();
     // The current chunk's glyph advances (`grid_eligible`).
     let mut advances: Vec<(f32, f32)> = Vec::new();
     // (chunk, its first glyph in `seq`)
@@ -1023,8 +1008,8 @@ pub(super) fn render_paragraph_lines(
     // The first-line indent goes to the first line with content, past any
     // `float_skip` lines.
     let first_content_idx = lines.iter().take_while(|l| l.float_skip).count();
-    // The TJ buffers, reused line after line.
-    let mut run_buffers = TjRun::default();
+    // The TJ buffers, reused line after line; `flush` empties them.
+    let mut run = TjRun::default();
     for (line_num, line) in lines.iter().enumerate() {
         let raw_y = first_baseline_y - line_y_offsets[line_num];
         let y = line_grid.map_or(raw_y, |g| {
@@ -1452,8 +1437,6 @@ pub(super) fn render_paragraph_lines(
             let mut td_x = 0.0_f32;
             let mut td_y = 0.0_f32;
             let mut cur_shear = 0.0_f32;
-            let mut run = std::mem::take(&mut run_buffers);
-            run.reset();
 
             // Logical order, so the content stream (and the tags) read the
             // text as written even where bidi stored the chunks visually.
@@ -1740,18 +1723,15 @@ pub(super) fn render_paragraph_lines(
                             face.char_width_1000(ch) + tc,
                         )
                     };
-                    let mut glyphs: Vec<(&FontEntry, &str, f32, f32)> =
-                        Vec::with_capacity(xs.len());
-                    match leader_char {
-                        Some(c) => glyphs.extend(xs.iter().map(|gx| glyph((0, c), gx))),
-                        None => glyphs.extend(
-                            chunk
-                                .text
-                                .char_indices()
-                                .zip(xs)
-                                .map(|(ic, gx)| glyph(ic, gx)),
-                        ),
-                    }
+                    let glyphs: Vec<_> = match leader_char {
+                        Some(c) => xs.iter().map(|gx| glyph((0, c), gx)).collect(),
+                        None => chunk
+                            .text
+                            .char_indices()
+                            .zip(xs)
+                            .map(|(ic, gx)| glyph(ic, gx))
+                            .collect(),
+                    };
                     (entry, glyphs)
                 });
                 let draw = if let Some((entry, glyphs)) = placed {
@@ -1862,7 +1842,7 @@ pub(super) fn render_paragraph_lines(
                         let show = |run: &mut TjRun, adjust: f32, text: &str| {
                             let advance = text.chars().map(|c| entry.pen_width_1000(c) + tc).sum();
                             run.adjust(adjust);
-                            run.show_encoded(advance, |open| entry.encode_into(text, open));
+                            run.show(advance, |open| entry.encode_into(text, open));
                         };
                         // Inside the chunk, the moves `show_placed` and
                         // `show_kerned` make.
@@ -2087,7 +2067,6 @@ pub(super) fn render_paragraph_lines(
                 }
             }
             run.flush(content);
-            run_buffers = run;
             if cur_synthetic_bold {
                 content.set_text_rendering_mode(TextRenderingMode::Fill);
                 cur_synthetic_bold = false;
@@ -2414,11 +2393,11 @@ mod tests {
         let mut run = TjRun::default();
         run.start(72.0, 700.0);
         run.advance_to(0.0, 12.0);
-        run.show(b"ab".to_vec(), 900.0);
-        run.show(b" ".to_vec(), 250.0);
+        run.show(900.0, |b| b.extend(b"ab"));
+        run.show(250.0, |b| b.extend(b" "));
         // The next word starts 1500.44 thousandths in: 350.4 right of the pen.
         run.advance_to(1500.44, 12.0);
-        run.show(b"c".to_vec(), 500.0);
+        run.show(500.0, |b| b.extend(b"c"));
         assert!((run.pen - 2000.4).abs() < 1e-3);
         assert!(run.continues(700.0) && !run.continues(690.0));
         let mut content = Content::new();

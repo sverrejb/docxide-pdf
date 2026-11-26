@@ -123,13 +123,7 @@ fn collect_used_chars(
     }
     for run in all_runs {
         let key = font_key_buf(run, &mut key_buf);
-        // Looked up before an owned key is made: runs mostly share a few fonts.
-        if !used.contains_key(key) {
-            used.insert(key.to_string(), FastSet::default());
-        }
-        let Some(chars) = used.get_mut(key) else {
-            continue;
-        };
+        let chars = used.entry(key.to_string()).or_default();
         // Word boundaries are drawn with the preceding word's font, which may
         // not be the font of the run that holds the space.
         chars.insert(' ');

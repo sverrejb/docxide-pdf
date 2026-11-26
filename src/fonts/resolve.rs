@@ -757,7 +757,7 @@ pub(crate) fn register_font(
     // symbol the document uses (SimSun has □ but not ☑), which used to render
     // as a blank. When no face resolved at all, only CJK is rescued: the
     // standard-14 Helvetica fallback can draw Latin but not Han.
-    let missing_chars: crate::fast_hash::FastSet<char> = ctx
+    let missing_chars: FastSet<char> = ctx
         .used_chars
         .iter()
         .copied()

@@ -803,8 +803,8 @@ mod tests {
             data,
             0,
             &FontContext {
-                embedded_fonts: &std::collections::HashMap::new(),
-                font_table: &std::collections::HashMap::new(),
+                embedded_fonts: &Default::default(),
+                font_table: &Default::default(),
                 used_chars: &chars.chars().collect(),
                 word_text: true,
                 extra_glyphs: None,

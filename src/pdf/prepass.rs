@@ -20,28 +20,13 @@ pub(super) fn body_runs<'a>(doc: &'a Document) -> impl Iterator<Item = &'a Run> 
 /// together outvote fr-FR), then its most common tag; else the declared
 /// default, else Word's en-US.
 pub(super) fn document_lang(doc: &Document) -> String {
-    let mut letters: HashMap<&str, usize> = HashMap::new();
+    // A fast map: one lookup per letter of the body.
+    let mut letters: crate::fast_hash::FastMap<&str, usize> = Default::default();
     for run in body_runs(doc) {
-        // Counted per stretch of one language, not per letter: a run's letters
-        // nearly all share one, and hashing each was a measurable share of a
-        // long document's conversion.
-        let mut stretch: Option<(&str, usize)> = None;
         for ch in run.text.chars().filter(|c| c.is_alphabetic()) {
-            let Some(lang) = layout::run_lang(run, layout::Script::of(ch)) else {
-                continue;
-            };
-            match &mut stretch {
-                Some((current, n)) if *current == &**lang => *n += 1,
-                _ => {
-                    if let Some((current, n)) = stretch {
-                        *letters.entry(current).or_default() += n;
-                    }
-                    stretch = Some((lang, 1));
-                }
+            if let Some(lang) = layout::run_lang(run, layout::Script::of(ch)) {
+                *letters.entry(lang).or_default() += 1;
             }
-        }
-        if let Some((current, n)) = stretch {
-            *letters.entry(current).or_default() += n;
         }
     }
     let primary = |lang: &str| tagging::primary_subtag(lang).to_ascii_lowercase();
