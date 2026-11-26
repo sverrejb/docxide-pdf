@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="480" viewBox="0 0 680 480" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13">
+<style>:root{--bg:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--grid:#e1e0d9;--j:#2a78d6;--s:#eb6834}@media (prefers-color-scheme:dark){:root{--bg:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--grid:#2c2c2a;--j:#3987e5;--s:#d95926}}text{fill:var(--ink)}.m{fill:var(--ink2)}</style>
+<rect width="680" height="480" rx="6" fill="var(--bg)"/>
+<text x="16" y="24" font-weight="600">Mean score vs the Word reference, 1229 documents</text>
+<rect x="16" y="36" width="10" height="10" rx="2" fill="var(--j)"/><text x="31" y="45" class="m">Jaccard</text>
+<rect x="96" y="36" width="10" height="10" rx="2" fill="var(--s)"/><text x="111" y="45" class="m">SSIM</text>
+<line x1="190.0" x2="190.0" y1="52" y2="456" stroke="var(--grid)"/><text x="190.0" y="472" text-anchor="middle" class="m" font-size="11">0</text>
+<line x1="300.0" x2="300.0" y1="52" y2="456" stroke="var(--grid)"/><text x="300.0" y="472" text-anchor="middle" class="m" font-size="11">25</text>
+<line x1="410.0" x2="410.0" y1="52" y2="456" stroke="var(--grid)"/><text x="410.0" y="472" text-anchor="middle" class="m" font-size="11">50</text>
+<line x1="520.0" x2="520.0" y1="52" y2="456" stroke="var(--grid)"/><text x="520.0" y="472" text-anchor="middle" class="m" font-size="11">75</text>
+<line x1="630.0" x2="630.0" y1="52" y2="456" stroke="var(--grid)"/><text x="630.0" y="472" text-anchor="middle" class="m" font-size="11">100</text>
+<text x="178" y="78" text-anchor="end">docxide-pdf</text>
+<rect x="190" y="60" width="391.3" height="14" rx="3" fill="var(--j)"><title>docxide-pdf Jaccard: 88.9</title></rect><text x="587.3" y="71" class="m" font-size="11">88.9</text>
+<rect x="190" y="76" width="420.4" height="14" rx="3" fill="var(--s)"><title>docxide-pdf SSIM: 95.6</title></rect><text x="616.4" y="87" class="m" font-size="11">95.6</text>
+<text x="178" y="122" text-anchor="end">WordCraft</text>
+<rect x="190" y="104" width="263.0" height="14" rx="3" fill="var(--j)"><title>WordCraft Jaccard: 59.8</title></rect><text x="459.0" y="115" class="m" font-size="11">59.8</text>
+<rect x="190" y="120" width="345.1" height="14" rx="3" fill="var(--s)"><title>WordCraft SSIM: 78.4</title></rect><text x="541.1" y="131" class="m" font-size="11">78.4</text>
+<text x="178" y="166" text-anchor="end">Stirling Office Convert</text>
+<rect x="190" y="148" width="254.0" height="14" rx="3" fill="var(--j)"><title>Stirling Office Convert Jaccard: 57.7</title></rect><text x="450.0" y="159" class="m" font-size="11">57.7</text>
+<rect x="190" y="164" width="327.2" height="14" rx="3" fill="var(--s)"><title>Stirling Office Convert SSIM: 74.4</title></rect><text x="523.2" y="175" class="m" font-size="11">74.4</text>
+<text x="178" y="210" text-anchor="end">jubarte-redlines</text>
+<rect x="190" y="192" width="242.1" height="14" rx="3" fill="var(--j)"><title>jubarte-redlines Jaccard: 55.0</title></rect><text x="438.1" y="203" class="m" font-size="11">55.0</text>
+<rect x="190" y="208" width="324.1" height="14" rx="3" fill="var(--s)"><title>jubarte-redlines SSIM: 73.7</title></rect><text x="520.1" y="219" class="m" font-size="11">73.7</text>
+<text x="178" y="247" text-anchor="end">LibreOffice</text>
+<text x="178" y="262" text-anchor="end" class="m" font-size="11">4 failed conversions</text>
+<rect x="190" y="236" width="236.2" height="14" rx="3" fill="var(--j)"><title>LibreOffice Jaccard: 53.7</title></rect><text x="432.2" y="247" class="m" font-size="11">53.7</text>
+<rect x="190" y="252" width="317.6" height="14" rx="3" fill="var(--s)"><title>LibreOffice SSIM: 72.2</title></rect><text x="513.6" y="263" class="m" font-size="11">72.2</text>
+<text x="178" y="298" text-anchor="end">office2pdf</text>
+<rect x="190" y="280" width="181.6" height="14" rx="3" fill="var(--j)"><title>office2pdf Jaccard: 41.3</title></rect><text x="377.6" y="291" class="m" font-size="11">41.3</text>
+<rect x="190" y="296" width="268.9" height="14" rx="3" fill="var(--s)"><title>office2pdf SSIM: 61.1</title></rect><text x="464.9" y="307" class="m" font-size="11">61.1</text>
+<text x="178" y="335" text-anchor="end">rdocx</text>
+<text x="178" y="350" text-anchor="end" class="m" font-size="11">5 failed conversions</text>
+<rect x="190" y="324" width="160.8" height="14" rx="3" fill="var(--j)"><title>rdocx Jaccard: 36.5</title></rect><text x="356.8" y="335" class="m" font-size="11">36.5</text>
+<rect x="190" y="340" width="247.4" height="14" rx="3" fill="var(--s)"><title>rdocx SSIM: 56.2</title></rect><text x="443.4" y="351" class="m" font-size="11">56.2</text>
+<text x="178" y="379" text-anchor="end">dxpdf</text>
+<text x="178" y="394" text-anchor="end" class="m" font-size="11">14 failed conversions</text>
+<rect x="190" y="368" width="134.4" height="14" rx="3" fill="var(--j)"><title>dxpdf Jaccard: 30.5</title></rect><text x="330.4" y="379" class="m" font-size="11">30.5</text>
+<rect x="190" y="384" width="243.5" height="14" rx="3" fill="var(--s)"><title>dxpdf SSIM: 55.3</title></rect><text x="439.5" y="395" class="m" font-size="11">55.3</text>
+<text x="178" y="430" text-anchor="end">MiniPdf (Rust)</text>
+<rect x="190" y="412" width="47.0" height="14" rx="3" fill="var(--j)"><title>MiniPdf (Rust) Jaccard: 10.7</title></rect><text x="243.0" y="423" class="m" font-size="11">10.7</text>
+<rect x="190" y="428" width="110.4" height="14" rx="3" fill="var(--s)"><title>MiniPdf (Rust) SSIM: 25.1</title></rect><text x="306.4" y="439" class="m" font-size="11">25.1</text>
+</svg>
