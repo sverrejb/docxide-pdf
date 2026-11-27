@@ -39,6 +39,61 @@ fn document(font: &str, rpr: &str) -> Vec<u8> {
     docx(&[("word/document.xml", xml.as_bytes())])
 }
 
+#[test]
+fn simple_footer_page_fields_are_evaluated_on_each_page() {
+    use docxide_pdf::display::Item;
+
+    let w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    let r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    let document = format!(
+        r#"<w:document xmlns:w="{w}" xmlns:r="{r}"><w:body>
+        <w:p><w:r><w:t>First</w:t><w:br w:type="page"/></w:r></w:p>
+        <w:p><w:r><w:t>Second</w:t><w:br w:type="page"/></w:r></w:p>
+        <w:p><w:r><w:t>Third</w:t></w:r></w:p>
+        <w:sectPr><w:footerReference w:type="default" r:id="rId1"/></w:sectPr>
+        </w:body></w:document>"#
+    );
+    let relationships = format!(
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="{r}/footer" Target="footer1.xml"/></Relationships>"#
+    );
+    let footer = format!(
+        r#"<w:ftr xmlns:w="{w}"><w:p>
+        <w:r><w:t xml:space="preserve">Page </w:t></w:r>
+        <w:fldSimple w:instr=" PAGE "><w:r><w:t>9</w:t></w:r><w:r><w:t>9</w:t></w:r></w:fldSimple>
+        <w:r><w:t xml:space="preserve"> of </w:t></w:r>
+        <w:fldSimple w:instr="NUMPAGES"/>
+        <w:r><w:t xml:space="preserve"> / </w:t></w:r>
+        <w:fldSimple w:instr="FILLIN"><w:r><w:t>cached</w:t></w:r></w:fldSimple>
+        </w:p></w:ftr>"#
+    );
+    let input = docx(&[
+        ("word/document.xml", document.as_bytes()),
+        ("word/_rels/document.xml.rels", relationships.as_bytes()),
+        ("word/footer1.xml", footer.as_bytes()),
+    ]);
+    let display = run(&input, &host().display_list(true)).display.unwrap();
+    fn collect_text(items: &[Item], text: &mut String) {
+        for item in items {
+            match item {
+                Item::Text(run) => text.extend(run.glyphs.iter().map(|glyph| glyph.text.as_str())),
+                Item::Group(items) => collect_text(items, text),
+                _ => {}
+            }
+        }
+    }
+    assert_eq!(display.pages.len(), 3);
+    for (index, page) in display.pages.iter().enumerate() {
+        let mut text = String::new();
+        collect_text(&page.items, &mut text);
+        let text: String = text.chars().filter(|ch| !ch.is_whitespace()).collect();
+        assert!(
+            text.contains(&format!("Page{}of3/cached", index + 1)),
+            "{text}"
+        );
+    }
+}
+
 fn requested(out: &Conversion, name: &str) -> bool {
     out.missing_fonts.iter().any(|m| m.name == name)
 }
