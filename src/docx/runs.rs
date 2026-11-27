@@ -847,11 +847,19 @@ fn collect_run_nodes<'a>(
                 collect_run_nodes(content, rels, markup, out, active_comments);
             }
         } else if is_wml && name == "fldSimple" {
-            // Simple field: <w:fldSimple w:instr="..."><w:r>cached</w:r></w:fldSimple>.
-            // Emit the cached display runs. Dynamic field codes (PAGE/NUMPAGES/etc.)
-            // are not rewritten here — the cached text matches Word's online converter
-            // output for the static-PDF case.
+            let first = out.len();
             collect_run_nodes(child, rels, markup, out, active_comments);
+            // A page field can omit its cached result and its formatting run entirely.
+            if out.len() == first
+                && matches!(
+                    child
+                        .attribute((WML_NS, "instr"))
+                        .and_then(parse_field_code),
+                    Some(FieldCode::Page(_) | FieldCode::NumPages(_))
+                )
+            {
+                out.push((child, None, false, active_comments.clone(), None));
+            }
         } else if ns == Some(MC_NS_TOP) && name == "AlternateContent" {
             if let Some((branch, _)) = super::xml::mc_selected_branch(child) {
                 collect_run_nodes(branch, rels, markup, out, active_comments);
@@ -1293,14 +1301,19 @@ pub(super) fn parse_runs<R: Read + Seek>(
         let runs_before = runs.len();
         // A fldSimple inside an open field's instruction is an argument to it;
         // its runs carry the nested field's cached value as instrText.
-        let simple = run_node
-            .parent()
-            .filter(|p| p.has_tag_name((WML_NS, "fldSimple")));
+        let bare_simple = run_node.has_tag_name((WML_NS, "fldSimple"));
+        let simple = (if bare_simple {
+            Some(run_node)
+        } else {
+            run_node.parent()
+        })
+        .filter(|p| p.has_tag_name((WML_NS, "fldSimple")));
         let simple_instr = simple.and_then(|fs| fs.attribute((WML_NS, "instr")));
         // The fldSimple's first run stands for the field; the rest are its value.
-        let simple_first_run = simple.is_some_and(|fs| {
-            fs.children().find(|n| n.has_tag_name((WML_NS, "r"))) == Some(run_node)
-        });
+        let simple_first_run = bare_simple
+            || simple.is_some_and(|fs| {
+                fs.children().find(|n| n.has_tag_name((WML_NS, "r"))) == Some(run_node)
+            });
         if simple_first_run
             && let Some(f) = field_stack.last_mut()
             && !f.seen_sep
@@ -1329,11 +1342,15 @@ pub(super) fn parse_runs<R: Read + Seek>(
             acc << 32 | v.and_then(|v| u32::from_str_radix(v, 16).ok()).unwrap_or(0) as u64
         });
 
-        // A STYLEREF or SEQ fldSimple on its own is one field run, evaluated
-        // like the complex form.
+        // Simple fields with a supported instruction use the same layout
+        // evaluation as their complex counterparts.
         if field_stack.is_empty()
-            && let Some(code @ (FieldCode::StyleRef { .. } | FieldCode::Seq { .. })) =
-                simple_instr.and_then(parse_field_code)
+            && let Some(
+                code @ (FieldCode::Page(_)
+                | FieldCode::NumPages(_)
+                | FieldCode::StyleRef { .. }
+                | FieldCode::Seq { .. }),
+            ) = simple_instr.and_then(parse_field_code)
         {
             if simple_first_run {
                 let cached: String = simple
