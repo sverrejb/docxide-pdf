@@ -1117,6 +1117,12 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
             prev.rsid = run.rsid;
             prev.source_breaks
                 .extend(run.source_breaks.iter().map(|b| base + b));
+            prev.range_spans
+                .extend(run.range_spans.iter().map(|span| crate::model::RangeSpan {
+                    from: base + span.from,
+                    to: base + span.to,
+                    ..*span
+                }));
             prev.text.push_str(&run.text);
         } else {
             result.push(run);
@@ -1287,7 +1293,10 @@ pub(super) fn parse_runs<R: Read + Seek>(
     {
         attach_comment_anchors(&mut runs, &mut ref_anchors, node_idx);
         if run_node.has_tag_name((MATH_NS, "oMath")) {
+            let runs_before = runs.len();
             runs.extend(math_zone_run(run_node, &defaults, ctx.theme, ctx.revisions));
+            ctx.link_ranges
+                .mark(run_node.range().start, &mut runs[runs_before..]);
             continue;
         }
         let runs_before = runs.len();
@@ -1785,6 +1794,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                 r.comment_ids = comment_ids.clone();
             }
         }
+        ctx.link_ranges
+            .mark(run_node.range().start, &mut runs[runs_before..]);
         if ruby.is_some() {
             for r in &mut runs[runs_before..] {
                 r.ruby = ruby.clone();

@@ -537,6 +537,10 @@ pub(super) struct WordChunk {
     pub(super) checkbox: Option<FormCheckbox>,
     /// Guide text drawn above this chunk and the ones sharing it.
     pub(super) ruby: Option<std::sync::Arc<crate::model::Ruby>>,
+    /// The range links this chunk is in (`ConvertOptions::range_links`).
+    pub(super) ranges: Vec<ChunkRange>,
+    /// From a bold run (`w:b`): a range link's heading is its bold lines.
+    pub(super) bold: bool,
     /// From a `w:rtl` run (bidi embedding, mirrored brackets).
     pub(super) rtl: bool,
     /// From a `w:hint="eastAsia"` run: its curly quotes are full-width
@@ -647,6 +651,8 @@ impl WordChunk {
             kern: false,
             checkbox: None,
             ruby: None,
+            ranges: Vec::new(),
+            bold: false,
             rtl: false,
             east_asia_hint: false,
             rtl_glyphs: false,
@@ -701,6 +707,10 @@ impl WordChunk {
             kern: run.kerns_at(eff_fs),
             checkbox: run.checkbox,
             ruby: run.ruby.clone(),
+            ranges: chunk_ranges(run, word, |part| {
+                word_width_for_run(entry, run, part, eff_fs)
+            }),
+            bold: run.bold,
             rtl: run.rtl,
             east_asia_hint: run.east_asia_hint,
             ..Self::blank(entry.pdf_name.clone(), eff_fs, x_offset, width)
@@ -757,6 +767,7 @@ impl WordChunk {
             inline_image_rotation_deg: img.rotation_deg,
             inline_image_alt: img.alt.clone(),
             inline_image_decorative: img.decorative,
+            ranges: whole_ranges(run),
             ..Self::blank(pdf_font, run.font_size, x_offset, width)
         }
     }
@@ -1395,6 +1406,84 @@ fn chunk_lang(run: &Run, text: &str) -> Option<Arc<str>> {
     run_lang(run, script).cloned()
 }
 
+/// A range link a chunk is in, and which part of the chunk: `from..to` as
+/// shares of its width (`0..1`, all of it, unless a range boundary falls
+/// between the letters of a word).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct ChunkRange {
+    pub(super) range: u32,
+    pub(super) from: f32,
+    pub(super) to: f32,
+}
+
+/// Every range the run is in, over the whole chunk (pictures, math zones).
+fn whole_ranges(run: &Run) -> Vec<ChunkRange> {
+    let mut ranges: Vec<ChunkRange> = Vec::new();
+    for span in &run.range_spans {
+        if !ranges.iter().any(|r| r.range == span.range) {
+            ranges.push(ChunkRange {
+                range: span.range,
+                from: 0.0,
+                to: 1.0,
+            });
+        }
+    }
+    ranges
+}
+
+/// The ranges `word` is in, with the share of its width each covers. `width`
+/// measures a prefix of `word` as it is laid out. A word that is not a slice
+/// of the run's text (caps and other rewrites) is in every range of the run,
+/// whole.
+fn chunk_ranges(run: &Run, word: &str, width: impl Fn(&str) -> f32) -> Vec<ChunkRange> {
+    if run.range_spans.is_empty() {
+        return Vec::new();
+    }
+    let text = run.text.as_bytes();
+    if word.is_empty() || !text.as_ptr_range().contains(&word.as_ptr()) {
+        return whole_ranges(run);
+    }
+    let at = word.as_ptr() as usize - text.as_ptr() as usize;
+    let end = at + word.len();
+    let mut ranges: Vec<ChunkRange> = Vec::new();
+    let mut total: Option<f32> = None;
+    for span in &run.range_spans {
+        let (from, to) = (span.from.max(at), span.to.min(end));
+        if from >= to {
+            continue;
+        }
+        let share = |offset: usize, total: f32| -> f32 {
+            if offset <= at {
+                0.0
+            } else if offset >= end || total <= 0.0 {
+                1.0
+            } else {
+                word.get(..offset - at)
+                    .map_or(1.0, |prefix| (width(prefix) / total).clamp(0.0, 1.0))
+            }
+        };
+        let total = if from > at || to < end {
+            *total.get_or_insert_with(|| width(word))
+        } else {
+            0.0
+        };
+        let (from, to) = (share(from, total), share(to, total));
+        // A run split by its own range's bookmark keeps one share.
+        match ranges.iter_mut().find(|r| r.range == span.range) {
+            Some(r) => {
+                r.from = r.from.min(from);
+                r.to = r.to.max(to);
+            }
+            None => ranges.push(ChunkRange {
+                range: span.range,
+                from,
+                to,
+            }),
+        }
+    }
+    ranges
+}
+
 /// Where source runs begin inside `word`, when `word` is a slice of the run's
 /// text (caps and other rewrites lose the mapping; they get none).
 fn source_starts(run: &Run, word: &str) -> Vec<usize> {
@@ -1445,6 +1534,7 @@ fn push_word_chunks(
         y_off,
     } = *wr;
     let first = chunks.len();
+    let range_source = original;
     let original = original.map(soft_shown);
     let original = original.as_deref();
     let actual = |shown: &str, source: &str| (shown != source).then(|| source.to_string());
@@ -1460,6 +1550,14 @@ fn push_word_chunks(
                 Some(o) if segs.len() == 1 => o,
                 _ => *source,
             };
+            let range_source = if segs.len() == 1 {
+                range_source.unwrap_or(source)
+            } else {
+                source
+            };
+            chunk.ranges = chunk_ranges(run, range_source, |part| {
+                word_width_for_run(entry, run, &part.to_uppercase(), *seg_fs)
+            });
             chunk.actual_text = actual(seg_text, source);
             chunks.push(chunk);
             seg_x += seg_w;
@@ -1495,6 +1593,11 @@ fn push_word_chunks(
         }
     } else {
         let mut chunk = WordChunk::text(entry, run, word, eff_fs, cs, y_off, x_start, total_ww);
+        if let Some(source) = range_source {
+            chunk.ranges = chunk_ranges(run, source, |part| {
+                word_width_for_run(entry, run, &shown_word(run, part), eff_fs)
+            });
+        }
         chunk.actual_text = original.and_then(|o| actual(word, o));
         chunks.push(chunk);
     }

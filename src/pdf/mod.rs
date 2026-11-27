@@ -33,6 +33,7 @@ mod page_builder;
 mod paragraph;
 mod positioning;
 mod prepass;
+mod range_links;
 mod shape_path;
 mod smartart;
 mod svg;
@@ -1706,6 +1707,7 @@ fn render_pass(
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     let t_layout = t0.elapsed();
     let bookmark_fragments = bookmarks::collect(&mut state.pb.all_links);
+    let range_lines = range_links::collect(&mut state.pb.all_links);
 
     // Phase 2b: column separator lines
     for (content, seps) in state.pb.all_contents.iter_mut().zip(&state.pb.all_col_seps) {
@@ -1991,6 +1993,7 @@ fn render_pass(
     // Table rendering can also emit markers in headers/footers; the public
     // positions describe the body only. Never serialize any marker as a link.
     bookmarks::collect(&mut state.pb.all_links);
+    range_links::collect(&mut state.pb.all_links);
     for links in &mut state.pb.all_links {
         let untagged = |a: &LinkAnnotation, b: &LinkAnnotation| {
             a.node.is_none() && b.node.is_none() && a.url == b.url
@@ -2028,6 +2031,21 @@ fn render_pass(
         .collect();
 
     bookmarks::store(bookmark_fragments, &valign_offsets);
+    // Range links go after the page's other links, each run of one URI in
+    // its own Link element like the links above.
+    let added = range_links::annotate(
+        &mut state.pb.all_links,
+        &range_lines,
+        &options.range_links,
+        &valign_offsets,
+    );
+    for (links, added) in state.pb.all_links.iter_mut().zip(added) {
+        let start = links.len() - added;
+        for link in links[start..].chunk_by_mut(|a, b| a.url == b.url) {
+            let node = state.pb.tags.add(tagging::ROOT, StructType::Link);
+            link.iter_mut().for_each(|l| l.node = Some(node));
+        }
+    }
     assemble_pdf_pages(
         &mut pdf,
         &mut alloc,

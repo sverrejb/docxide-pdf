@@ -97,6 +97,9 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     /// The body's comment ranges (`comment_ranges`); empty for headers,
     /// footers and notes.
     pub(in crate::docx) comments: CommentRanges,
+    /// The body's range links (`LinkRanges::find`); empty for headers,
+    /// footers and notes.
+    pub(in crate::docx) link_ranges: LinkRanges,
     /// Fields left open by the previous paragraph (`runs::FieldCarry`).
     pub(in crate::docx) fields: runs::FieldCarry,
     /// What the current section's character grid adds to one character
@@ -122,6 +125,60 @@ pub(in crate::docx) struct CommentRanges {
     pub(in crate::docx) open_at: HashMap<usize, Vec<u32>>,
     /// Every `w:commentReference` id in document order.
     pub(in crate::docx) reference_order: Vec<u32>,
+}
+
+/// Where each requested range link lies in `word/document.xml`: the byte
+/// offsets of its start and end `w:bookmarkStart` elements. A bookmark never
+/// sits inside a run, so a run is in a range exactly when its element starts
+/// between the two, whatever wraps it (hyperlinks, fields, tables, text
+/// boxes). Ranges whose bookmarks are missing or out of order are dropped.
+#[derive(Default)]
+pub(in crate::docx) struct LinkRanges {
+    /// (range index, start offset, end offset).
+    ranges: Vec<(u32, usize, usize)>,
+}
+
+impl LinkRanges {
+    fn find(root: roxmltree::Node, links: &[crate::RangeLink]) -> Self {
+        if links.is_empty() {
+            return Self::default();
+        }
+        // The first bookmark of each name, as Word keeps it.
+        let mut at: HashMap<&str, usize> = HashMap::new();
+        for n in root.descendants() {
+            if n.has_tag_name((WML_NS, "bookmarkStart"))
+                && let Some(name) = n.attribute((WML_NS, "name"))
+            {
+                at.entry(name).or_insert(n.range().start);
+            }
+        }
+        let ranges = links
+            .iter()
+            .enumerate()
+            .filter_map(|(index, link)| {
+                let start = *at.get(link.start.as_str())?;
+                let end = *at.get(link.end.as_str())?;
+                (start < end).then_some((u32::try_from(index).ok()?, start, end))
+            })
+            .collect();
+        Self { ranges }
+    }
+
+    /// The spans of `runs`, built from the element at byte offset `node`,
+    /// that lie in a range: each whole run.
+    pub(in crate::docx) fn mark(&self, node: usize, runs: &mut [crate::model::Run]) {
+        for &(range, start, end) in &self.ranges {
+            if start < node && node < end {
+                for run in runs.iter_mut() {
+                    run.range_spans.push(crate::model::RangeSpan {
+                        range,
+                        from: 0,
+                        to: run.text.len(),
+                    });
+                }
+            }
+        }
+    }
 }
 
 fn is_text_node(n: roxmltree::Node) -> bool {
@@ -1036,12 +1093,17 @@ mod relationships {
     }
 }
 
+#[cfg(test)]
 pub fn parse_bytes(bytes: &[u8], view: crate::RevisionView) -> Result<Document, Error> {
+    parse_bytes_with(bytes, &crate::ConvertOptions::new().revisions(view))
+}
+
+pub fn parse_bytes_with(bytes: &[u8], options: &crate::ConvertOptions) -> Result<Document, Error> {
     let cursor = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(cursor)
         .map_err(|_| Error::InvalidDocx("data is not a valid ZIP/DOCX archive".into()))?;
 
-    parse_zip(&mut zip, view)
+    parse_zip(&mut zip, options.revisions, &options.range_links)
 }
 
 fn parse_core_props<R: Read + std::io::Seek>(
@@ -1079,6 +1141,7 @@ fn parse_core_props<R: Read + std::io::Seek>(
 fn parse_zip<R: Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
     view: crate::RevisionView,
+    range_links: &[crate::RangeLink],
 ) -> Result<Document, Error> {
     let markup = view == crate::RevisionView::Markup;
     let revisions = Revisions {
@@ -1133,6 +1196,7 @@ fn parse_zip<R: Read + std::io::Seek>(
     let default_line_pitch = styles.defaults.font_size * 1.2;
 
     let comment_ranges = comment_ranges(root);
+    let link_ranges = LinkRanges::find(root, range_links);
     // Word numbers balloons in the order of their reference marks.
     let mut next_index = 0;
     for id in &comment_ranges.reference_order {
@@ -1165,6 +1229,7 @@ fn parse_zip<R: Read + std::io::Seek>(
         numbering: &numbering,
         revisions: &revisions,
         comments: comment_ranges,
+        link_ranges,
         fields: Default::default(),
         grid_char_delta: grid_deltas.first().copied().unwrap_or(0.0),
         line_unit: line_units.first().copied().unwrap_or(12.0),
