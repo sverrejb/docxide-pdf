@@ -168,6 +168,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     let floating_images = parsed.floating_images;
 
+    let image_ranges = crate::model::shown_image_ranges(&runs);
     let (para_image, mut content_height) = if !opts.resolve_drawings {
         (None, 0.0)
     } else if !has_text && shown_images == 1 && !runs.iter().any(Run::underlined_picture) {
@@ -187,6 +188,11 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     } else {
         let drawing = compute_drawing_info(node, ctx);
         (drawing.image, drawing.height)
+    };
+    let image_ranges = if para_image.is_some() {
+        image_ranges
+    } else {
+        Vec::new()
     };
 
     if let Some(ref ic) = parsed.inline_chart {
@@ -305,6 +311,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         toc_field: parsed.toc_instr,
         is_section_break: false,
         bookmarks,
+        image_ranges,
         outline_level,
         paragraph_mark_vanish,
         paragraph_mark_font_size,

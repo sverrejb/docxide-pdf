@@ -33,6 +33,16 @@ struct Args {
     /// compression, pictures resampled only above 384 ppi
     #[arg(long, env = "DOCXIDE_FAST_COMPRESSION", value_parser = FalseyValueParser::new())]
     fast_compression: bool,
+    /// An invisible link over the text between two bookmarks, as
+    /// "START END URI [HEADING_URI]"; repeat for more (the environment
+    /// variable takes one link per line)
+    #[arg(
+        long,
+        value_name = "LINK",
+        env = "DOCXIDE_RANGE_LINKS",
+        value_delimiter = '\n'
+    )]
+    range_link: Vec<docxide_pdf::RangeLink>,
 }
 
 fn available_path(path: PathBuf) -> PathBuf {
@@ -108,7 +118,8 @@ fn main() {
         .font_dirs(fonts)
         .font_cache(!args.no_font_cache)
         .debug_wrap(args.debug_wrap)
-        .compression(compression);
+        .compression(compression)
+        .range_links(args.range_link);
     let fail = |e: &dyn std::fmt::Display| -> ! {
         eprintln!("Error: {e}");
         std::process::exit(1);

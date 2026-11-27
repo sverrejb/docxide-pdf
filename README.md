@@ -151,6 +151,40 @@ and coordinates are PDF points measured upward from the page bottom. This is
 not a multi-paragraph bookmark-range API; headers, footers and text boxes are
 excluded.
 
+### Range links
+
+`ConvertOptions::range_links` writes invisible link annotations over the text
+laid out between two bookmarks, so a viewer can link a place in the PDF back
+to whatever produced it:
+
+```rust
+use docxide_pdf::{ConvertOptions, RangeLink, convert};
+
+let options = ConvertOptions::new().range_links([
+    RangeLink::new("start", "end", "app:item/1"),
+    // A second link over the range's heading: its leading bold lines.
+    RangeLink::new("start2", "end2", "app:item/2").heading_uri("app:heading/2"),
+]);
+let out = convert(&docx_bytes, &options)?;
+```
+
+A range runs from the `bookmarkStart` named `start` to the one named `end`,
+wherever they sit: between paragraphs and tables, or between the runs of a line
+(the link then starts or stops inside the line, inside a word if the runs
+split one). Every line holding text or a picture of the range gets the link,
+as the box of the range's glyphs on it (advance widths, the face's `hhea`
+ascender and descender) or of the picture. Per page, the range's first and
+last lines keep their own rectangle and the lines in between share one: at
+most three rectangles a page, plus one per floating picture anchored in the
+range, drawn over the picture's box (rotated: that box's bounding box) and
+never merged with the lines. `heading_uri` adds one more link over the
+range's leading lines on its first page while every run on them is bold (at
+most four lines, no gap taller than a line between them). Only the body is
+covered (table cells, text boxes and pictures included; headers, footers,
+notes and list labels are not), and links follow section vertical alignment.
+A range whose bookmarks are missing or out of order links nothing; without range
+links the PDF is unchanged.
+
 ### Hosts without a filesystem (WebAssembly)
 
 From a source checkout, compile the library for the bare wasm target:
@@ -218,6 +252,7 @@ Each setting is a `ConvertOptions` builder method in the library, and a CLI flag
 | A font file's bytes, used before installed faces of the same family and style; repeat for more | None | `.font(bytes)` | | |
 | Search the system font directories | On (off on bare wasm) | `.system_fonts(false)` | | |
 | Scan the font directories on every conversion instead of reading the font index disk cache. Useful when debugging font resolution | Cache on | `.font_cache(false)` | `--no-font-cache` | `DOCXIDE_NO_FONT_CACHE=1` |
+| Invisible links over bookmarked text (see [Range links](#range-links)) | None | `.range_links([RangeLink::new(start, end, uri)])` | `--range-link "START END URI [HEADING_URI]"` | `DOCXIDE_RANGE_LINKS`, one per line |
 | Also return the pages as a display list (`Conversion::display`) | Off | `.display_list(true)` | | |
 | Draw the float wrap zones on the page (debugging) | Off | | `--debug-wrap` | `DOCXIDE_DEBUG_WRAP=1` |
 

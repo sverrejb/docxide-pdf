@@ -688,6 +688,7 @@ fn parse_placed_drawing<R: Read + Seek>(
                     anchor_run: 0,
                     on_line: false,
                     v_from_line: anchored_to_line(container),
+                    ranges: Vec::new(),
                 }));
             }
             // A wrapNone diagram floats at its anchor, the paragraph's text laid

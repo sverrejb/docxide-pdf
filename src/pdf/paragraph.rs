@@ -2156,6 +2156,7 @@ pub(super) fn render_paragraph_block(
                     &mut state.pb.deferred_shapes,
                     &mut state.pb.tags,
                     page,
+                    &mut state.pb.links,
                 );
             }
 
@@ -2351,6 +2352,7 @@ pub(super) fn render_paragraph_block(
                         &mut state.pb.deferred_shapes,
                         &mut state.pb.tags,
                         page,
+                        &mut state.pb.links,
                     );
                 }
                 // Full-width pictures keep following visible text below them,
@@ -2726,6 +2728,7 @@ pub(super) fn render_paragraph_block(
         &mut state.pb.deferred_shapes,
         &mut state.pb.tags,
         page,
+        &mut state.pb.links,
     );
     for tb in &para.textboxes {
         render_para_textbox(
@@ -3011,6 +3014,14 @@ pub(super) fn render_paragraph_block(
             );
             if turned {
                 state.pb.content.restore_state();
+            }
+            if !para.image_ranges.is_empty() {
+                let drawn = if turned {
+                    (box_x, box_bottom, box_w, box_h)
+                } else {
+                    rect
+                };
+                range_links::mark_picture(&mut state.pb.links, &para.image_ranges, drawn);
             }
             // Markup view: the inserted picture's revision underline, the run's
             // post-table geometry on a 0.25pt grid like the text path's.

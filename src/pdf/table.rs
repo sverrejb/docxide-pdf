@@ -10,8 +10,8 @@ use crate::model::{
 };
 
 use super::cell_draw::{
-    beside_float_geometry, cell_label_alignment_offset, clip_fixed_cell_pictures, draw_border,
-    draw_cell_borders, draw_cell_float, draw_cell_label, draw_cell_paragraph_bottom,
+    beside_float_geometry, cell_image_rect, cell_label_alignment_offset, clip_fixed_cell_pictures,
+    draw_border, draw_cell_borders, draw_cell_float, draw_cell_label, draw_cell_paragraph_bottom,
     draw_cell_paragraph_shading, draw_cell_shading, render_cell_inline_image,
     render_simple_textbox, valign_offset,
 };
@@ -278,6 +278,7 @@ fn render_cell_content(
                         .iter()
                         .filter(|fi| !(layered && fi.behind_doc) && !above_shapes(fi));
                     for fi in behind_floats.chain(front_floats) {
+                        fi.mark_ranges(links, cell_x, float_y);
                         place_cell_float(
                             content,
                             &mut behind,
@@ -292,6 +293,7 @@ fn render_cell_content(
 
                 if let Some(ref img_name) = para.image_name {
                     for fi in para.floating_images.iter().filter(above_shapes) {
+                        fi.mark_ranges(links, cell_x, float_y);
                         cell_figure(content, &mut tagger, cell_para, fi.tagging(), |c| {
                             draw_cell_float(c, fi, cell_x, float_y)
                         });
@@ -301,6 +303,12 @@ fn render_cell_content(
                     // The paragraph's P stays empty and the picture follows
                     // it as a Figure, as in the body.
                     let picture = (para.image_alt.as_deref(), para.image_decorative);
+                    if let Some(src) = source_para
+                        && !src.image_ranges.is_empty()
+                    {
+                        let rect = cell_image_rect(para, cell_x, col_w, cursor_y, cm);
+                        super::range_links::mark_picture(links, &src.image_ranges, rect);
+                    }
                     cursor_y -= cell_figure(content, &mut tagger, None, picture, |c| {
                         render_cell_inline_image(c, para, img_name, cell_x, col_w, cursor_y, cm)
                     });
@@ -409,6 +417,7 @@ fn render_cell_content(
                     );
                 }
                 for fi in para.floating_images.iter().filter(above_shapes) {
+                    fi.mark_ranges(links, cell_x, float_y);
                     cell_figure(content, &mut tagger, None, fi.tagging(), |c| {
                         draw_cell_float(c, fi, cell_x, float_y)
                     });

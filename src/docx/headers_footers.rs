@@ -112,6 +112,7 @@ fn parse_notes<R: Read + Seek>(
         numbering,
         revisions,
         comments: Default::default(),
+        link_ranges: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,
         // ponytail: notes take no section's line grid; 12pt is the no-grid unit.

@@ -403,6 +403,7 @@ fn group_image(image: EmbeddedImage, x: f32, y: f32, base: &BaseAnchor) -> Float
         anchor_run: 0,
         on_line: base.on_line,
         v_from_line: base.v_from_line,
+        ranges: Vec::new(),
     }
 }
 

@@ -222,18 +222,14 @@ pub(super) fn draw_cell_shading(
     );
 }
 
-/// Render an inline image within a table cell paragraph, handling alignment,
-/// shadow, glow, stroke, and the image transform. Returns the image height
-/// consumed so the caller can advance its cursor.
-pub(super) fn render_cell_inline_image(
-    content: &mut Content,
+/// Where a cell paragraph's lone picture is drawn: `(x, y, width, height)`.
+pub(super) fn cell_image_rect(
     para: &CellParagraphLayout,
-    img_name: &str,
     cell_x: f32,
     col_w: f32,
     cursor_y: f32,
     cm: &CellMargins,
-) -> f32 {
+) -> (f32, f32, f32, f32) {
     // The picture is the paragraph's first line, so it starts at the first-line
     // indent: nabl's logo paragraph (w:ind left=-198) sits 9.9pt into the cell
     // margin in Word.
@@ -246,7 +242,27 @@ pub(super) fn render_cell_inline_image(
             Alignment::Right => text_w - para.image_width - para.image_trim,
             _ => 0.0,
         };
-    let img_y = cursor_y - para.image_height;
+    (
+        img_x,
+        cursor_y - para.image_height,
+        para.image_width,
+        para.image_height,
+    )
+}
+
+/// Render an inline image within a table cell paragraph, handling alignment,
+/// shadow, glow, stroke, and the image transform. Returns the image height
+/// consumed so the caller can advance its cursor.
+pub(super) fn render_cell_inline_image(
+    content: &mut Content,
+    para: &CellParagraphLayout,
+    img_name: &str,
+    cell_x: f32,
+    col_w: f32,
+    cursor_y: f32,
+    cm: &CellMargins,
+) -> f32 {
+    let (img_x, img_y, ..) = cell_image_rect(para, cell_x, col_w, cursor_y, cm);
 
     // Word clips a picture wider than its cell to the cell's edges (nabl's
     // 90.75pt logo in an 81pt column).

@@ -12,6 +12,7 @@ mod host;
 mod image_count;
 mod libreoffice_comparison;
 mod page_geometry;
+mod range_links;
 mod speed;
 mod text_boundary;
 mod visual_comparison;

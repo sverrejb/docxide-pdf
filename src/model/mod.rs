@@ -695,6 +695,8 @@ pub struct Paragraph {
     pub field_code_mark: bool,
     pub is_section_break: bool,
     pub bookmarks: Vec<String>,
+    /// The range links `image` is in (`Run::range_spans` of its run).
+    pub image_ranges: Vec<u32>,
     pub outline_level: Option<u8>,
     pub paragraph_mark_vanish: bool,
     pub paragraph_mark_font_size: Option<f32>,
@@ -837,6 +839,17 @@ pub struct HorizontalRule {
     pub is_standard: bool,
 }
 
+/// A part of a run's text that lies between the two bookmarks of a range
+/// link: byte offsets `from..to` in `Run::text`, and the link's index in
+/// `ConvertOptions::range_links`. A run without text (a picture) has the
+/// empty span `0..0`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RangeSpan {
+    pub range: u32,
+    pub from: usize,
+    pub to: usize,
+}
+
 #[derive(Clone)]
 pub struct Run {
     pub text: String,
@@ -844,6 +857,9 @@ pub struct Run {
     /// began. Word keeps such runs apart and its PDF writer restarts its glyph
     /// positions at each (`pdf::glyph_grid`), so drawing needs them after the merge.
     pub source_breaks: Vec<usize>,
+    /// The parts of `text` inside requested range links
+    /// (`ConvertOptions::range_links`); empty when none are requested.
+    pub range_spans: Vec<RangeSpan>,
     /// The `w:rsidR` and `w:rsidRPr` of the source run (of its last part once merged).
     pub rsid: u64,
     pub font_size: f32,
@@ -997,6 +1013,20 @@ impl Run {
 
 /// Takes the first shown picture out of `runs` to lay it out as the
 /// paragraph's block image, with the height it takes.
+/// The range links (`Run::range_spans`) of the picture `take_shown_image`
+/// takes.
+pub fn shown_image_ranges(runs: &[Run]) -> Vec<u32> {
+    let mut ranges: Vec<u32> = Vec::new();
+    if let Some(run) = runs.iter().find(|r| r.shown_image().is_some()) {
+        for span in &run.range_spans {
+            if !ranges.contains(&span.range) {
+                ranges.push(span.range);
+            }
+        }
+    }
+    ranges
+}
+
 pub fn take_shown_image(runs: &mut [Run]) -> (Option<EmbeddedImage>, f32) {
     let img = runs
         .iter_mut()
@@ -1046,6 +1076,7 @@ impl Default for Run {
         Self {
             text: String::new(),
             source_breaks: Vec::new(),
+            range_spans: Vec::new(),
             rsid: 0,
             font_size: 0.0,
             font_name: String::new(),

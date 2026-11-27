@@ -312,6 +312,7 @@ fn resolve_hf<R: Read + Seek>(
         numbering: ctx.numbering,
         revisions: ctx.revisions,
         comments: Default::default(),
+        link_ranges: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,
         line_unit: ctx.line_unit,

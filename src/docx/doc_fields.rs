@@ -287,6 +287,8 @@ pub(super) fn expand_toc_fields<R: Read + std::io::Seek>(
             style_num_id: None,
             style_num_ilvl: None,
         };
+        // Generated XML: its offsets are not the body's.
+        let link_ranges = std::mem::take(&mut ctx.link_ranges);
         let mut generated: Vec<Block> = xmls
             .iter()
             .filter_map(|xml| roxmltree::Document::parse(xml).ok())
@@ -301,6 +303,7 @@ pub(super) fn expand_toc_fields<R: Read + std::io::Seek>(
                 ))
             })
             .collect();
+        ctx.link_ranges = link_ranges;
         if let Some(Block::Paragraph(first)) = generated.first_mut() {
             first.starts_toc_field = true;
         }
