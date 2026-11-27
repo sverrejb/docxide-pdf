@@ -5,10 +5,11 @@ Open work only. Finished rounds, their rules and evidence live in git history
 
 ## Open fixture leads
 
-**Range links:** `ConvertOptions::range_links` covers body and cell text and
-inline pictures. Not covered: list labels (a range that opens a numbered
-paragraph links its text, not its number), floating pictures anchored in the
-range, headers/footers and notes, rotated text boxes (their lines are linked
+**Range links:** `ConvertOptions::range_links` covers body and cell text,
+inline pictures and floating pictures anchored in the range. Not covered: list
+labels (a range that opens a numbered paragraph links its text, not its
+number), headers/footers and notes, the vertical-alignment shift of
+page-relative floats (untested), rotated text boxes (their lines are linked
 unrotated), and the extra Tc spacing of character-justified (CJK) lines inside
 a partly linked word.
 

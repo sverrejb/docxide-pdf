@@ -187,6 +187,9 @@ impl LinkRanges {
         node: usize,
         floats: &mut [crate::model::FloatingImage],
     ) {
+        if floats.is_empty() {
+            return;
+        }
         for &(range, start, end) in &self.ranges {
             if start < node && node < end {
                 for float in floats.iter_mut() {

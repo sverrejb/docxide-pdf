@@ -247,7 +247,7 @@ pub(super) fn render_floating_images(
             tags,
             page,
         ) {
-            super::range_links::mark_picture(links, &fi.ranges, drawn);
+            super::range_links::mark_float(links, &fi.ranges, drawn);
             let layer = if fi.behind_doc {
                 &mut *behind
             } else {

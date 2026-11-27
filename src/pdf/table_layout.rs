@@ -97,7 +97,7 @@ impl CellFloatingImageLayout {
             (x, y, self.display_width, self.display_height),
             self.rotation_deg,
         );
-        super::range_links::mark_picture(links, &self.ranges, drawn);
+        super::range_links::mark_float(links, &self.ranges, drawn);
     }
 }
 

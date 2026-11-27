@@ -175,13 +175,14 @@ split one). Every line holding text or a picture of the range gets the link,
 as the box of the range's glyphs on it (advance widths, the face's `hhea`
 ascender and descender) or of the picture. Per page, the range's first and
 last lines keep their own rectangle and the lines in between share one: at
-most three rectangles a page. `heading_uri` adds one more link over the
+most three rectangles a page, plus one per floating picture anchored in the
+range, drawn over the picture's box (rotated: that box's bounding box) and
+never merged with the lines. `heading_uri` adds one more link over the
 range's leading lines on its first page while every run on them is bold (at
 most four lines, no gap taller than a line between them). Only the body is
-covered (table cells and inline pictures included; headers, footers, notes,
-list labels and floating pictures are not), and links follow section vertical
-alignment. A
-range whose bookmarks are missing or out of order links nothing; without range
+covered (table cells, text boxes and pictures included; headers, footers,
+notes and list labels are not), and links follow section vertical alignment.
+A range whose bookmarks are missing or out of order links nothing; without range
 links the PDF is unchanged.
 
 ### Hosts without a filesystem (WebAssembly)

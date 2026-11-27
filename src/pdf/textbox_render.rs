@@ -862,14 +862,16 @@ pub(super) fn render_textbox_paragraphs(
                 let img_y = cursor_y - inter_gap - foot_drop - img.display_height - y_offset;
                 // Box paragraphs keep their picture on its run (see
                 // `textbox_para_block_image`), and its ranges with it.
+                let run_ranges;
                 let ranges = if tp.image.is_some() {
-                    std::borrow::Cow::Borrowed(&tp.image_ranges)
+                    &tp.image_ranges
                 } else {
-                    std::borrow::Cow::Owned(crate::model::shown_image_ranges(&tp.runs))
+                    run_ranges = crate::model::shown_image_ranges(&tp.runs);
+                    &run_ranges
                 };
                 super::range_links::mark_picture(
                     links,
-                    &ranges,
+                    ranges,
                     (img_x, img_y, img.display_width, img.display_height),
                 );
                 // The paragraph's P stays empty and the picture follows it as

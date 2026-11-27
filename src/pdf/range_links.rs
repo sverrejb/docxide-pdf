@@ -18,6 +18,7 @@ use std::hash::BuildHasher;
 
 const MARKER: &str = "\0docxide-range:";
 /// Per range and page: the first line, the lines in between, the last line.
+/// Floating pictures are not lines: each keeps its own rectangle.
 const MAX_RECTS_PER_PAGE: usize = 3;
 /// A heading is at most this many leading lines.
 const MAX_HEADING_ROWS: usize = 4;
@@ -36,6 +37,9 @@ pub(super) struct LineBox {
     /// Every run with text on the line (the whole line, not only the
     /// range's part) is bold.
     pub(super) bold: bool,
+    /// A floating picture: placed apart from the text, so never merged
+    /// with lines nor part of a heading.
+    pub(super) float: bool,
 }
 
 fn union(a: Rect, b: Rect) -> Rect {
@@ -152,12 +156,32 @@ pub(super) fn mark_line(
 pub(super) fn mark_picture(
     links: &mut Vec<LinkAnnotation>,
     ranges: &[u32],
+    drawn: (f32, f32, f32, f32),
+) {
+    mark_box(links, ranges, drawn, '0');
+}
+
+/// Leave a placeholder per range for a floating picture, kept apart from
+/// the range's lines: `(x, y, width, height)`, PDF space.
+pub(super) fn mark_float(
+    links: &mut Vec<LinkAnnotation>,
+    ranges: &[u32],
+    drawn: (f32, f32, f32, f32),
+) {
+    mark_box(links, ranges, drawn, 'f');
+}
+
+/// `kind`: `0` a line, `f` a floating picture (see [`collect`]).
+fn mark_box(
+    links: &mut Vec<LinkAnnotation>,
+    ranges: &[u32],
     (x, y, width, height): (f32, f32, f32, f32),
+    kind: char,
 ) {
     for range in ranges {
         links.push(LinkAnnotation {
             rect: Rect::new(x, y, x + width, y + height),
-            url: format!("{MARKER}{range}:0"),
+            url: format!("{MARKER}{range}:{kind}"),
             node: None,
             text: String::new(),
         });
@@ -165,7 +189,8 @@ pub(super) fn mark_picture(
 }
 
 /// Take the placeholders out of every page's links: per page, the line boxes
-/// in the order they were drawn.
+/// in the order they were drawn. A placeholder's kind follows its range:
+/// `1` a bold line, `f` a floating picture, anything else a line.
 pub(super) fn collect(pages: &mut [Vec<LinkAnnotation>]) -> Vec<Vec<LineBox>> {
     pages
         .iter_mut()
@@ -175,12 +200,13 @@ pub(super) fn collect(pages: &mut [Vec<LinkAnnotation>]) -> Vec<Vec<LineBox>> {
                 let Some(marker) = link.url.strip_prefix(MARKER) else {
                     return true;
                 };
-                let (range, bold) = marker.split_once(':').unwrap_or((marker, "0"));
+                let (range, kind) = marker.split_once(':').unwrap_or((marker, "0"));
                 if let Ok(range) = range.parse() {
                     lines.push(LineBox {
                         range,
                         rect: link.rect,
-                        bold: bold == "1",
+                        bold: kind == "1",
+                        float: kind == "f",
                     });
                 }
                 false
@@ -196,24 +222,31 @@ fn by_position(a: &Rect, b: &Rect) -> std::cmp::Ordering {
 }
 
 /// A page's rectangles for one range: the first and last lines as they are,
-/// the lines in between merged.
+/// the lines in between merged, then each floating picture's own: merging a
+/// picture placed apart would cover what lies between it and the lines.
 fn collapse(lines: &[LineBox]) -> Vec<Rect> {
-    let mut rects: Vec<Rect> = lines.iter().map(|line| line.rect).collect();
-    rects.sort_by(by_position);
-    if rects.len() <= MAX_RECTS_PER_PAGE {
-        return rects;
-    }
-    let last = rects[rects.len() - 1];
-    let middle = rects[2..rects.len() - 1]
+    let mut rects: Vec<Rect> = lines
         .iter()
-        .fold(rects[1], |acc, rect| union(acc, *rect));
-    vec![rects[0], middle, last]
+        .filter(|line| !line.float)
+        .map(|line| line.rect)
+        .collect();
+    rects.sort_by(by_position);
+    if rects.len() > MAX_RECTS_PER_PAGE {
+        let last = rects[rects.len() - 1];
+        let middle = rects[2..rects.len() - 1]
+            .iter()
+            .fold(rects[1], |acc, rect| union(acc, *rect));
+        rects.truncate(1);
+        rects.extend([middle, last]);
+    }
+    rects.extend(lines.iter().filter(|line| line.float).map(|line| line.rect));
+    rects
 }
 
 /// The range's heading on a page: its leading rows while they are bold and
 /// follow each other without a gap taller than a row.
 fn heading(lines: &[LineBox]) -> Option<Rect> {
-    let mut sorted: Vec<LineBox> = lines.to_vec();
+    let mut sorted: Vec<LineBox> = lines.iter().filter(|line| !line.float).copied().collect();
     sorted.sort_by(|a, b| by_position(&a.rect, &b.rect));
     let mut rows: Vec<(Rect, bool)> = Vec::new();
     for line in sorted {
@@ -301,7 +334,39 @@ mod tests {
             range: 0,
             rect: Rect::new(x1, bottom, x2, top),
             bold,
+            float: false,
         }
+    }
+
+    #[test]
+    fn keeps_floating_pictures_apart_from_lines_and_headings() {
+        let picture = LineBox {
+            float: true,
+            ..line(690.0, 640.0, 400.0, 500.0, true)
+        };
+        let mut lines: Vec<LineBox> = (0..5)
+            .map(|i| {
+                line(
+                    700.0 - 14.0 * i as f32,
+                    688.0 - 14.0 * i as f32,
+                    72.0,
+                    120.0,
+                    i == 0,
+                )
+            })
+            .collect();
+        lines.insert(2, picture);
+        let rects = collapse(&lines);
+        assert_eq!(rects.len(), 4);
+        assert!(rects[..3].iter().all(|rect| rect.x2 == 120.0), "{rects:?}");
+        assert_eq!(
+            (rects[3].x1, rects[3].y1, rects[3].x2, rects[3].y2),
+            (400.0, 640.0, 500.0, 690.0)
+        );
+        // The bold first line alone is the heading; the picture is no row.
+        let title = heading(&lines).expect("heading");
+        assert_eq!((title.x2, title.y1), (120.0, 688.0));
+        assert!(heading(&[picture]).is_none());
     }
 
     #[test]

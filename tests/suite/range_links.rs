@@ -480,6 +480,47 @@ fn range_links_cover_a_floating_picture() {
 }
 
 #[test]
+fn range_links_keep_a_floating_picture_apart_from_the_lines() {
+    // Five short lines and, anchored in the third, a picture floating to the
+    // right of them: merging it with the middle lines would cover the page
+    // between the two.
+    let lines: String = (1..=5)
+        .map(|i| {
+            let picture = if i == 3 {
+                anchored_picture(("page", "page"), 400, 90)
+            } else {
+                String::new()
+            };
+            paragraph(&format!("{}{picture}", run(&format!("Line {i}"))))
+        })
+        .collect();
+    let png = png();
+    let input = document_with(
+        &format!(
+            "{}{lines}{}",
+            bookmark(1, "print"),
+            bookmark(2, "print_end")
+        ),
+        &[
+            ("word/_rels/document.xml.rels", PICTURE_RELS),
+            ("word/media/image1.png", &png),
+        ],
+    );
+    let pdf = convert(
+        &input,
+        vec![RangeLink::new("print", "print_end", "x:print")],
+    );
+    let page = &links(&pdf)[0];
+    let rects = only(page, "x:print");
+    assert_eq!(rects.len(), 4, "{rects:?}");
+    let (pictures, text): (Vec<&&Link>, Vec<&&Link>) =
+        rects.iter().partition(|link| link.rect[0] > 300.0);
+    assert_eq!(pictures.len(), 1, "{rects:?}");
+    assert_box(pictures[0], 400.0, 90.0);
+    assert!(text.iter().all(|link| link.rect[2] < 300.0), "{rects:?}");
+}
+
+#[test]
 fn range_links_cover_a_floating_picture_in_a_table_cell() {
     let picture = paragraph(&in_range(&anchored_picture(("column", "paragraph"), 10, 0)));
     let body = format!(
