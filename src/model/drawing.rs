@@ -172,6 +172,8 @@ pub struct FloatingImage {
     /// Positioned `relativeFrom="line"` (kept as `VRelativeFrom::Paragraph`):
     /// see `Textbox::v_from_line`.
     pub v_from_line: bool,
+    /// The range links (`ConvertOptions::range_links`) the anchoring run is in.
+    pub ranges: Vec<u32>,
 }
 
 /// Covers all 187 OOXML preset shapes and arbitrary custom geometry (a:custGeom).

@@ -234,6 +234,7 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
         anchor_run: 0,
         on_line: false,
         v_from_line: false,
+        ranges: Vec::new(),
     })
 }
 

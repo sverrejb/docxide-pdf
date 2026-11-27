@@ -278,6 +278,7 @@ fn render_cell_content(
                         .iter()
                         .filter(|fi| !(layered && fi.behind_doc) && !above_shapes(fi));
                     for fi in behind_floats.chain(front_floats) {
+                        fi.mark_ranges(links, cell_x, float_y);
                         place_cell_float(
                             content,
                             &mut behind,
@@ -292,6 +293,7 @@ fn render_cell_content(
 
                 if let Some(ref img_name) = para.image_name {
                     for fi in para.floating_images.iter().filter(above_shapes) {
+                        fi.mark_ranges(links, cell_x, float_y);
                         cell_figure(content, &mut tagger, cell_para, fi.tagging(), |c| {
                             draw_cell_float(c, fi, cell_x, float_y)
                         });
@@ -415,6 +417,7 @@ fn render_cell_content(
                     );
                 }
                 for fi in para.floating_images.iter().filter(above_shapes) {
+                    fi.mark_ranges(links, cell_x, float_y);
                     cell_figure(content, &mut tagger, None, fi.tagging(), |c| {
                         draw_cell_float(c, fi, cell_x, float_y)
                     });

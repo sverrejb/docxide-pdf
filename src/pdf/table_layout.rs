@@ -70,12 +70,34 @@ pub(super) struct CellFloatingImageLayout {
     /// The picture's `docPr@descr` and decorative flag, for tagging.
     pub(super) alt: Option<String>,
     pub(super) decorative: bool,
+    /// The range links the picture's anchoring run is in.
+    pub(super) ranges: Vec<u32>,
 }
 
 impl CellFloatingImageLayout {
     /// (alt, decorative), for `cell_figure`.
     pub(super) fn tagging(&self) -> (Option<&str>, bool) {
         (self.alt.as_deref(), self.decorative)
+    }
+
+    /// Leave the picture's range link placeholders over the box
+    /// `draw_cell_float` paints for a paragraph whose top is `para_y`.
+    pub(super) fn mark_ranges(
+        &self,
+        links: &mut Vec<super::LinkAnnotation>,
+        cell_x: f32,
+        para_y: f32,
+    ) {
+        if self.ranges.is_empty() {
+            return;
+        }
+        let x = cell_x + self.h_offset;
+        let y = para_y - self.v_offset - self.display_height;
+        let drawn = super::positioning::rotated_bounds(
+            (x, y, self.display_width, self.display_height),
+            self.rotation_deg,
+        );
+        super::range_links::mark_picture(links, &self.ranges, drawn);
     }
 }
 
@@ -1131,6 +1153,7 @@ pub(super) fn compute_row_layouts(
                                             behind_doc: fi.behind_doc,
                                             alt: fi.image.alt.clone(),
                                             decorative: fi.image.decorative,
+                                            ranges: fi.ranges.clone(),
                                         })
                                     })
                                     .collect();

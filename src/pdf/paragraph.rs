@@ -2156,6 +2156,7 @@ pub(super) fn render_paragraph_block(
                     &mut state.pb.deferred_shapes,
                     &mut state.pb.tags,
                     page,
+                    &mut state.pb.links,
                 );
             }
 
@@ -2351,6 +2352,7 @@ pub(super) fn render_paragraph_block(
                         &mut state.pb.deferred_shapes,
                         &mut state.pb.tags,
                         page,
+                        &mut state.pb.links,
                     );
                 }
                 // Full-width pictures keep following visible text below them,
@@ -2726,6 +2728,7 @@ pub(super) fn render_paragraph_block(
         &mut state.pb.deferred_shapes,
         &mut state.pb.tags,
         page,
+        &mut state.pb.links,
     );
     for tb in &para.textboxes {
         render_para_textbox(

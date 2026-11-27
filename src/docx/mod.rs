@@ -179,6 +179,22 @@ impl LinkRanges {
             }
         }
     }
+
+    /// The ranges of the floating pictures anchored in the run element at
+    /// byte offset `node`.
+    pub(in crate::docx) fn mark_floats(
+        &self,
+        node: usize,
+        floats: &mut [crate::model::FloatingImage],
+    ) {
+        for &(range, start, end) in &self.ranges {
+            if start < node && node < end {
+                for float in floats.iter_mut() {
+                    float.ranges.push(range);
+                }
+            }
+        }
+    }
 }
 
 fn is_text_node(n: roxmltree::Node) -> bool {

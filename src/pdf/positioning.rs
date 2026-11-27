@@ -228,10 +228,11 @@ pub(super) fn render_floating_images(
     front: &mut Vec<(u32, Content)>,
     tags: &mut Tags,
     page: usize,
+    links: &mut Vec<super::LinkAnnotation>,
 ) {
     for (fi_idx, fi) in floating_images.iter().enumerate() {
         let mut buf = super::tagging::artifact_content();
-        if render_one_floating_image(
+        if let Some(drawn) = render_one_floating_image(
             fi,
             fi_idx,
             global_block_idx,
@@ -246,6 +247,7 @@ pub(super) fn render_floating_images(
             tags,
             page,
         ) {
+            super::range_links::mark_picture(links, &fi.ranges, drawn);
             let layer = if fi.behind_doc {
                 &mut *behind
             } else {
@@ -257,8 +259,8 @@ pub(super) fn render_floating_images(
 }
 
 /// Render a single floating image (with shadow/glow/clip/border effects) into
-/// `content`. Returns true if an image was actually emitted (i.e. it had a
-/// registered XObject name).
+/// `content`. Returns the box it covers on the page (x, y, width, height) if
+/// an image was actually emitted (i.e. it had a registered XObject name).
 fn render_one_floating_image(
     fi: &FloatingImage,
     fi_idx: usize,
@@ -275,10 +277,8 @@ fn render_one_floating_image(
     // `content` must be inside the default artifact.
     tags: &mut Tags,
     page: usize,
-) -> bool {
-    let Some(pdf_name) = pdf_names.get(&(global_block_idx, fi_idx)) else {
-        return false;
-    };
+) -> Option<(f32, f32, f32, f32)> {
+    let pdf_name = pdf_names.get(&(global_block_idx, fi_idx))?;
     let img = &fi.image;
     let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
     let fi_y_top = anchor.fi_y_top(fi, sp);
@@ -346,7 +346,17 @@ fn render_one_floating_image(
     if rotated {
         content.restore_state();
     }
-    true
+    Some(rotated_bounds(rect, img.rotation_deg))
+}
+
+/// The page box `(x, y, w, h)` covers once turned by `deg` about its centre.
+pub(super) fn rotated_bounds((x, y, w, h): (f32, f32, f32, f32), deg: f32) -> (f32, f32, f32, f32) {
+    if deg.abs() <= 0.01 {
+        return (x, y, w, h);
+    }
+    let (sin, cos) = deg.to_radians().sin_cos();
+    let (bw, bh) = (w * cos.abs() + h * sin.abs(), w * sin.abs() + h * cos.abs());
+    (x + (w - bw) / 2.0, y + (h - bh) / 2.0, bw, bh)
 }
 
 /// Turn subsequent drawing by `deg` (OOXML clockwise degrees) about the centre of

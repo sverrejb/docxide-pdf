@@ -407,3 +407,127 @@ fn range_links_in_caps_do_not_include_other_words_in_the_merged_run() {
         assert!(range[0].width() < 120.0, "{property}: {range:?}");
     }
 }
+
+const PICTURE_RELS: &[u8] = br#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/></Relationships>"#;
+/// 1pt in EMU.
+const EMU: i64 = 12700;
+
+fn png() -> Vec<u8> {
+    let mut png = Vec::new();
+    image::RgbImage::new(4, 2)
+        .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    png
+}
+
+/// The only link of `body`'s first page, a range `print`..`print_end`.
+fn picture_link(body: &str) -> Link {
+    let png = png();
+    let input = document_with(
+        body,
+        &[
+            ("word/_rels/document.xml.rels", PICTURE_RELS),
+            ("word/media/image1.png", &png),
+        ],
+    );
+    let pdf = convert(
+        &input,
+        vec![RangeLink::new("print", "print_end", "x:print")],
+    );
+    let rects = links(&pdf)[0].clone();
+    assert_eq!(rects.len(), 1, "{rects:?}");
+    assert_eq!(rects[0].uri, "x:print");
+    rects[0].clone()
+}
+
+/// A run with a 100x50pt picture floating `x`, `y` pt from the page's or
+/// the column's and paragraph's (`relative`) origin.
+fn anchored_picture(relative: (&str, &str), x: i64, y: i64) -> String {
+    format!(
+        r#"<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="{}"><wp:posOffset>{}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="{}"><wp:posOffset>{}</wp:posOffset></wp:positionV><wp:extent cx="1270000" cy="635000"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapSquare wrapText="bothSides"/><wp:docPr id="1" name="p"/><wp:cNvGraphicFramePr/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="p"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>"#,
+        relative.0,
+        x * EMU,
+        relative.1,
+        y * EMU
+    )
+}
+
+fn in_range(content: &str) -> String {
+    format!(
+        "{}{content}{}",
+        bookmark(1, "print"),
+        bookmark(2, "print_end")
+    )
+}
+
+fn assert_box(link: &Link, x: f32, y_top: f32) {
+    // PDF space: the letter page is 792pt high.
+    let expected = [x, 792.0 - y_top - 50.0, x + 100.0, 792.0 - y_top];
+    for (got, want) in link.rect.iter().zip(expected) {
+        assert!((got - want).abs() < 0.5, "{link:?} != {expected:?}");
+    }
+}
+
+#[test]
+fn range_links_cover_a_floating_picture() {
+    let picture = anchored_picture(("page", "page"), 200, 300);
+    let link = picture_link(&format!(
+        "{}{}",
+        paragraph(&run("Before")),
+        paragraph(&in_range(&picture))
+    ));
+    assert_box(&link, 200.0, 300.0);
+}
+
+#[test]
+fn range_links_cover_a_floating_picture_in_a_table_cell() {
+    let picture = paragraph(&in_range(&anchored_picture(("column", "paragraph"), 10, 0)));
+    let body = format!(
+        r#"<w:tbl><w:tblGrid><w:gridCol w:w="4680"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="4680" w:type="dxa"/></w:tcPr>{picture}</w:tc></w:tr></w:tbl><w:p/>"#
+    );
+    let link = picture_link(&body);
+    assert!((link.width() - 100.0).abs() < 0.5, "{link:?}");
+    assert!((link.height() - 50.0).abs() < 0.5, "{link:?}");
+    // Inside the cell, at the top of the page's text area.
+    assert!(
+        link.rect[0] > 72.0 && link.rect[2] < 72.0 + 234.0 + 1.0,
+        "{link:?}"
+    );
+    assert!(
+        link.rect[3] <= 720.0 + 0.5 && link.rect[3] > 690.0,
+        "{link:?}"
+    );
+}
+
+#[test]
+fn range_links_cover_a_floating_vml_picture() {
+    let picture = r#"<w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape id="p" style="position:absolute;margin-left:200pt;margin-top:300pt;width:100pt;height:50pt;z-index:1;mso-position-horizontal-relative:page;mso-position-vertical-relative:page"><v:imagedata r:id="rId1" o:title="" xmlns:o="urn:schemas-microsoft-com:office:office"/></v:shape></w:pict></w:r>"#;
+    let link = picture_link(&format!(
+        "{}{}",
+        paragraph(&run("Before")),
+        paragraph(&in_range(picture))
+    ));
+    assert_box(&link, 200.0, 300.0);
+}
+
+#[test]
+fn range_links_cover_a_picture_alone_in_a_text_box() {
+    let inline = r#"<w:r><w:drawing><wp:inline><wp:extent cx="1270000" cy="635000"/><wp:docPr id="2" name="p"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="2" name="p"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"#;
+    let story = paragraph(&in_range(inline));
+    let text_box = format!(
+        r#"<w:r><w:drawing><wp:anchor xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>{x}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>{y}</wp:posOffset></wp:positionV><wp:extent cx="{w}" cy="{h}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="1" name="Box"/><wp:cNvGraphicFramePr/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{w}" cy="{h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></wps:spPr><wps:txbx><w:txbxContent>{story}</w:txbxContent></wps:txbx><wps:bodyPr rot="0" vert="horz" wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"><a:noAutofit/></wps:bodyPr></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>"#,
+        x = 200 * EMU,
+        y = 300 * EMU,
+        w = 200 * EMU,
+        h = 100 * EMU,
+    );
+    let link = picture_link(&paragraph(&text_box));
+    assert!((link.width() - 100.0).abs() < 0.5, "{link:?}");
+    assert!((link.height() - 50.0).abs() < 0.5, "{link:?}");
+    // In the box, 200pt from the page's left and 300pt from its top.
+    assert!((link.rect[0] - 200.0).abs() < 2.0, "{link:?}");
+    assert!(
+        link.rect[3] <= 792.0 - 300.0 + 0.5 && link.rect[3] > 792.0 - 300.0 - 20.0,
+        "{link:?}"
+    );
+}

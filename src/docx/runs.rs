@@ -1300,6 +1300,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
             continue;
         }
         let runs_before = runs.len();
+        let floats_before = floating_images.len();
         // A fldSimple inside an open field's instruction is an argument to it;
         // its runs carry the nested field's cached value as instrText.
         let simple = run_node
@@ -1618,11 +1619,11 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         Some("page") => {
                             // Floats anchored before the break belong to the page it
                             // ends (flyer templates put every text box in front of it).
-                            let floats_before = !floating_images.is_empty()
+                            let anchors_before = !floating_images.is_empty()
                                 || !textboxes.is_empty()
                                 || !connectors.is_empty()
                                 || !smartart.is_empty();
-                            if runs.is_empty() && pending_text.is_empty() && !floats_before {
+                            if runs.is_empty() && pending_text.is_empty() && !anchors_before {
                                 page_break_before_content = true;
                             } else {
                                 flush_pending(&mut pending_text, &mut runs);
@@ -1796,6 +1797,10 @@ pub(super) fn parse_runs<R: Read + Seek>(
         }
         ctx.link_ranges
             .mark(run_node.range().start, &mut runs[runs_before..]);
+        ctx.link_ranges.mark_floats(
+            run_node.range().start,
+            &mut floating_images[floats_before..],
+        );
         if ruby.is_some() {
             for r in &mut runs[runs_before..] {
                 r.ruby = ruby.clone();

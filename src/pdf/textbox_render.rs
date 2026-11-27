@@ -860,6 +860,18 @@ pub(super) fn render_textbox_paragraphs(
                     + align_offset(tp.alignment, (tp_align_w - img.box_width()).max(0.0))
                     + img.effect_left;
                 let img_y = cursor_y - inter_gap - foot_drop - img.display_height - y_offset;
+                // Box paragraphs keep their picture on its run (see
+                // `textbox_para_block_image`), and its ranges with it.
+                let ranges = if tp.image.is_some() {
+                    std::borrow::Cow::Borrowed(&tp.image_ranges)
+                } else {
+                    std::borrow::Cow::Owned(crate::model::shown_image_ranges(&tp.runs))
+                };
+                super::range_links::mark_picture(
+                    links,
+                    &ranges,
+                    (img_x, img_y, img.display_width, img.display_height),
+                );
                 // The paragraph's P stays empty and the picture follows it as
                 // a Figure in the Sect, as in the body.
                 let figure = tag.as_mut().filter(|_| !img.decorative);
