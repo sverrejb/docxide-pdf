@@ -53,6 +53,9 @@ Python helpers in `tools/` (each has a docstring):
 - `current_focus/` — one handover document per active area (layout accuracy,
   charts, accessibility, fundamentals, …). Read the one for the area you work
   in; keep it current.
+- `CONTRIBUTING.md` — the shape of a pull request (scope, simplest code,
+  CLI options through clap, proof in the description), taken from the
+  maintainer's follow-ups to merged PRs. Read it before opening one.
 - Specs: query `mcp__local-rag__query_documents` (OOXML spec and PDF spec are
   ingested) before guessing WordprocessingML or PDF semantics.
 
